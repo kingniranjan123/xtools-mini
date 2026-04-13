@@ -299,8 +299,7 @@ def api_download():
         custom_dir = True
         _out = out_dir
         if not _out:
-            rows = get_db().execute('SELECT value FROM settings WHERE key=?', ('dir_ig',)).fetchone()
-            _out = (rows['value'].strip() if rows and rows['value'] else '') or DOWNLOADS_DIR
+            _out = _read_setting('dir_ig') or DOWNLOADS_DIR
             custom_dir = False
         results = download_reels(
             urls=urls,
@@ -317,22 +316,42 @@ def api_download():
     return jsonify({'job_id': job_id})
 
 def _save_reel_to_db(info: dict):
-    db = get_db()
-    db.execute('''
-        INSERT OR REPLACE INTO reels
-          (id, url, account, title, caption, tags, mentions,
-           duration, file_path, thumbnail, downloaded_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
-    ''', (
-        info.get('id'), info.get('url'), info.get('account'),
-        info.get('title'), info.get('caption'),
-        json.dumps(info.get('tags', [])),
-        json.dumps(info.get('mentions', [])),
-        info.get('duration'), info.get('file_path'),
-        info.get('thumbnail'),
-        datetime.utcnow().isoformat(),
-    ))
-    db.commit()
+    """Thread-safe DB insert — uses a direct connection, not Flask g."""
+    import sqlite3
+    db_path = os.path.join(BASE_DIR, 'reels_db.sqlite')
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute('''
+            INSERT OR REPLACE INTO reels
+              (id, url, account, title, caption, tags, mentions,
+               duration, file_path, thumbnail, downloaded_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        ''', (
+            info.get('id'), info.get('url'), info.get('account'),
+            info.get('title'), info.get('caption'),
+            json.dumps(info.get('tags', [])),
+            json.dumps(info.get('mentions', [])),
+            info.get('duration'), info.get('file_path'),
+            info.get('thumbnail'),
+            datetime.utcnow().isoformat(),
+        ))
+        con.commit()
+    finally:
+        con.close()
+
+
+def _read_setting(key: str, default: str = '') -> str:
+    """Thread-safe settings read via direct sqlite3 (not Flask g)."""
+    import sqlite3
+    db_path = os.path.join(BASE_DIR, 'reels_db.sqlite')
+    try:
+        con = sqlite3.connect(db_path)
+        row = con.execute('SELECT value FROM settings WHERE key=?', (key,)).fetchone()
+        con.close()
+        return row[0].strip() if row and row[0] else default
+    except Exception:
+        return default
+
 
 @app.route('/api/download/progress/<job_id>')
 def api_download_progress(job_id):
@@ -830,8 +849,7 @@ def api_youtube_download():
         yt_dir = data.get('output_dir', '').strip()
         custom_dir = True
         if not yt_dir:
-            rows = get_db().execute('SELECT value FROM settings WHERE key=?', ('dir_yt',)).fetchone()
-            yt_dir = (rows['value'].strip() if rows and rows['value'] else '') or os.path.join(DOWNLOADS_DIR, '_youtube')
+            yt_dir = _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube')
             custom_dir = False
         results = download_youtube(
             urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only, custom_dir=custom_dir,
@@ -1014,13 +1032,13 @@ def api_download_userid():
         import re as _re
         base_dir    = data.get('output_dir', '').strip()
         if not base_dir: 
-            rows = get_db().execute('SELECT value FROM settings WHERE key=?', ('dir_ig',)).fetchone()
-            base_dir = (rows['value'].strip() if rows and rows['value'] else '') or DOWNLOADS_DIR
+            base_dir = _read_setting('dir_ig') or DOWNLOADS_DIR
             out_dir  = os.path.join(base_dir, username)
         else:
             out_dir  = base_dir
             
-        profile_url = f'https://www.instagram.com/{username}/reels/'
+        # Instagram profile URL — yt-dlp only supports the plain profile URL, not /reels/
+        profile_url = f'https://www.instagram.com/{username}/'
         os.makedirs(out_dir, exist_ok=True)
 
         if quality == 'best':
@@ -1028,9 +1046,15 @@ def api_download_userid():
         else:
             fmt = f'bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best'
 
-        cmd = [sys.executable, '-m', 'yt_dlp', '--rm-cache-dir', '--playlist-end', str(limit), '--format', fmt,
-               '--output', os.path.join(out_dir, '%(id)s.%(ext)s'),
-               '--write-info-json', '--no-warnings']
+        cmd = [
+            sys.executable, '-m', 'yt_dlp', '--rm-cache-dir',
+            '--playlist-end', str(limit),
+            '--yes-playlist',
+            '--format', fmt,
+            '--output', os.path.join(out_dir, '%(id)s.%(ext)s'),
+            '--write-info-json', '--no-warnings',
+            '--ignore-errors',  # skip unavailable videos in the playlist
+        ]
         if os.path.isfile(COOKIES_FILE):
             cmd += ['--cookies', COOKIES_FILE]
         cmd.append(profile_url)
