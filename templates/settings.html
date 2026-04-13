@@ -83,7 +83,16 @@
       </div>
       <div class="form-hint">Stored locally in your database. Never sent externally.</div>
     </div>
-    <button class="btn btn-primary" onclick="saveApiKeys()">💾 Save API Keys</button>
+    <div class="form-group" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+      <label class="form-label">🏠 My Home Channel (for 7-day history)</label>
+      <input class="form-input mono" id="home-channel" type="text"
+        placeholder="@YourChannelHandle  or  youtube.com/@handle"
+        value="{{ settings.home_channel or '' }}">
+      <div class="form-hint">
+        Any channel matching this handle gets <strong>7 historical snapshots</strong>. All other channels get 1 (latest only).
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="saveApiKeys()">💾 Save API Keys &amp; Home Channel</button>
   </div>
 </div>
 
@@ -460,9 +469,10 @@ function toggleKeyVisibility(inputId, btn) {
 }
 
 async function saveApiKeys() {
-  const key = document.getElementById('yt-api-key').value.trim();
-  const resp = await postJSON('/api/settings/keys/save', { yt_api_key: key });
-  if (resp.ok) { showToast('API key saved!', 'success'); setTimeout(() => location.reload(), 900); }
+  const key  = document.getElementById('yt-api-key').value.trim();
+  const home = document.getElementById('home-channel').value.trim();
+  const resp = await postJSON('/api/settings/keys/save', { yt_api_key: key, home_channel: home });
+  if (resp.ok) { showToast('API key & Home Channel saved!', 'success'); setTimeout(() => location.reload(), 900); }
   else showToast(resp.error || 'Failed', 'error');
 }
 

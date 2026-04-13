@@ -263,25 +263,90 @@ def analytics_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
     settings = _get_settings_dict()
     yt_api_configured = bool(settings.get('yt_api_key', '').strip())
-    return render_template('analytics.html', settings=settings, yt_api_configured=yt_api_configured)
+    from modules.analytics_db import get_all_stored_channels
+    stored_channels = get_all_stored_channels('youtube')
+    return render_template('analytics.html', settings=settings,
+                           yt_api_configured=yt_api_configured,
+                           stored_channels=stored_channels)
+
 
 @app.route('/api/analytics/youtube', methods=['POST'])
 def api_analytics_youtube():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
-    data = request.get_json() or {}
+    data    = request.get_json() or {}
     channel = data.get('channel', '').strip()
     if not channel: return jsonify({'error': 'No channel provided'}), 400
     api_key = _read_setting('yt_api_key')
     if not api_key: return jsonify({'error': 'YouTube API key not configured. Go to Settings → API Keys.'}), 400
     try:
         from modules.analytics import get_youtube_channel_stats
+        from modules.analytics_db import save_snapshot
         result = get_youtube_channel_stats(channel, api_key)
+        # Determine if this is the user's "home" channel
+        home_ch = _read_setting('home_channel', '').strip().lstrip('@').lower()
+        ch_handle = result['channel'].get('title', '').lower()
+        is_own = bool(home_ch and (home_ch in ch_handle or ch_handle in home_ch or
+                                    home_ch == result['channel']['id'].lower()))
+        save_snapshot(
+            channel_id=result['channel']['id'],
+            channel_title=result['channel']['title'],
+            data=result,
+            is_own_channel=is_own,
+            platform='youtube'
+        )
+        result['is_own_channel'] = is_own
         return jsonify(result)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     except Exception as e:
         app.logger.error(f'YouTube analytics error: {e}')
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/multi', methods=['POST'])
+def api_analytics_multi():
+    """Analyse multiple channels in one call — returns comparison table."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    channels = data.get('channels', [])
+    if not channels: return jsonify({'error': 'No channels provided'}), 400
+    if len(channels) > 10: return jsonify({'error': 'Maximum 10 channels per comparison'}), 400
+    api_key = _read_setting('yt_api_key')
+    if not api_key: return jsonify({'error': 'YouTube API key not configured.'}), 400
+    try:
+        from modules.analytics import get_multi_channel_comparison
+        from modules.analytics_db import save_snapshot
+        results = get_multi_channel_comparison(channels, api_key)
+        home_ch = _read_setting('home_channel', '').strip().lstrip('@').lower()
+        for r in results:
+            if r.get('error') or not r.get('full_data'):
+                continue
+            is_own = bool(home_ch and home_ch in r.get('title', '').lower())
+            save_snapshot(
+                channel_id=r['channel_id'],
+                channel_title=r['title'],
+                data=r['full_data'],
+                is_own_channel=is_own,
+                platform='youtube'
+            )
+            del r['full_data']  # Don't send full data back for comparison (too large)
+        return jsonify({'results': results})
+    except Exception as e:
+        app.logger.error(f'Multi-channel analytics error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/snapshots/<channel_id>')
+def api_analytics_snapshots(channel_id):
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    from modules.analytics_db import get_snapshots
+    snaps = get_snapshots(channel_id, 'youtube')
+    # Strip full video list from snapshots for speed (return summary only)
+    for s in snaps:
+        if 'data' in s and 'videos' in s['data']:
+            s['data']['videos'] = s['data']['videos'][:5]  # Keep top 5 only for history view
+    return jsonify({'snapshots': snaps})
+
 
 @app.route('/api/analytics/instagram', methods=['POST'])
 def api_analytics_instagram():
@@ -291,23 +356,27 @@ def api_analytics_instagram():
     if not username: return jsonify({'error': 'No username provided'}), 400
     try:
         from modules.analytics import get_instagram_profile_stats
+        from modules.analytics_db import save_snapshot
         cookie_path = COOKIES_FILE if os.path.isfile(COOKIES_FILE) else ''
         result = get_instagram_profile_stats(username, cookie_path)
+        save_snapshot(username, username, result, is_own_channel=False, platform='instagram')
         return jsonify(result)
     except Exception as e:
         app.logger.error(f'Instagram analytics error: {e}')
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/settings/keys/save', methods=['POST'])
 def api_save_keys():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     data = request.get_json() or {}
     db = get_db()
-    for k in ['yt_api_key']:
+    for k in ['yt_api_key', 'home_channel']:
         if k in data:
             db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (k, data[k]))
     db.commit()
     return jsonify({'ok': True})
+
 
 
 # ── Thumbnail / watermark preview ─────────────────────────────

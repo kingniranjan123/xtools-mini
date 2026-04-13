@@ -49,6 +49,18 @@ CREATE TABLE IF NOT EXISTS ig_accounts (
   error_count   INTEGER DEFAULT 0,
   last_used     DATETIME
 );
+
+CREATE TABLE IF NOT EXISTS channel_snapshots (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel_id    TEXT NOT NULL,
+  channel_title TEXT,
+  platform      TEXT DEFAULT 'youtube',
+  slot          INTEGER DEFAULT 1,
+  snapshot_json TEXT NOT NULL,
+  captured_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_snapshot_slot ON channel_snapshots(channel_id, slot);
 """
 
 def get_db():

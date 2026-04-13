@@ -6,216 +6,287 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title"><span class="grad-text">Channel Analytics</span></h1>
-  <p class="page-subtitle">Analyze any YouTube or Instagram channel — engagement rates, top videos, and optimal posting times.</p>
+  <p class="page-subtitle">VidIQ-grade stats for any public YouTube or Instagram channel. Compare up to 10 channels side-by-side.</p>
 </div>
 
-<!-- Platform Tabs -->
+<!-- ════════ Platform Tabs ════════ -->
 <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:24px;">
-  <button class="btn btn-sm active" id="tab-yt-btn" onclick="switchAnalyticsTab('yt')" style="background:var(--bg-card);border:1px solid var(--border);">
-    🎬 YouTube
-  </button>
-  <button class="btn btn-sm btn-ghost" id="tab-ig-btn" onclick="switchAnalyticsTab('ig')">
-    📸 Instagram
-  </button>
+  <button class="btn btn-sm active" id="tab-yt-btn" onclick="switchPlatformTab('yt')" style="background:var(--bg-card);border:1px solid var(--border);">🎬 YouTube</button>
+  <button class="btn btn-sm btn-ghost" id="tab-ig-btn" onclick="switchPlatformTab('ig')">📸 Instagram</button>
 </div>
 
-<!-- ═══════ YouTube Tab ═══════ -->
+<!-- ════════════════════════════════════════════
+     YOUTUBE TAB
+════════════════════════════════════════════ -->
 <div id="tab-yt">
-  <div class="two-col">
-    <div style="display:flex;flex-direction:column;gap:16px;">
-      <div class="card">
-        <div class="card-header"><div class="card-title">🎬 Analyze YouTube Channel</div></div>
-        <div class="card-body">
-          <div class="form-group">
-            <label class="form-label">Channel URL or @Handle</label>
-            <input class="form-input mono" id="yt-input" type="text" placeholder="@mkbhd  or  youtube.com/@mkbhd">
-            <div class="form-hint">Enter any public YouTube channel handle or URL.</div>
-          </div>
-          {% if not yt_api_configured %}
-          <div style="padding:12px;background:rgba(255,170,0,0.06);border:1px solid rgba(255,170,0,0.2);border-radius:var(--radius-sm);margin-bottom:16px;font-size:12px;">
-            ⚠️ <strong>No YouTube API key.</strong> Go to <a href="{{ url_for('settings_page') }}">Settings → API Keys</a> to add your free key.
-          </div>
-          {% endif %}
-          <button class="btn btn-primary btn-full" id="yt-analyze-btn" onclick="analyzeYouTube()" {% if not yt_api_configured %}disabled{% endif %}>
-            📊 Analyse Channel
-          </button>
-        </div>
-      </div>
-    </div>
 
-    <div style="display:flex;flex-direction:column;gap:16px;">
-      <div class="card">
-        <div class="card-header"><div class="card-title">ℹ️ How It Works</div></div>
-        <div class="card-body" style="font-size:12px;color:var(--text-secondary);line-height:1.8;">
-          <strong>YouTube Data API v3</strong> is a free Google service. Your API key lets you query any public channel:<br><br>
-          • Subscriber count, total views, video count<br>
-          • Up to 50 latest videos with views, likes, comments<br>
-          • Engagement rate = <code>(likes + comments) / views × 100</code><br>
-          • Best posting time heatmap based on historical performance<br><br>
-          <strong>Free quota:</strong> 10,000 units/day ≈ 50–100 full analyses.
+  <!-- Input Panel -->
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+      <div class="card-title">🎬 Analyse YouTube Channels</div>
+      {% if not yt_api_configured %}
+      <a href="{{ url_for('settings_page') }}" class="badge badge-orange" style="text-decoration:none;">⚠ Add API Key in Settings</a>
+      {% else %}
+      <span class="badge badge-green">✓ API Key Set</span>
+      {% endif %}
+    </div>
+    <div class="card-body">
+      <div style="display:flex; gap:4px; background:var(--bg-card-2); padding:4px; border-radius:var(--radius-sm); width:fit-content; margin-bottom:16px;">
+        <button class="btn btn-sm active" id="mode-single-btn" onclick="switchMode('single')" style="background:var(--bg-card);border:1px solid var(--border);">Single Channel</button>
+        <button class="btn btn-sm btn-ghost" id="mode-multi-btn" onclick="switchMode('multi')">Multi-Channel Compare</button>
+      </div>
+
+      <!-- Single mode -->
+      <div id="mode-single">
+        <div class="form-group">
+          <label class="form-label">Channel URL or @Handle</label>
+          <input class="form-input mono" id="yt-input" type="text" placeholder="@mkbhd  or  youtube.com/@mkbhd  or  UCBcRF...">
         </div>
+        <button class="btn btn-primary" id="yt-analyze-btn" onclick="analyzeYouTube()" {% if not yt_api_configured %}disabled{% endif %}>📊 Deep Analyse</button>
+      </div>
+
+      <!-- Multi-channel mode -->
+      <div id="mode-multi" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Channel Handles (one per line, max 10)</label>
+          <textarea class="form-textarea mono" id="yt-multi-input" rows="5" placeholder="@mkbhd&#10;@LinusTechTips&#10;@Veritasium&#10;@kurzgesagt"></textarea>
+          <div class="form-hint">Enter up to 10 channel handles. Results will appear in a side-by-side comparison table.</div>
+        </div>
+        <button class="btn btn-primary" id="yt-multi-btn" onclick="analyzeMulti()" {% if not yt_api_configured %}disabled{% endif %}>📊 Compare All Channels</button>
       </div>
     </div>
   </div>
 
-  <!-- Results area -->
-  <div id="yt-results" style="display:none; margin-top:20px;">
-    <!-- Channel Card -->
-    <div class="card" style="margin-bottom:20px;">
-      <div class="card-body">
-        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
-          <img id="yt-thumb" src="" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--border);">
-          <div style="flex:1;">
-            <div id="yt-title" style="font-size:20px;font-weight:700;"></div>
-            <div id="yt-handle" style="font-size:13px;color:var(--text-muted);margin-top:2px;"></div>
-          </div>
-          <div style="display:flex;gap:20px;flex-wrap:wrap;">
-            <div style="text-align:center;">
-              <div class="grad-text" style="font-size:22px;font-weight:800;" id="yt-subs">—</div>
-              <div style="font-size:11px;color:var(--text-muted);">Subscribers</div>
-            </div>
-            <div style="text-align:center;">
-              <div class="grad-text" style="font-size:22px;font-weight:800;" id="yt-views">—</div>
-              <div style="font-size:11px;color:var(--text-muted);">Total Views</div>
-            </div>
-            <div style="text-align:center;">
-              <div class="grad-text" style="font-size:22px;font-weight:800;" id="yt-count">—</div>
-              <div style="font-size:11px;color:var(--text-muted);">Videos</div>
-            </div>
-            <div style="text-align:center;">
-              <div class="grad-text" style="font-size:22px;font-weight:800;" id="yt-eng">—</div>
-              <div style="font-size:11px;color:var(--text-muted);">Avg Engagement</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Best Time Recommendation -->
-    <div class="card" style="margin-bottom:20px;" id="yt-besttime-card">
-      <div class="card-header">
-        <div class="card-title">🕐 Optimal Posting Time</div>
-        <span class="badge badge-green">AI Recommended</span>
-      </div>
-      <div class="card-body">
-        <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:20px;">
-          <div style="background:linear-gradient(135deg,rgba(255,60,172,.15),rgba(255,107,53,.1));padding:20px 28px;border-radius:var(--radius);border:1px solid rgba(255,60,172,.3);text-align:center;">
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">BEST DAY</div>
-            <div class="grad-text" style="font-size:32px;font-weight:900;" id="yt-best-day">—</div>
-          </div>
-          <div style="background:linear-gradient(135deg,rgba(255,107,53,.15),rgba(255,170,0,.1));padding:20px 28px;border-radius:var(--radius);border:1px solid rgba(255,107,53,.3);text-align:center;">
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">BEST HOUR</div>
-            <div class="grad-text" style="font-size:26px;font-weight:900;white-space:nowrap;" id="yt-best-hour">—</div>
-          </div>
-        </div>
-        <!-- Heatmap grid -->
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Avg Views Heatmap — Day × Hour (darker = higher engagement)</div>
-        <div id="yt-heatmap" style="overflow-x:auto;"></div>
-      </div>
-    </div>
-
-    <!-- Top Videos Table -->
+  <!-- ── Multi-Channel Comparison Table ── -->
+  <div id="multi-results" style="display:none; margin-bottom:24px;">
     <div class="card">
       <div class="card-header">
-        <div class="card-title">📹 Top Videos by Views</div>
-        <span class="badge badge-gray" id="yt-video-count-badge">0 videos</span>
+        <div class="card-title">📊 Multi-Channel Comparison</div>
+        <span class="badge badge-blue" id="multi-count-badge">0 channels</span>
+      </div>
+      <div class="card-body" style="padding:0; overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border);background:var(--bg-card-2);color:var(--text-muted);text-align:left;">
+              <th style="padding:10px 12px;">Channel</th>
+              <th style="padding:10px 12px;text-align:right;">Subscribers</th>
+              <th style="padding:10px 12px;text-align:right;">Total Views</th>
+              <th style="padding:10px 12px;text-align:right;">Videos</th>
+              <th style="padding:10px 12px;text-align:right;">Avg Views</th>
+              <th style="padding:10px 12px;text-align:right;">Avg Engagement</th>
+              <th style="padding:10px 12px;text-align:right;">View Velocity</th>
+              <th style="padding:10px 12px;text-align:right;">Uploads/Wk</th>
+              <th style="padding:10px 12px;text-align:right;">Avg Duration</th>
+              <th style="padding:10px 12px;text-align:right;">Avg Tags</th>
+              <th style="padding:10px 12px;">Best Day</th>
+              <th style="padding:10px 12px;">Best Hour</th>
+            </tr>
+          </thead>
+          <tbody id="multi-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Single Channel Deep Dashboard ── -->
+  <div id="yt-results" style="display:none;">
+
+    <!-- 1. Channel Header KPIs -->
+    <div class="card" style="margin-bottom:16px;" id="yt-channel-card">
+      <div class="card-body">
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:20px;">
+          <img id="yt-thumb" src="" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--border);">
+          <div style="flex:1;min-width:0;">
+            <div id="yt-title" style="font-size:20px;font-weight:700;"></div>
+            <div id="yt-meta" style="font-size:12px;color:var(--text-muted);margin-top:4px;"></div>
+          </div>
+          <div id="yt-own-badge" style="display:none;">
+            <span class="badge badge-green">🏠 Home Channel · 7-Day History</span>
+          </div>
+        </div>
+        <!-- KPI Grid -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;">
+          {% set kpis = [
+            ('yt-kpi-subs','Subscribers','👥'),
+            ('yt-kpi-views','Total Views','👁'),
+            ('yt-kpi-videos','Videos','📹'),
+            ('yt-kpi-age','Channel Age','📅'),
+            ('yt-kpi-upwk','Uploads/Week','📆'),
+            ('yt-kpi-viewsub','Views/Sub','📈'),
+            ('yt-kpi-avgviews','Avg Views','▶'),
+            ('yt-kpi-eng','Avg Engagement','💬'),
+          ] %}
+          {% for id,label,icon in kpis %}
+          <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">{{ icon }} {{ label }}</div>
+            <div class="grad-text" style="font-size:18px;font-weight:800;" id="{{ id }}">—</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Content Analysis Cards -->
+    <div class="section-heading">Content Analysis</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px;">
+      {% set ca_kpis = [
+        ('yt-ca-velocity','Avg Views/Day','🚀','view_velocity'),
+        ('yt-ca-dur','Avg Duration','⏱','duration'),
+        ('yt-ca-title','Avg Title Len','🔤','title_len'),
+        ('yt-ca-tags','Avg Tags/Video','🏷','tags'),
+        ('yt-ca-gap','Upload Cadence','📅','gap'),
+        ('yt-ca-like','Like Ratio','👍','like'),
+        ('yt-ca-comment','Comment Ratio','💬','comment'),
+        ('yt-ca-desc','Avg Desc Len','📝','desc'),
+      ] %}
+      {% for id,label,icon,_ in ca_kpis %}
+      <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">{{ icon }} {{ label }}</div>
+        <div style="font-size:18px;font-weight:700;color:var(--text);" id="{{ id }}">—</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- 3. Best Posting Time -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <div class="card-title">🕐 Optimal Posting Time</div>
+        <span class="badge badge-green">Based on view performance</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+          <div style="background:linear-gradient(135deg,rgba(255,60,172,.15),rgba(255,107,53,.1));padding:18px 26px;border-radius:var(--radius);border:1px solid rgba(255,60,172,.3);text-align:center;min-width:120px;">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">BEST DAY</div>
+            <div class="grad-text" style="font-size:30px;font-weight:900;" id="yt-best-day">—</div>
+          </div>
+          <div style="background:linear-gradient(135deg,rgba(255,107,53,.15),rgba(255,170,0,.1));padding:18px 26px;border-radius:var(--radius);border:1px solid rgba(255,107,53,.3);text-align:center;min-width:180px;">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">BEST HOUR (UTC)</div>
+            <div class="grad-text" style="font-size:22px;font-weight:900;" id="yt-best-hour">—</div>
+          </div>
+        </div>
+        <!-- Day/Hour Heatmap -->
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Average Views Heatmap — all 7 days × 24 hours (UTC)</div>
+        <div id="yt-heatmap" style="overflow-x:auto;"></div>
+        <!-- Monthly Pattern -->
+        <div style="font-size:11px;color:var(--text-muted);margin:16px 0 8px;">Monthly Upload Pattern</div>
+        <div id="yt-monthly" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      </div>
+    </div>
+
+    <!-- 4. Top Performers (3 tabs) -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <div class="card-title">🏆 Top Performers</div>
+        <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:3px;border-radius:var(--radius-sm);">
+          <button class="btn btn-sm active" id="perf-views-btn" onclick="switchPerfTab('views')" style="background:var(--bg-card);border:1px solid var(--border);font-size:11px;">Most Viewed</button>
+          <button class="btn btn-sm btn-ghost" id="perf-eng-btn" onclick="switchPerfTab('eng')" style="font-size:11px;">Most Engaging</button>
+          <button class="btn btn-sm btn-ghost" id="perf-vel-btn" onclick="switchPerfTab('vel')" style="font-size:11px;">Fastest Growing</button>
+          <button class="btn btn-sm btn-ghost" id="perf-breakout-btn" onclick="switchPerfTab('breakout')" style="font-size:11px;">Breakouts 🔥</button>
+        </div>
       </div>
       <div class="card-body" style="padding:0;">
-        <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:12px;">
-            <thead>
-              <tr style="border-bottom:1px solid var(--border);color:var(--text-muted);text-align:left;">
-                <th style="padding:10px 12px;">#</th>
-                <th style="padding:10px 12px;">Title</th>
-                <th style="padding:10px 12px;text-align:right;">Views</th>
-                <th style="padding:10px 12px;text-align:right;">Likes</th>
-                <th style="padding:10px 12px;text-align:right;">Comments</th>
-                <th style="padding:10px 12px;text-align:right;">Engagement</th>
-                <th style="padding:10px 12px;">Published</th>
-              </tr>
-            </thead>
-            <tbody id="yt-video-tbody"></tbody>
-          </table>
-        </div>
+        <div id="perf-table-views"></div>
+        <div id="perf-table-eng" style="display:none;"></div>
+        <div id="perf-table-vel" style="display:none;"></div>
+        <div id="perf-table-breakout" style="display:none;"></div>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- ═══════ Instagram Tab ═══════ -->
-<div id="tab-ig" style="display:none;">
-  <div class="two-col">
-    <div style="display:flex;flex-direction:column;gap:16px;">
-      <div class="card">
-        <div class="card-header"><div class="card-title">📸 Analyze Instagram Profile</div></div>
-        <div class="card-body">
-          <div class="form-group">
-            <label class="form-label">Instagram Username</label>
-            <input class="form-input mono" id="ig-input" type="text" placeholder="@username (without @)">
-          </div>
-          <div style="padding:10px;background:rgba(0,212,168,.06);border:1px solid rgba(0,212,168,.2);border-radius:var(--radius-sm);font-size:12px;margin-bottom:16px;">
-            ✓ Uses your saved P1 cookies — works on public profiles &amp; profiles you follow.
-          </div>
-          <button class="btn btn-primary btn-full" id="ig-analyze-btn" onclick="analyzeInstagram()">
-            📊 Analyse Profile
-          </button>
-        </div>
-      </div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:16px;">
-      <div class="card">
-        <div class="card-header"><div class="card-title">ℹ️ How It Works</div></div>
-        <div class="card-body" style="font-size:12px;color:var(--text-secondary);line-height:1.8;">
-          Uses your authenticated Instagram session (P1 cookies) to query:<br><br>
-          • Follower count, following, total posts<br>
-          • Recent 50 posts with likes &amp; comments<br>
-          • Engagement rate = <code>(likes + comments) / followers × 100</code><br>
-          • Best posting time heatmap based on top-performing posts<br>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- IG Results -->
-  <div id="ig-results" style="display:none; margin-top:20px;">
+    <!-- 5. All Videos Table -->
     <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <div class="card-title">📹 All Analysed Videos</div>
+        <span class="badge badge-gray" id="yt-video-total">0 videos</span>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:800px;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border);color:var(--text-muted);text-align:left;background:var(--bg-card-2);">
+              <th style="padding:8px 10px;">#</th>
+              <th style="padding:8px 10px;">Title</th>
+              <th style="padding:8px 10px;text-align:right;">Views</th>
+              <th style="padding:8px 10px;text-align:right;">Likes</th>
+              <th style="padding:8px 10px;text-align:right;">Comments</th>
+              <th style="padding:8px 10px;text-align:right;">Engagement</th>
+              <th style="padding:8px 10px;text-align:right;">Duration</th>
+              <th style="padding:8px 10px;text-align:right;">Velocity</th>
+              <th style="padding:8px 10px;text-align:right;">Tags</th>
+              <th style="padding:8px 10px;">Published</th>
+            </tr>
+          </thead>
+          <tbody id="yt-video-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 6. Historical Snapshots (own channel only) -->
+    <div id="yt-history-section" style="display:none;">
+      <div class="section-heading">📜 Historical Snapshots (7-Day GDG Buffer)</div>
+      <div id="yt-history-cards" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;"></div>
+    </div>
+
+  </div><!-- /yt-results -->
+</div><!-- /tab-yt -->
+
+<!-- ════════════════════════════════════════════
+     INSTAGRAM TAB
+════════════════════════════════════════════ -->
+<div id="tab-ig" style="display:none;">
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><div class="card-title">📸 Analyse Instagram Profile</div></div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">Instagram Username</label>
+        <input class="form-input mono" id="ig-input" type="text" placeholder="username (without @)">
+      </div>
+      <div style="padding:10px;background:rgba(0,212,168,.06);border:1px solid rgba(0,212,168,.2);border-radius:var(--radius-sm);font-size:12px;margin-bottom:16px;">
+        ✓ Uses your saved P1 cookies — 1 snapshot stored per profile.
+      </div>
+      <button class="btn btn-primary" id="ig-analyze-btn" onclick="analyzeInstagram()">📊 Analyse Profile</button>
+    </div>
+  </div>
+
+  <div id="ig-results" style="display:none; margin-top:20px;">
+    <div class="card" style="margin-bottom:16px;">
       <div class="card-body">
         <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
           <img id="ig-avatar" src="" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--border);">
           <div style="flex:1;">
             <div id="ig-name" style="font-size:18px;font-weight:700;"></div>
-            <div id="ig-user" style="font-size:13px;color:var(--text-muted);"></div>
+            <div id="ig-user" style="font-size:12px;color:var(--text-muted);"></div>
           </div>
-          <div style="display:flex;gap:20px;flex-wrap:wrap;">
-            <div style="text-align:center;">
-              <div class="grad-text" style="font-size:22px;font-weight:800;" id="ig-followers">—</div>
-              <div style="font-size:11px;color:var(--text-muted);">Followers</div>
-            </div>
-            <div style="text-align:center;">
-              <div class="grad-text" style="font-size:22px;font-weight:800;" id="ig-following">—</div>
-              <div style="font-size:11px;color:var(--text-muted);">Following</div>
-            </div>
-            <div style="text-align:center;">
-              <div class="grad-text" style="font-size:22px;font-weight:800;" id="ig-avg-eng">—</div>
-              <div style="font-size:11px;color:var(--text-muted);">Avg Engagement</div>
-            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-top:16px;">
+          <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">👥 Followers</div>
+            <div class="grad-text" style="font-size:18px;font-weight:800;" id="ig-followers">—</div>
+          </div>
+          <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">👣 Following</div>
+            <div class="grad-text" style="font-size:18px;font-weight:800;" id="ig-following">—</div>
+          </div>
+          <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">💬 Avg Engagement</div>
+            <div class="grad-text" style="font-size:18px;font-weight:800;" id="ig-avg-eng">—</div>
+          </div>
+          <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">❤ Avg Likes</div>
+            <div class="grad-text" style="font-size:18px;font-weight:800;" id="ig-avg-likes">—</div>
           </div>
         </div>
       </div>
     </div>
-
-    <!-- IG Best Time -->
-    <div class="card" style="margin-bottom:20px;">
+    <div class="card">
       <div class="card-header"><div class="card-title">🕐 Optimal Posting Time</div></div>
       <div class="card-body">
-        <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:20px;">
-          <div style="background:linear-gradient(135deg,rgba(255,60,172,.15),rgba(255,107,53,.1));padding:20px 28px;border-radius:var(--radius);border:1px solid rgba(255,60,172,.3);text-align:center;">
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">BEST DAY</div>
-            <div class="grad-text" style="font-size:32px;font-weight:900;" id="ig-best-day">—</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+          <div style="background:linear-gradient(135deg,rgba(255,60,172,.15),rgba(255,107,53,.1));padding:16px 24px;border-radius:var(--radius);border:1px solid rgba(255,60,172,.3);text-align:center;">
+            <div style="font-size:10px;color:var(--text-muted);">BEST DAY</div>
+            <div class="grad-text" style="font-size:28px;font-weight:900;" id="ig-best-day">—</div>
           </div>
-          <div style="background:linear-gradient(135deg,rgba(255,107,53,.15),rgba(255,170,0,.1));padding:20px 28px;border-radius:var(--radius);border:1px solid rgba(255,107,53,.3);text-align:center;">
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">BEST HOUR</div>
-            <div class="grad-text" style="font-size:26px;font-weight:900;white-space:nowrap;" id="ig-best-hour">—</div>
+          <div style="background:linear-gradient(135deg,rgba(255,107,53,.15),rgba(255,170,0,.1));padding:16px 24px;border-radius:var(--radius);border:1px solid rgba(255,107,53,.3);text-align:center;">
+            <div style="font-size:10px;color:var(--text-muted);">BEST HOUR</div>
+            <div class="grad-text" style="font-size:22px;font-weight:900;" id="ig-best-hour">—</div>
           </div>
         </div>
         <div id="ig-heatmap" style="overflow-x:auto;"></div>
@@ -228,178 +299,302 @@
 
 {% block scripts %}
 <script>
-// ── Tab switcher ────────────────────────────────────────────
-function switchAnalyticsTab(t) {
+// ── Utilities ────────────────────────────────────────────────
+function fmt(n) {
+  if (n == null) return '—';
+  if (n >= 1e9) return (n/1e9).toFixed(1)+'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
+  return String(n);
+}
+function fmtDate(iso) { return iso ? iso.slice(0,10) : '—'; }
+function setEl(id, val) { const e = document.getElementById(id); if(e) e.textContent = val ?? '—'; }
+
+// ── Tab switches ─────────────────────────────────────────────
+function switchPlatformTab(t) {
   ['yt','ig'].forEach(id => {
-    document.getElementById('tab-' + id).style.display = id === t ? 'block' : 'none';
-    const btn = document.getElementById('tab-' + id + '-btn');
-    btn.style.background = id === t ? 'var(--bg-card)' : 'transparent';
-    btn.style.border = id === t ? '1px solid var(--border)' : 'none';
-    btn.classList.toggle('active', id === t);
+    document.getElementById('tab-'+id).style.display = id===t?'block':'none';
+    document.getElementById('tab-'+id+'-btn').classList.toggle('active', id===t);
+    document.getElementById('tab-'+id+'-btn').style.background = id===t?'var(--bg-card)':'transparent';
+    document.getElementById('tab-'+id+'-btn').style.border = id===t?'1px solid var(--border)':'none';
+  });
+}
+function switchMode(m) {
+  ['single','multi'].forEach(id => {
+    document.getElementById('mode-'+id).style.display = id===m?'block':'none';
+    const b = document.getElementById('mode-'+id+'-btn');
+    b.classList.toggle('active', id===m);
+    b.style.background = id===m?'var(--bg-card)':'transparent';
+    b.style.border = id===m?'1px solid var(--border)':'none';
+  });
+  if(m==='multi') document.getElementById('yt-results').style.display='none';
+  else document.getElementById('multi-results').style.display='none';
+}
+function switchPerfTab(t) {
+  ['views','eng','vel','breakout'].forEach(id => {
+    document.getElementById('perf-table-'+id).style.display = id===t?'block':'none';
+    const b = document.getElementById('perf-'+id+'-btn');
+    b.classList.toggle('active', id===t);
+    b.style.background = id===t?'var(--bg-card)':'transparent';
+    b.style.border = id===t?'1px solid var(--border)':'none';
   });
 }
 
-// ── Formatters ─────────────────────────────────────────────
-function fmt(n) {
-  if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
-  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
-  return String(n);
-}
-
-function fmtDate(iso) {
-  if (!iso) return '—';
-  return iso.slice(0,10);
-}
-
-// ── Heatmap builder ─────────────────────────────────────────
+// ── Heatmap builder ──────────────────────────────────────────
 function buildHeatmap(containerId, heatmap, dayOrder) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  
-  // Find max for normalisation
+  const el = document.getElementById(containerId);
+  if(!el) return;
   let max = 0;
-  for (const day of dayOrder) {
-    for (let h = 0; h < 24; h++) {
-      max = Math.max(max, heatmap[day]?.[h] || 0);
+  for(const d of dayOrder) for(let h=0;h<24;h++) max=Math.max(max, heatmap[d]?.[h]||0);
+  let html=`<table style="border-collapse:collapse;min-width:700px;font-size:10px;">`;
+  html+=`<tr><th style="padding:3px 6px;color:var(--text-muted);white-space:nowrap;">UTC</th>`;
+  for(let h=0;h<24;h++) html+=`<th style="padding:2px 3px;color:var(--text-muted);text-align:center;min-width:24px;">${h}</th>`;
+  html+=`</tr>`;
+  for(const d of dayOrder) {
+    html+=`<tr><td style="padding:3px 6px;color:var(--text-secondary);font-weight:600;white-space:nowrap;">${d}</td>`;
+    for(let h=0;h<24;h++){
+      const v=heatmap[d]?.[h]||0;
+      const alpha=max>0?(0.05+v/max*0.88).toFixed(2):'0.05';
+      const tc=v/max>0.55?'#fff':'var(--text-muted)';
+      html+=`<td title="${d} ${h}:00 — ${fmt(v)}" style="padding:4px 2px;text-align:center;border-radius:2px;background:rgba(255,60,172,${alpha});color:${tc};">${v>0?fmt(v):''}</td>`;
     }
+    html+=`</tr>`;
   }
-  
-  const hours = Array.from({length: 24}, (_, i) => i);
-  
-  let html = `<table style="border-collapse:collapse;min-width:700px;font-size:10px;">`;
-  // Header row (hours)
-  html += `<tr><th style="padding:4px 6px;color:var(--text-muted);text-align:right;">UTC</th>`;
-  for (const h of hours) {
-    html += `<th style="padding:2px 4px;color:var(--text-muted);text-align:center;min-width:26px;">${h}</th>`;
-  }
-  html += `</tr>`;
-  
-  for (const day of dayOrder) {
-    html += `<tr>`;
-    html += `<td style="padding:4px 6px;color:var(--text-secondary);font-weight:600;white-space:nowrap;">${day}</td>`;
-    for (const h of hours) {
-      const val = heatmap[day]?.[h] || 0;
-      const intensity = max > 0 ? val / max : 0;
-      const alpha = (0.08 + intensity * 0.85).toFixed(2);
-      const textColor = intensity > 0.6 ? '#fff' : 'var(--text-muted)';
-      html += `<td title="${day} ${h}:00 — ${fmt(val)} avg views" style="
-        padding:4px;
-        text-align:center;
-        border-radius:3px;
-        background:rgba(255,60,172,${alpha});
-        color:${textColor};
-        cursor:default;
-      ">${val > 0 ? fmt(val) : ''}</td>`;
-    }
-    html += `</tr>`;
-  }
-  html += `</table>`;
-  container.innerHTML = html;
+  html+=`</table>`;
+  el.innerHTML=html;
 }
 
-// ── YouTube Analyze ─────────────────────────────────────────
-async function analyzeYouTube() {
-  const input = document.getElementById('yt-input').value.trim();
-  if (!input) { showToast('Enter a channel URL or @handle', 'warn'); return; }
-  
-  const btn = document.getElementById('yt-analyze-btn');
-  btn.disabled = true;
-  btn.textContent = '⏳ Analysing…';
-  document.getElementById('yt-results').style.display = 'none';
-  
-  try {
-    const resp = await postJSON('/api/analytics/youtube', { channel: input });
-    if (resp.error) { showToast(resp.error, 'error'); return; }
-    
-    const d = resp;
-    const ch = d.channel;
-    const bt = d.best_times;
-    const sm = d.summary;
-    
-    document.getElementById('yt-thumb').src = ch.thumbnail || '';
-    document.getElementById('yt-title').textContent = ch.title;
-    document.getElementById('yt-handle').textContent = ch.country ? `📍 ${ch.country}` : '';
-    document.getElementById('yt-subs').textContent = ch.hidden_subscribers ? '—' : fmt(ch.subscribers);
-    document.getElementById('yt-views').textContent = fmt(ch.total_views);
-    document.getElementById('yt-count').textContent = fmt(ch.video_count);
-    document.getElementById('yt-eng').textContent = sm.avg_engagement_rate + '%';
-    document.getElementById('yt-best-day').textContent = bt.best_day;
-    document.getElementById('yt-best-hour').textContent = bt.best_hour_label;
-    
-    buildHeatmap('yt-heatmap', bt.heatmap, bt.day_order);
-    
-    // Videos table
-    const tbody = document.getElementById('yt-video-tbody');
-    tbody.innerHTML = d.videos.map((v, i) => `
+// ── Monthly Pattern ──────────────────────────────────────────
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function buildMonthly(containerId, monthly) {
+  const el=document.getElementById(containerId);
+  if(!el||!monthly) return;
+  const max=Math.max(...Object.values(monthly),1);
+  el.innerHTML=MONTHS.map(m=>{
+    const v=monthly[m]||0;
+    const h=Math.max(8,v/max*60);
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="font-size:10px;color:var(--text-muted);">${v}</div>
+      <div style="width:24px;height:${h}px;background:linear-gradient(180deg,var(--grad-from),var(--grad-via));border-radius:3px;opacity:${v>0?1:0.2};"></div>
+      <div style="font-size:10px;color:var(--text-muted);">${m}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Video table builder ──────────────────────────────────────
+function buildVideoTable(containerId, videos, rankKey='views') {
+  const el=document.getElementById(containerId);
+  if(!el) return;
+  const sorted=[...videos].sort((a,b)=>(b[rankKey]||0)-(a[rankKey]||0)).slice(0,20);
+  el.innerHTML=`<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:760px;">
+    <thead><tr style="border-bottom:1px solid var(--border);color:var(--text-muted);background:var(--bg-card-2);">
+      <th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Title</th>
+      <th style="padding:8px 10px;text-align:right;">Views</th>
+      <th style="padding:8px 10px;text-align:right;">Engagement</th>
+      <th style="padding:8px 10px;text-align:right;">Duration</th>
+      <th style="padding:8px 10px;text-align:right;">Velocity/Day</th>
+      <th style="padding:8px 10px;">Published</th>
+    </tr></thead><tbody>
+    ${sorted.map((v,i)=>`
       <tr style="border-bottom:1px solid var(--border);">
-        <td style="padding:10px 12px;color:var(--text-muted);">${i+1}</td>
-        <td style="padding:10px 12px;max-width:300px;">
+        <td style="padding:8px 10px;color:var(--text-muted);">${i+1}</td>
+        <td style="padding:8px 10px;max-width:280px;">
           <div style="display:flex;align-items:center;gap:8px;">
-            <img src="${v.thumbnail||''}" style="width:40px;height:28px;object-fit:cover;border-radius:3px;flex-shrink:0;">
-            <a href="https://youtube.com/watch?v=${v.id}" target="_blank" style="color:var(--text);text-decoration:none;font-size:12px;line-height:1.4;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">${v.title}</a>
+            <img src="${v.thumbnail||''}" style="width:38px;height:26px;object-fit:cover;border-radius:2px;flex-shrink:0;">
+            <a href="https://youtube.com/watch?v=${v.id}" target="_blank" style="color:var(--text);text-decoration:none;font-size:11px;line-height:1.4;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">${v.title}</a>
           </div>
         </td>
-        <td style="padding:10px 12px;text-align:right;font-family:var(--font-mono);">${fmt(v.views)}</td>
-        <td style="padding:10px 12px;text-align:right;font-family:var(--font-mono);">${fmt(v.likes)}</td>
-        <td style="padding:10px 12px;text-align:right;font-family:var(--font-mono);">${fmt(v.comments)}</td>
-        <td style="padding:10px 12px;text-align:right;">
-          <span style="color:${v.engagement_rate > 5 ? 'var(--accent-green)' : 'var(--text-secondary)'};">${v.engagement_rate}%</span>
-        </td>
-        <td style="padding:10px 12px;color:var(--text-muted);">${fmtDate(v.published_at)}</td>
+        <td style="padding:8px 10px;text-align:right;font-family:var(--font-mono);">${fmt(v.views)}</td>
+        <td style="padding:8px 10px;text-align:right;color:${v.engagement_rate>5?'var(--accent-green)':'var(--text-secondary)'};">${v.engagement_rate}%</td>
+        <td style="padding:8px 10px;text-align:right;font-family:var(--font-mono);">${v.duration_fmt||'—'}</td>
+        <td style="padding:8px 10px;text-align:right;font-family:var(--font-mono);">${fmt(v.view_velocity)}</td>
+        <td style="padding:8px 10px;color:var(--text-muted);">${fmtDate(v.published_at)}</td>
       </tr>
-    `).join('');
-    
-    document.getElementById('yt-video-count-badge').textContent = d.videos.length + ' videos';
-    document.getElementById('yt-results').style.display = 'block';
-    showToast('Analysis complete!', 'success');
-    
-  } catch(e) {
-    showToast('Error: ' + e.message, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '📊 Analyse Channel';
-  }
+    `).join('')}
+    </tbody></table></div>`;
 }
 
-// ── Instagram Analyze ───────────────────────────────────────
-async function analyzeInstagram() {
-  const input = document.getElementById('ig-input').value.trim().replace('@','');
-  if (!input) { showToast('Enter a username', 'warn'); return; }
-  
-  const btn = document.getElementById('ig-analyze-btn');
-  btn.disabled = true;
-  btn.textContent = '⏳ Analysing…';
-  document.getElementById('ig-results').style.display = 'none';
-  
-  try {
-    const resp = await postJSON('/api/analytics/instagram', { username: input });
-    if (resp.error) { showToast(resp.error, 'error'); return; }
-    
-    const p = resp.profile;
-    const bt = resp.best_times;
-    const sm = resp.summary;
-    
-    document.getElementById('ig-avatar').src = p.profile_pic || '';
-    document.getElementById('ig-name').textContent = p.full_name || input;
-    document.getElementById('ig-user').textContent = `@${p.username} · ${p.post_count} posts`;
-    document.getElementById('ig-followers').textContent = fmt(p.followers);
-    document.getElementById('ig-following').textContent = fmt(p.following);
-    document.getElementById('ig-avg-eng').textContent = sm.avg_engagement_rate + '%';
-    document.getElementById('ig-best-day').textContent = bt.best_day;
-    document.getElementById('ig-best-hour').textContent = bt.best_hour_label;
-    
-    buildHeatmap('ig-heatmap', bt.heatmap, bt.day_order);
-    
-    document.getElementById('ig-results').style.display = 'block';
-    showToast('Instagram analysis complete!', 'success');
-    
-  } catch(e) {
-    showToast('Error: ' + e.message, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '📊 Analyse Profile';
+// ── Render full single-channel dashboard ─────────────────────
+function renderYTDashboard(d) {
+  const ch=d.channel, ca=d.content_analysis, bt=d.best_times, tp=d.top_performers;
+
+  document.getElementById('yt-thumb').src=ch.thumbnail||'';
+  setEl('yt-title', ch.title);
+  setEl('yt-meta', `${ch.country} · Joined ${fmtDate(ch.published_at)} · ${ch.channel_age_days} days old`);
+
+  // KPIs
+  setEl('yt-kpi-subs', ch.hidden_subscribers?'Hidden':fmt(ch.subscribers));
+  setEl('yt-kpi-views', fmt(ch.total_views));
+  setEl('yt-kpi-videos', fmt(ch.video_count));
+  setEl('yt-kpi-age', ch.channel_age_days+' days');
+  setEl('yt-kpi-upwk', ch.uploads_per_week+'/wk');
+  setEl('yt-kpi-viewsub', ch.views_per_subscriber);
+  setEl('yt-kpi-avgviews', fmt(ca.avg_views));
+  setEl('yt-kpi-eng', ca.avg_engagement_rate+'%');
+
+  // Content Analysis
+  setEl('yt-ca-velocity', fmt(ca.avg_view_velocity)+'/day');
+  setEl('yt-ca-dur', ca.avg_duration_fmt);
+  setEl('yt-ca-title', ca.avg_title_length+' chars');
+  setEl('yt-ca-tags', ca.avg_tag_count+' tags');
+  setEl('yt-ca-gap', ca.avg_upload_gap_days!=null ? ca.avg_upload_gap_days+' days' : '—');
+  setEl('yt-ca-like', ca.avg_like_ratio+'%');
+  setEl('yt-ca-comment', ca.avg_comment_ratio+'%');
+  setEl('yt-ca-desc', ca.avg_description_length+' chars');
+
+  // Best times
+  setEl('yt-best-day', bt.best_day);
+  setEl('yt-best-hour', bt.best_hour_label);
+  buildHeatmap('yt-heatmap', bt.heatmap, bt.day_order);
+  buildMonthly('yt-monthly', bt.monthly_pattern);
+
+  // Top performers
+  buildVideoTable('perf-table-views', tp.by_views, 'views');
+  buildVideoTable('perf-table-eng', tp.by_engagement, 'engagement_rate');
+  buildVideoTable('perf-table-vel', tp.by_velocity, 'view_velocity');
+  buildVideoTable('perf-table-breakout', tp.breakouts, 'view_velocity');
+
+  // All videos
+  const tbody=document.getElementById('yt-video-tbody');
+  setEl('yt-video-total', d.videos_analyzed+' videos');
+  tbody.innerHTML=d.videos.map((v,i)=>`
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:7px 10px;color:var(--text-muted);">${i+1}</td>
+      <td style="padding:7px 10px;max-width:260px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <img src="${v.thumbnail||''}" style="width:36px;height:24px;object-fit:cover;border-radius:2px;flex-shrink:0;">
+          <a href="https://youtube.com/watch?v=${v.id}" target="_blank" style="color:var(--text);text-decoration:none;font-size:11px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">${v.title}</a>
+        </div>
+      </td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.views)}</td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.likes)}</td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.comments)}</td>
+      <td style="padding:7px 10px;text-align:right;color:${v.engagement_rate>5?'var(--accent-green)':'var(--text-secondary)'};">${v.engagement_rate}%</td>
+      <td style="padding:7px 10px;text-align:right;">${v.duration_fmt||'—'}</td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.view_velocity)}</td>
+      <td style="padding:7px 10px;text-align:right;">${v.tag_count}</td>
+      <td style="padding:7px 10px;color:var(--text-muted);">${fmtDate(v.published_at)}</td>
+    </tr>
+  `).join('');
+
+  // Own channel badge + history
+  if(d.is_own_channel) {
+    document.getElementById('yt-own-badge').style.display='block';
+    loadHistory(d.channel.id);
   }
+
+  document.getElementById('yt-results').style.display='block';
+}
+
+// ── Load Snapshot History ────────────────────────────────────
+async function loadHistory(channelId) {
+  const resp = await fetch('/api/analytics/snapshots/'+channelId);
+  const json = await resp.json();
+  const snaps = json.snapshots||[];
+  if(!snaps.length) return;
+  const section=document.getElementById('yt-history-section');
+  section.style.display='block';
+  const cards=document.getElementById('yt-history-cards');
+  cards.innerHTML=snaps.map(s=>`
+    <div style="background:var(--bg-card-2);padding:14px 18px;border-radius:var(--radius-sm);border:1px solid var(--border);min-width:180px;">
+      <div style="font-size:10px;color:var(--text-muted);">Slot ${s.slot} ${s.slot===snaps[0].slot?'<span style=\"background:var(--accent);color:#000;padding:1px 5px;border-radius:3px;font-size:9px;\">LATEST</span>':''}</div>
+      <div style="font-size:12px;font-weight:600;margin-top:4px;">${s.channel_title}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${s.captured_at.slice(0,16).replace('T',' ')} UTC</div>
+      ${s.data?.content_analysis?`<div style="margin-top:8px;font-size:11px;">
+        <span style="color:var(--text-muted);">Avg Views:</span> <strong>${fmt(s.data.content_analysis.avg_views)}</strong><br>
+        <span style="color:var(--text-muted);">Engagement:</span> <strong>${s.data.content_analysis.avg_engagement_rate}%</strong>
+      </div>`:''}
+    </div>
+  `).join('');
+}
+
+// ── Analyse Single YouTube Channel ───────────────────────────
+async function analyzeYouTube() {
+  const input=document.getElementById('yt-input').value.trim();
+  if(!input){showToast('Enter a channel','warn');return;}
+  const btn=document.getElementById('yt-analyze-btn');
+  btn.disabled=true; btn.textContent='⏳ Analysing…';
+  document.getElementById('yt-results').style.display='none';
+  try {
+    const resp=await postJSON('/api/analytics/youtube',{channel:input});
+    if(resp.error){showToast(resp.error,'error');return;}
+    renderYTDashboard(resp);
+    showToast('Analysis complete!','success');
+  } catch(e){showToast(e.message,'error');}
+  finally{btn.disabled=false;btn.textContent='📊 Deep Analyse';}
+}
+
+// ── Multi-Channel Comparison ─────────────────────────────────
+async function analyzeMulti() {
+  const raw=document.getElementById('yt-multi-input').value.trim();
+  const channels=raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(!channels.length){showToast('Enter at least one channel','warn');return;}
+  if(channels.length>10){showToast('Maximum 10 channels','warn');return;}
+  const btn=document.getElementById('yt-multi-btn');
+  btn.disabled=true; btn.textContent=`⏳ Analysing ${channels.length} channels…`;
+  document.getElementById('multi-results').style.display='none';
+  try {
+    const resp=await postJSON('/api/analytics/multi',{channels});
+    if(resp.error){showToast(resp.error,'error');return;}
+    const results=resp.results||[];
+    const tbody=document.getElementById('multi-tbody');
+    tbody.innerHTML=results.map(r=>{
+      if(r.error) return `<tr><td colspan="12" style="padding:12px;color:var(--accent-red);">❌ ${r.input}: ${r.error}</td></tr>`;
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:10px 12px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <img src="${r.thumbnail||''}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
+            <div>
+              <div style="font-weight:600;font-size:12px;">${r.title}</div>
+              <div style="font-size:10px;color:var(--text-muted);">${r.input}</div>
+            </div>
+          </div>
+        </td>
+        <td style="padding:10px 12px;text-align:right;font-family:var(--font-mono);">${fmt(r.subscribers)}</td>
+        <td style="padding:10px 12px;text-align:right;font-family:var(--font-mono);">${fmt(r.total_views)}</td>
+        <td style="padding:10px 12px;text-align:right;">${fmt(r.video_count)}</td>
+        <td style="padding:10px 12px;text-align:right;">${fmt(r.avg_views)}</td>
+        <td style="padding:10px 12px;text-align:right;color:${(r.avg_engagement_rate||0)>5?'var(--accent-green)':'var(--text-secondary)'};">${r.avg_engagement_rate}%</td>
+        <td style="padding:10px 12px;text-align:right;">${fmt(r.avg_view_velocity)}/day</td>
+        <td style="padding:10px 12px;text-align:right;">${r.uploads_per_week}/wk</td>
+        <td style="padding:10px 12px;text-align:right;">${r.avg_duration_fmt||'—'}</td>
+        <td style="padding:10px 12px;text-align:right;">${r.avg_tag_count}</td>
+        <td style="padding:10px 12px;">${r.best_day}</td>
+        <td style="padding:10px 12px;font-size:11px;">${r.best_hour_label}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('multi-count-badge').textContent=results.length+' channels';
+    document.getElementById('multi-results').style.display='block';
+    showToast(`Compared ${results.length} channels!`,'success');
+  } catch(e){showToast(e.message,'error');}
+  finally{btn.disabled=false;btn.textContent='📊 Compare All Channels';}
+}
+
+// ── Analyse Instagram ────────────────────────────────────────
+async function analyzeInstagram() {
+  const u=document.getElementById('ig-input').value.trim().replace('@','');
+  if(!u){showToast('Enter a username','warn');return;}
+  const btn=document.getElementById('ig-analyze-btn');
+  btn.disabled=true; btn.textContent='⏳ Analysing…';
+  document.getElementById('ig-results').style.display='none';
+  try {
+    const resp=await postJSON('/api/analytics/instagram',{username:u});
+    if(resp.error){showToast(resp.error,'error');return;}
+    const p=resp.profile, bt=resp.best_times, sm=resp.summary;
+    document.getElementById('ig-avatar').src=p.profile_pic||'';
+    setEl('ig-name',p.full_name||u);
+    setEl('ig-user',`@${p.username} · ${p.post_count} posts`);
+    setEl('ig-followers',fmt(p.followers));
+    setEl('ig-following',fmt(p.following));
+    setEl('ig-avg-eng',sm.avg_engagement_rate+'%');
+    setEl('ig-avg-likes',fmt(sm.avg_likes_per_post));
+    setEl('ig-best-day',bt.best_day);
+    setEl('ig-best-hour',bt.best_hour_label);
+    buildHeatmap('ig-heatmap',bt.heatmap,bt.day_order);
+    document.getElementById('ig-results').style.display='block';
+    showToast('Instagram analysis complete!','success');
+  } catch(e){showToast(e.message,'error');}
+  finally{btn.disabled=false;btn.textContent='📊 Analyse Profile';}
 }
 </script>
 {% endblock %}
