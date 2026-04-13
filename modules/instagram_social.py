@@ -169,6 +169,8 @@ def lookup_user(username: str, cookies_file: str) -> dict:
         user = data.get('data', {}).get('user', {})
         if not user:
             return {'error': 'User not found or private'}
+        timeline = user.get('edge_owner_to_timeline_media', {}).get('edges', [])
+        shortcodes = [edge['node']['shortcode'] for edge in timeline if 'node' in edge and 'shortcode' in edge['node']]
         return {
             'user_id':         user.get('id'),
             'username':        user.get('username', username),
@@ -177,6 +179,7 @@ def lookup_user(username: str, cookies_file: str) -> dict:
             'following_count': user.get('edge_follow', {}).get('count', 0),
             'is_private':      user.get('is_private', False),
             'profile_pic_url': user.get('profile_pic_url', ''),
+            'recent_posts':    shortcodes,
         }
     except requests.exceptions.HTTPError as exc:
         if resp.status_code == 429:

@@ -1045,8 +1045,6 @@ def api_download_userid():
         else:
             out_dir  = base_dir
             
-        # Instagram profile URL — yt-dlp only supports the plain profile URL, not /reels/
-        profile_url = f'https://www.instagram.com/{username}/'
         os.makedirs(out_dir, exist_ok=True)
 
         if quality == 'best':
@@ -1056,16 +1054,33 @@ def api_download_userid():
 
         cmd = [
             sys.executable, '-m', 'yt_dlp', '--rm-cache-dir',
-            '--playlist-end', str(limit),
-            '--yes-playlist',
             '--format', fmt,
             '--output', os.path.join(out_dir, '%(id)s.%(ext)s'),
             '--write-info-json', '--no-warnings',
-            '--ignore-errors',  # skip unavailable videos in the playlist
+            '--ignore-errors',  # skip unavailable videos
         ]
         if os.path.isfile(COOKIES_FILE):
             cmd += ['--cookies', COOKIES_FILE]
-        cmd.append(profile_url)
+            
+        _emit(job, f'Looking up latest {limit} reels for @{username}...')
+        from modules.instagram_social import lookup_user
+        info = lookup_user(username, COOKIES_FILE)
+        
+        if 'error' in info:
+            _emit(job, f'API Error: {info["error"]}')
+            _finish(job, 'Failed to fetch user profile metadata.', error=True)
+            return
+            
+        shortcodes = info.get('recent_posts', [])
+        if not shortcodes:
+            _emit(job, 'No recent posts found for this user.')
+            _finish(job, 'Extraction complete (0 found).', error=True)
+            return
+
+        # Cap at requested limit
+        shortcodes = shortcodes[:limit]
+        urls = [f'https://www.instagram.com/p/{sc}/' for sc in shortcodes]
+        cmd.extend(urls)
 
         downloaded = 0
         results    = []
