@@ -1,122 +1,320 @@
 {% extends "layout.html" %}
-
-{% block title %}Instagram Publisher — Nikethan{% endblock %}
-{% block breadcrumb %}Instagram Publisher{% endblock %}
+{% block title %}Instagram Auto-Poster — Nikethan{% endblock %}
+{% block breadcrumb %}Auto-Post{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h1 class="page-title"><span class="grad-text">Instagram Auto-Poster</span></h1>
-  <p class="page-subtitle">Schedule and automatically publish downloaded reels back to Instagram.</p>
+  <h1 class="page-title"><span class="grad-text">📸 Instagram Auto-Poster</span></h1>
+  <p class="page-subtitle">Post sequentially across up to <strong>5 Instagram accounts</strong>, each with their own folder, caption, rate limits and cooling period.</p>
 </div>
 
-<div class="two-col">
-  <div style="display:flex; flex-direction:column; gap:16px;">
-    
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">🤖 Auto-Poster Engine</div>
-        <span class="badge badge-{% if settings.get('poster_enabled') == '1' %}green{% else %}gray{% endif %}">
-            {% if settings.get('poster_enabled') == '1' %}ACTIVE{% else %}DISABLED{% endif %}
-        </span>
-      </div>
-      <div class="card-body">
-        <form id="poster-form">
-          <div class="form-group" style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-card-2); padding:16px; border-radius:var(--radius-sm); border:1px solid var(--border);">
-             <div>
-                <div style="font-weight:600; font-size:14px;">Enable Auto-Pubhlishing</div>
-                <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Automatically post fully processed reels to Instagram.</div>
-             </div>
-             <label class="toggle-switch">
-                <input type="checkbox" id="poster_enabled" {% if settings.get('poster_enabled') == '1' %}checked{% endif %}>
-                <span class="toggle-slider"></span>
-             </label>
-          </div>
-          
-          <div class="form-group" style="margin-top:20px;">
-            <label class="form-label">Posting Interval (Minutes)</label>
-            <input type="number" class="form-input" id="poster_interval" value="{{ settings.get('poster_interval', '10') }}" min="5" max="1440">
-            <div class="form-hint">How often the daemon wakes up to post a reel (Default: 10).</div>
-          </div>
-          
-          <div class="section-heading" style="margin-top:30px; margin-bottom:12px;">Default Captions</div>
-          <div class="form-group">
-            <label class="form-label">Constant Description</label>
-            <textarea class="form-textarea" id="poster_desc" rows="4" placeholder="Follow for more amazing content!">{{ settings.get('poster_desc', '') }}</textarea>
-          </div>
-          
-          <div class="form-group">
-            <label class="form-label">Constant Tags</label>
-            <textarea class="form-textarea mono" id="poster_tags" rows="3" placeholder="#viral #trending #reels">{{ settings.get('poster_tags', '') }}</textarea>
-          </div>
-          
-          <button type="button" class="btn btn-primary btn-full" onclick="savePosterSettings()">💾 Save Auto-Poster Settings</button>
-        </form>
-      </div>
-    </div>
-    
+<!-- Live Status Bar -->
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;" id="status-bar">
+  {% for a in accounts %}
+  <div id="status-pill-{{ a.id }}" style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:20px;font-size:12px;transition:all .3s;">
+    <span id="status-dot-{{ a.id }}" style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);flex-shrink:0;"></span>
+    <span style="font-weight:600;">{{ a.label or 'Account '~a.id }}</span>
+    <span id="status-label-{{ a.id }}" style="color:var(--text-muted);">—</span>
   </div>
+  {% endfor %}
+  <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="refreshStatus()">🔄 Refresh</button>
+</div>
 
-  <div style="display:flex; flex-direction:column; gap:16px;">
-    <div class="card">
-        <div class="card-header"><div class="card-title">🔐 Publisher Authentication</div></div>
-        <div class="card-body">
-            <div class="form-hint" style="margin-bottom:16px;">
-               Instagrapi requires an explicit Username and Password to upload videos securely. This is independent of the Cookies used for downloading.
-            </div>
-            <div class="form-group">
-                <label class="form-label">Instagram Username</label>
-                <input type="text" class="form-input mono" id="publisher_user" value="{{ settings.get('publisher_user', '') }}">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Instagram Password</label>
-                <input type="password" class="form-input" id="publisher_pass" value="{% if settings.get('publisher_pass') %}********{% endif %}">
-            </div>
-            <button type="button" class="btn btn-secondary btn-full" onclick="savePublisherAuth()">Secure Save Credentials</button>
+<!-- Account Cards -->
+{% for a in accounts %}
+<div class="card" style="margin-bottom:16px;" id="account-card-{{ a.id }}">
+  <div class="card-header" style="cursor:pointer;" onclick="toggleCard({{ a.id }})">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:18px;">{{ ['🔵','🟡','🟢','🟠','🟣'][a.id-1] }}</span>
+      <div>
+        <div class="card-title" id="card-label-{{ a.id }}">{{ a.label or 'Account '~a.id }}</div>
+        <div style="font-size:11px;color:var(--text-muted);" id="card-sub-{{ a.id }}">
+          {% if a.username %}@{{ a.username }}{% else %}Not configured{% endif %}
         </div>
+      </div>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span id="card-status-badge-{{ a.id }}" class="badge badge-{% if a.enabled %}green{% else %}gray{% endif %}">
+        {% if a.enabled %}ENABLED{% else %}DISABLED{% endif %}
+      </span>
+      <!-- Global enable toggle -->
+      <label class="toggle-switch" onclick="event.stopPropagation()">
+        <input type="checkbox" id="enabled-{{ a.id }}" {% if a.enabled %}checked{% endif %}
+               onchange="saveAccountField({{ a.id }}, 'enabled', this.checked ? 1 : 0)">
+        <span class="toggle-slider"></span>
+      </label>
+      <span style="color:var(--text-muted);font-size:12px;" id="chevron-{{ a.id }}">▼</span>
+    </div>
+  </div>
+  <div id="account-body-{{ a.id }}" style="display:{% if loop.first %}block{% else %}none{% endif %};">
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+        <!-- Left col: Auth + Folder -->
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Label / Nickname</label>
+            <input class="form-input" id="label-{{ a.id }}" type="text" value="{{ a.label or '' }}" placeholder="e.g. Main Channel">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Instagram Username</label>
+            <input class="form-input mono" id="username-{{ a.id }}" type="text" value="{{ a.username or '' }}" placeholder="@handle">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Instagram Password</label>
+            <div style="display:flex;gap:6px;">
+              <input class="form-input" id="password-{{ a.id }}" type="password" value="{{ a.password or '' }}" placeholder="••••••••" style="flex:1;">
+              <button class="btn btn-ghost btn-sm" onclick="toggleKeyVisibility('password-{{ a.id }}', this)">👁</button>
+            </div>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">📁 Source Folder</label>
+            <div style="display:flex;gap:6px;">
+              <input class="form-input mono" id="folder-{{ a.id }}" type="text" value="{{ a.folder_path or '' }}" placeholder="C:\videos\account1" style="flex:1;">
+              <button class="btn btn-ghost btn-sm" onclick="pickFolder({{ a.id }})">📂</button>
+            </div>
+            <div class="form-hint">Videos posted in order (oldest first). Already-posted files are tracked.</div>
+          </div>
+        </div>
+
+        <!-- Right col: Caption + Rate limits -->
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Caption Template</label>
+            <textarea class="form-textarea" id="caption-{{ a.id }}" rows="3" placeholder="Follow for more!">{{ a.caption or '' }}</textarea>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Hashtags</label>
+            <textarea class="form-textarea mono" id="tags-{{ a.id }}" rows="2" placeholder="#viral #reels">{{ a.tags or '' }}</textarea>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" style="font-size:10px;">Max Posts/Batch</label>
+              <input class="form-input" id="max_posts_batch-{{ a.id }}" type="number" value="{{ a.max_posts_batch or 10 }}" min="1" max="50">
+              <div class="form-hint">Posts before cooling</div>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" style="font-size:10px;">Cool Period (min)</label>
+              <input class="form-input" id="cool_minutes-{{ a.id }}" type="number" value="{{ a.cool_minutes or 120 }}" min="10" max="1440">
+              <div class="form-hint">After batch limit</div>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" style="font-size:10px;">Gap Between Posts</label>
+              <input class="form-input" id="interval_minutes-{{ a.id }}" type="number" value="{{ a.interval_minutes or 15 }}" min="5" max="1440">
+              <div class="form-hint">Minutes between each</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status row -->
+      <div style="display:flex;gap:10px;align-items:center;padding:12px;background:var(--bg-card-2);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:12px;">
+        <span id="inline-status-{{ a.id }}" style="font-size:12px;flex:1;color:var(--text-muted);">—</span>
+        <div style="font-size:12px;">Posts this window: <strong id="posts-count-{{ a.id }}">{{ a.posts_in_window or 0 }}/{{ a.max_posts_batch or 10 }}</strong></div>
+        <button class="btn btn-ghost btn-sm" onclick="resetCooling({{ a.id }})" title="Reset cooling window">🔄 Reset Window</button>
+      </div>
+
+      <!-- Save button -->
+      <button class="btn btn-primary" onclick="saveAccount({{ a.id }})">💾 Save Account {{ a.id }}</button>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Activity Log -->
+<div class="card" style="margin-top:20px;">
+  <div class="card-header">
+    <div class="card-title">📋 Posting Activity Log</div>
+    <button class="btn btn-ghost btn-sm" onclick="loadLog()">🔄 Refresh</button>
+  </div>
+  <div class="card-body" style="padding:0;overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border);color:var(--text-muted);background:var(--bg-card-2);">
+          <th style="padding:8px 12px;">Account</th>
+          <th style="padding:8px 12px;">File</th>
+          <th style="padding:8px 12px;">Outcome</th>
+          <th style="padding:8px 12px;">Note</th>
+          <th style="padding:8px 12px;">Time</th>
+        </tr>
+      </thead>
+      <tbody id="log-tbody">
+        <tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text-muted);">Loading…</td></tr>
+      </tbody>
+    </table>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-async function savePosterSettings() {
-    const enabled = document.getElementById('poster_enabled').checked ? '1' : '0';
-    const interval = document.getElementById('poster_interval').value || '10';
-    const desc = document.getElementById('poster_desc').value.trim();
-    const tags = document.getElementById('poster_tags').value.trim();
-    
-    const resp = await postJSON('/api/settings/poster/save', {
-        poster_enabled: enabled,
-        poster_interval: interval,
-        poster_desc: desc,
-        poster_tags: tags
-    });
-    
-    if (resp.ok) {
-        showToast('Auto-Poster settings saved!', 'success');
-        setTimeout(() => location.reload(), 1000);
-    } else {
-        showToast(resp.error || 'Failed to save', 'error');
-    }
+
+// ── Accordion ─────────────────────────────────────────────────
+function toggleCard(id) {
+  const body = document.getElementById('account-body-'+id);
+  const chev = document.getElementById('chevron-'+id);
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  chev.textContent  = open ? '▶' : '▼';
 }
 
-async function savePublisherAuth() {
-    const user = document.getElementById('publisher_user').value.trim();
-    const pass = document.getElementById('publisher_pass').value;
-    
-    // Only send pass if it's changed from the placeholder
-    const payload = { publisher_user: user };
-    if (pass && pass !== '********') {
-        payload['publisher_pass'] = pass;
-    }
-    
-    const resp = await postJSON('/api/settings/poster/auth', payload);
-    if (resp.ok) {
-        showToast('Publisher credentials securely saved.', 'success');
-    } else {
-        showToast(resp.error || 'Failed to save', 'error');
-    }
+// ── Save whole account ────────────────────────────────────────
+async function saveAccount(id) {
+  const get = (field) => {
+    const el = document.getElementById(field+'-'+id);
+    return el ? el.value : '';
+  };
+  const getNum = (field, def) => {
+    const v = parseInt(get(field));
+    return isNaN(v) ? def : v;
+  };
+  const enabled = document.getElementById('enabled-'+id).checked ? 1 : 0;
+  const payload = {
+    label:            get('label'),
+    username:         get('username').replace('@','').trim(),
+    password:         get('password'),
+    folder_path:      get('folder'),
+    caption:          get('caption'),
+    tags:             get('tags'),
+    max_posts_batch:  getNum('max_posts_batch', 10),
+    cool_minutes:     getNum('cool_minutes', 120),
+    interval_minutes: getNum('interval_minutes', 15),
+    enabled:          enabled,
+  };
+  const resp = await postJSON(`/api/poster/accounts/${id}/save`, payload);
+  if (resp.ok) {
+    showToast(`Account ${id} saved!`, 'success');
+    // Update label in header
+    document.getElementById('card-label-'+id).textContent = payload.label || `Account ${id}`;
+    document.getElementById('card-sub-'+id).textContent = payload.username ? `@${payload.username}` : 'Not configured';
+    const badge = document.getElementById('card-status-badge-'+id);
+    badge.textContent = enabled ? 'ENABLED' : 'DISABLED';
+    badge.className = 'badge badge-'+(enabled ? 'green' : 'gray');
+  } else {
+    showToast(resp.error || 'Failed', 'error');
+  }
+}
+
+// ── Save single field (for toggle) ───────────────────────────
+async function saveAccountField(id, field, value) {
+  const resp = await postJSON(`/api/poster/accounts/${id}/save`, {[field]: value});
+  if (resp.ok) {
+    const badge = document.getElementById('card-status-badge-'+id);
+    if (badge) { badge.textContent = value ? 'ENABLED' : 'DISABLED'; badge.className = 'badge badge-'+(value ? 'green' : 'gray'); }
+    refreshStatus();
+  }
+}
+
+// ── Reset cooling ─────────────────────────────────────────────
+async function resetCooling(id) {
+  const resp = await postJSON(`/api/poster/accounts/${id}/reset`, {});
+  if (resp.ok) { showToast(`Account ${id} cooling reset!`, 'success'); refreshStatus(); }
+  else showToast(resp.error || 'Failed', 'error');
+}
+
+// ── Folder picker (via settings browse API if available) ──────
+async function pickFolder(id) {
+  try {
+    const resp = await fetch('/api/browse-folder');
+    const j    = await resp.json();
+    if (j.path) document.getElementById('folder-'+id).value = j.path;
+  } catch {
+    showToast('Folder picker unavailable — type path manually', 'warn');
+  }
+}
+
+// ── Live status refresh ───────────────────────────────────────
+const STATUS_COLORS = {
+  idle:    '#8250ff',
+  posting: '#00d4a8',
+  cooling: '#ff6b35',
+  error:   '#ff4141',
+  disabled:'#777',
+};
+const STATUS_DOT_COLORS = {
+  idle:    'rgba(130,80,255,.6)',
+  posting: '#00d4a8',
+  cooling: '#ff6b35',
+  error:   '#ff4141',
+  disabled:'#555',
+};
+
+async function refreshStatus() {
+  try {
+    const resp = await fetch('/api/poster/accounts/status');
+    const data = await resp.json();
+    (data.accounts || []).forEach(a => {
+      const dot   = document.getElementById('status-dot-'+a.id);
+      const label = document.getElementById('status-label-'+a.id);
+      const inline= document.getElementById('inline-status-'+a.id);
+      const count = document.getElementById('posts-count-'+a.id);
+      const pill  = document.getElementById('status-pill-'+a.id);
+
+      const st = a.enabled ? (a.status || 'idle') : 'disabled';
+      const dotColor = STATUS_DOT_COLORS[st] || '#777';
+      if (dot) dot.style.background = dotColor;
+
+      let labelText = '';
+      if (!a.enabled) {
+        labelText = 'disabled';
+      } else if (st === 'cooling') {
+        labelText = `cooling ${a.cooling_remaining_mins ?? '?'}m`;
+      } else if (st === 'posting') {
+        labelText = 'posting…';
+      } else if (st === 'error') {
+        labelText = 'error';
+      } else {
+        labelText = 'idle';
+      }
+      if (label) label.textContent = labelText;
+      if (inline) inline.textContent = a.note || '—';
+      if (count)  count.textContent  = `${a.posts_in_window||0}/${a.max_posts_batch||10}`;
+
+      // Pulse the pill if posting
+      if (pill) {
+        pill.style.borderColor = dotColor;
+        pill.style.boxShadow   = st==='posting' ? `0 0 8px ${dotColor}` : 'none';
+      }
+    });
+  } catch(e) { console.warn('Status refresh error', e); }
+}
+
+// Auto-refresh every 15s
+setInterval(refreshStatus, 15000);
+refreshStatus();
+loadLog();
+
+// ── Activity Log ──────────────────────────────────────────────
+async function loadLog() {
+  const resp = await fetch('/api/poster/log');
+  const data = await resp.json();
+  const rows = data.log || [];
+  const tbody = document.getElementById('log-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text-muted);">No activity yet.</td></tr>';
+    return;
+  }
+  const outcomeStyle = {
+    posted:  'color:#00d4a8;font-weight:700;',
+    error:   'color:#ff4141;font-weight:700;',
+    skipped: 'color:#777;',
+  };
+  tbody.innerHTML = rows.map(r => `
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:7px 12px;">${r.label||''} <span style="color:var(--text-muted);font-size:10px;">@${r.username||''}</span></td>
+      <td style="padding:7px 12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-family:var(--font-mono);">${(r.file_path||'').split(/[\\/]/).pop()}</td>
+      <td style="padding:7px 12px;${outcomeStyle[r.outcome]||''}">${r.outcome||'—'}</td>
+      <td style="padding:7px 12px;font-size:11px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;">${r.note||''}</td>
+      <td style="padding:7px 12px;color:var(--text-muted);white-space:nowrap;">${(r.logged_at||'').slice(0,16).replace('T',' ')}</td>
+    </tr>
+  `).join('');
+}
+
+// ── Key visibility toggle ─────────────────────────────────────
+function toggleKeyVisibility(id, btn) {
+  const el = document.getElementById(id);
+  if (el.type === 'password') { el.type='text'; btn.textContent='🙈'; }
+  else { el.type='password'; btn.textContent='👁'; }
 }
 </script>
 {% endblock %}

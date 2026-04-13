@@ -256,7 +256,13 @@ def instagram_page():
 @app.route('/post')
 def post_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
-    return render_template('post.html', settings=_get_settings_dict())
+    db = get_db()
+    accounts = [dict(r) for r in db.execute('SELECT * FROM poster_accounts ORDER BY id').fetchall()]
+    # Mask passwords
+    for a in accounts:
+        if a.get('password'):
+            a['password'] = '********'
+    return render_template('post.html', accounts=accounts)
 
 @app.route('/analytics')
 def analytics_page():
@@ -1467,37 +1473,108 @@ def api_download_userid():
     threading.Thread(target=run, daemon=True).start()
     return jsonify({'job_id': job_id})
 # ══════════════════════════════════════════════════════════════
-#  API — Auto Poster
+#  API — Multi-Account Auto Poster
 # ══════════════════════════════════════════════════════════════
-@app.route('/api/settings/poster/save', methods=['POST'])
-def api_save_poster_settings():
+
+@app.route('/api/poster/accounts', methods=['GET'])
+def api_poster_accounts():
+    """Return all 5 poster account configs (passwords masked)."""
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    rows = get_db().execute('SELECT * FROM poster_accounts ORDER BY id').fetchall()
+    accounts = []
+    for r in rows:
+        a = dict(r)
+        if a.get('password'):
+            a['password'] = '********'
+        accounts.append(a)
+    return jsonify({'accounts': accounts})
+
+
+@app.route('/api/poster/accounts/<int:acc_id>/save', methods=['POST'])
+def api_poster_account_save(acc_id):
+    """Save config for a single poster account slot."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    if acc_id not in range(1, 6): return jsonify({'error': 'Invalid account slot'}), 400
     data = request.get_json() or {}
-    db = get_db()
-    
-    for k in ['poster_enabled', 'poster_interval', 'poster_desc', 'poster_tags']:
+    db   = get_db()
+
+    allowed = ['label', 'username', 'folder_path', 'caption', 'tags',
+               'max_posts_batch', 'cool_minutes', 'interval_minutes', 'enabled']
+    sets  = []
+    vals  = []
+    for k in allowed:
         if k in data:
-            db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (k, str(data[k])))
-    
+            sets.append(f'{k}=?')
+            vals.append(data[k])
+
+    # Only update password if user actually typed a new one
+    raw_pass = data.get('password', '')
+    if raw_pass and raw_pass != '********':
+        sets.append('password=?')
+        vals.append(raw_pass)
+
+    if sets:
+        vals.append(acc_id)
+        db.execute(f'UPDATE poster_accounts SET {", ".join(sets)} WHERE id=?', vals)
+        db.commit()
+
+    return jsonify({'ok': True})
+
+
+@app.route('/api/poster/accounts/status', methods=['GET'])
+def api_poster_status():
+    """Live status of all accounts: status, note, posts_in_window, last_posted_at."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    rows = get_db().execute(
+        'SELECT id, label, username, enabled, status, note, posts_in_window, max_posts_batch, last_posted_at, window_start, cool_minutes FROM poster_accounts ORDER BY id'
+    ).fetchall()
+    accounts = []
+    for r in rows:
+        a = dict(r)
+        # Compute cooling_remaining if in cooling
+        if a.get('status') == 'cooling' and a.get('window_start'):
+            try:
+                from datetime import datetime, timedelta
+                ws = datetime.fromisoformat(a['window_start'])
+                elapsed  = (datetime.utcnow() - ws).total_seconds() / 60
+                remaining = max(0, (a['cool_minutes'] or 120) - elapsed)
+                a['cooling_remaining_mins'] = int(remaining)
+            except Exception:
+                a['cooling_remaining_mins'] = None
+        else:
+            a['cooling_remaining_mins'] = None
+        accounts.append(a)
+    return jsonify({'accounts': accounts})
+
+
+@app.route('/api/poster/log', methods=['GET'])
+def api_poster_log():
+    """Last 50 poster log entries."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    rows = get_db().execute(
+        'SELECT pl.*, pa.label, pa.username FROM poster_log pl LEFT JOIN poster_accounts pa ON pl.account_id=pa.id ORDER BY pl.id DESC LIMIT 50'
+    ).fetchall()
+    return jsonify({'log': [dict(r) for r in rows]})
+
+
+@app.route('/api/poster/accounts/<int:acc_id>/reset', methods=['POST'])
+def api_poster_reset(acc_id):
+    """Reset cooling window for an account."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    db = get_db()
+    db.execute('UPDATE poster_accounts SET posts_in_window=0, window_start=NULL, status="idle", note="Manual reset" WHERE id=?', (acc_id,))
     db.commit()
     return jsonify({'ok': True})
 
+
+# Legacy routes kept for backward compat
+@app.route('/api/settings/poster/save', methods=['POST'])
+def api_save_poster_settings():
+    return jsonify({'ok': True, 'note': 'Use /api/poster/accounts/<id>/save instead'})
+
 @app.route('/api/settings/poster/auth', methods=['POST'])
 def api_save_poster_auth():
-    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
-    data = request.get_json() or {}
-    db = get_db()
-    
-    user = data.get('publisher_user', '').strip()
-    if user:
-        db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', ('publisher_user', user))
-        
-    pwd = data.get('publisher_pass')
-    if pwd:
-        db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', ('publisher_pass', pwd))
-        
-    db.commit()
-    return jsonify({'ok': True})
+    return jsonify({'ok': True, 'note': 'Use /api/poster/accounts/<id>/save instead'})
 
 
 # ── Boot ──────────────────────────────────────────────────────
@@ -1517,7 +1594,7 @@ if __name__ == '__main__':
             return db, settings
 
     from modules.poster import run_poster_daemon
-    threading.Thread(target=run_poster_daemon, args=(get_context_for_poster,), daemon=True).start()
+    threading.Thread(target=run_poster_daemon, daemon=True).start()
 
     cuda_str = 'CUDA ACTIVE' if CUDA_INFO['available'] else 'CPU Mode'
     print(f'\n  *** Nikethan Reels Toolkit ***')
