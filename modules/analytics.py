@@ -458,3 +458,284 @@ def get_instagram_profile_stats(username: str, cookie_path: str = '') -> dict:
             'posts_analyzed': n,
         }
     }
+
+
+# ─────────────────────────────────────────────────────────────
+#  Single Video Deep Analysis
+# ─────────────────────────────────────────────────────────────
+
+def get_youtube_video_deep_analysis(video_id_or_url: str, api_key: str,
+                                     channel_avg: dict = None) -> dict:
+    """
+    Deep-dive analytics for a single YouTube video.
+    Compares the video's performance against channel averages if provided.
+    video_id_or_url: full URL or bare video ID (11-char).
+    """
+    if not HAS_REQUESTS:
+        raise RuntimeError('requests library not installed.')
+
+    # Extract video ID
+    vid_match = re.search(r'(?:v=|youtu\.be/|shorts/)([\w-]{11})', video_id_or_url)
+    video_id = vid_match.group(1) if vid_match else video_id_or_url.strip()
+    if len(video_id) != 11:
+        raise ValueError(f'Invalid video ID: {video_id_or_url}')
+
+    # Fetch full video data
+    data = _yt_get('videos', {
+        'part': 'snippet,statistics,contentDetails,topicDetails',
+        'id': video_id
+    }, api_key)
+
+    items = data.get('items', [])
+    if not items:
+        raise ValueError(f'Video not found: {video_id}')
+
+    v = items[0]
+    vs     = v.get('statistics', {})
+    vsnip  = v.get('snippet', {})
+    vcd    = v.get('contentDetails', {})
+    vtopic = v.get('topicDetails', {})
+
+    views    = int(vs.get('viewCount', 0))
+    likes    = int(vs.get('likeCount', 0))
+    comments = int(vs.get('commentCount', 0))
+    duration_secs = _parse_duration(vcd.get('duration', ''))
+    tags     = vsnip.get('tags', [])
+    title    = vsnip.get('title', '')
+    desc     = vsnip.get('description', '')
+
+    is_short = duration_secs > 0 and duration_secs <= 180  # <= 3 mins
+    eng_rate = round((likes + comments) / max(views, 1) * 100, 3)
+    like_ratio    = round(likes    / max(views, 1) * 100, 3)
+    comment_ratio = round(comments / max(views, 1) * 100, 3)
+
+    pub = vsnip.get('publishedAt', '')
+    try:
+        pub_dt = datetime.fromisoformat(pub.replace('Z', '+00:00'))
+        days_since = max((datetime.now(timezone.utc) - pub_dt).days, 1)
+        view_velocity = round(views / days_since)
+        publish_hour = pub_dt.hour
+        publish_day  = DAYS[pub_dt.weekday()]
+    except Exception:
+        days_since = 1
+        view_velocity = views
+        publish_hour = None
+        publish_day  = '—'
+
+    # Thumbnails (all resolutions)
+    thumbs = vsnip.get('thumbnails', {})
+    thumbnails = {
+        'default':  thumbs.get('default',  {}).get('url'),
+        'medium':   thumbs.get('medium',   {}).get('url'),
+        'high':     thumbs.get('high',     {}).get('url'),
+        'standard': thumbs.get('standard', {}).get('url'),
+        'maxres':   thumbs.get('maxres',   {}).get('url'),
+    }
+
+    # Topics
+    topic_categories = [
+        t.split('/')[-1] for t in vtopic.get('topicCategories', [])
+    ]
+
+    # vs channel averages
+    vs_channel = {}
+    if channel_avg:
+        ca = channel_avg
+        vs_channel = {
+            'views_vs_avg':    _pct_diff(views,    ca.get('avg_views', 0)),
+            'likes_vs_avg':    _pct_diff(likes,    ca.get('avg_likes', 0)),
+            'comments_vs_avg': _pct_diff(comments, ca.get('avg_comments', 0)),
+            'eng_vs_avg':      _pct_diff(eng_rate, ca.get('avg_engagement_rate', 0)),
+            'velocity_vs_avg': _pct_diff(view_velocity, ca.get('avg_view_velocity', 0)),
+        }
+
+    # Description keyword density
+    desc_words = re.findall(r'\b\w{4,}\b', desc.lower())
+    from collections import Counter
+    top_desc_words = Counter(desc_words).most_common(10)
+
+    return {
+        'video_id':        video_id,
+        'url':             f'https://youtube.com/watch?v={video_id}',
+        'title':           title,
+        'title_length':    len(title),
+        'description':     desc[:500],
+        'description_length': len(desc),
+        'published_at':    pub,
+        'publish_hour_utc': publish_hour,
+        'publish_day':     publish_day,
+        'days_live':       days_since,
+        'thumbnails':      thumbnails,
+        'channel_id':      vsnip.get('channelId'),
+        'channel_title':   vsnip.get('channelTitle'),
+        'category_id':     vsnip.get('categoryId'),
+        'is_short':        is_short,
+        'duration_secs':   duration_secs,
+        'duration_fmt':    _fmt_duration(duration_secs),
+        'tags':            tags,
+        'tag_count':       len(tags),
+        'topic_categories': topic_categories,
+        'views':           views,
+        'likes':           likes,
+        'comments':        comments,
+        'engagement_rate': eng_rate,
+        'like_ratio':      like_ratio,
+        'comment_ratio':   comment_ratio,
+        'view_velocity':   view_velocity,
+        'top_desc_keywords': [{'word': w, 'count': c} for w, c in top_desc_words],
+        'vs_channel':      vs_channel,
+        'performance_grade': _grade_video(eng_rate, view_velocity),
+    }
+
+
+def _pct_diff(val, avg):
+    """Return % difference vs average, signed."""
+    if not avg:
+        return None
+    return round((val - avg) / avg * 100, 1)
+
+
+def _grade_video(eng_rate, velocity):
+    """Return a simple A/B/C/D performance grade."""
+    score = 0
+    if eng_rate >= 10: score += 3
+    elif eng_rate >= 5: score += 2
+    elif eng_rate >= 1: score += 1
+
+    if velocity >= 10000: score += 3
+    elif velocity >= 1000: score += 2
+    elif velocity >= 100: score += 1
+
+    if score >= 5: return 'A+'
+    if score >= 4: return 'A'
+    if score >= 3: return 'B'
+    if score >= 2: return 'C'
+    return 'D'
+
+
+# ─────────────────────────────────────────────────────────────
+#  YouTube Trending (Day / Week / Month, Shorts vs Long)
+# ─────────────────────────────────────────────────────────────
+
+YT_CATEGORY_NAMES = {
+    '1': 'Film & Animation', '2': 'Autos & Vehicles', '10': 'Music',
+    '15': 'Pets & Animals', '17': 'Sports', '19': 'Travel & Events',
+    '20': 'Gaming', '22': 'People & Blogs', '23': 'Comedy',
+    '24': 'Entertainment', '25': 'News & Politics', '26': 'How-to & Style',
+    '27': 'Education', '28': 'Science & Technology', '29': 'Non-profits & Activism',
+}
+
+TRENDING_WINDOWS = {
+    'day':   1,
+    'week':  7,
+    'month': 30,
+}
+
+
+def get_youtube_trending(api_key: str, region_code: str = 'US',
+                         category_id: str = '0',
+                         window: str = 'day',
+                         max_results: int = 50) -> dict:
+    """
+    Fetch YouTube trending videos via chart=mostPopular.
+    Splits results into Shorts (≤3 min) and Long-form (>3 min).
+    Applies a view-velocity filter to approximate day/week/month freshness.
+    """
+    if not HAS_REQUESTS:
+        raise RuntimeError('requests library not installed.')
+
+    params = {
+        'part':       'snippet,statistics,contentDetails',
+        'chart':      'mostPopular',
+        'regionCode': region_code,
+        'maxResults': 50,
+    }
+    if category_id and category_id != '0':
+        params['videoCategoryId'] = category_id
+
+    data = _yt_get('videos', params, api_key)
+    raw_items = data.get('items', [])
+
+    cutoff_days = TRENDING_WINDOWS.get(window, 1)
+    cutoff_dt   = datetime.now(timezone.utc) - timedelta(days=cutoff_days)
+
+    shorts = []
+    long_form = []
+
+    for v in raw_items:
+        vs    = v.get('statistics', {})
+        vsnip = v.get('snippet', {})
+        vcd   = v.get('contentDetails', {})
+
+        views    = int(vs.get('viewCount', 0))
+        likes    = int(vs.get('likeCount', 0))
+        comments = int(vs.get('commentCount', 0))
+        duration_secs = _parse_duration(vcd.get('duration', ''))
+        title = vsnip.get('title', '')
+        pub   = vsnip.get('publishedAt', '')
+        tags  = vsnip.get('tags', [])
+
+        try:
+            pub_dt = datetime.fromisoformat(pub.replace('Z', '+00:00'))
+            days_since = max((datetime.now(timezone.utc) - pub_dt).days, 1)
+            view_velocity = round(views / days_since)
+        except Exception:
+            pub_dt = None
+            days_since = 1
+            view_velocity = views
+
+        eng_rate = round((likes + comments) / max(views, 1) * 100, 3)
+        is_short = duration_secs > 0 and duration_secs <= 180
+
+        entry = {
+            'id':              v['id'],
+            'url':             f'https://youtube.com/watch?v={v["id"]}',
+            'title':           title,
+            'thumbnail':       vsnip.get('thumbnails', {}).get('medium', {}).get('url'),
+            'channel_title':   vsnip.get('channelTitle'),
+            'channel_id':      vsnip.get('channelId'),
+            'published_at':    pub,
+            'duration_secs':   duration_secs,
+            'duration_fmt':    _fmt_duration(duration_secs),
+            'is_short':        is_short,
+            'views':           views,
+            'likes':           likes,
+            'comments':        comments,
+            'engagement_rate': eng_rate,
+            'view_velocity':   view_velocity,
+            'days_live':       days_since,
+            'tag_count':       len(tags),
+            'category_id':     vsnip.get('categoryId', '—'),
+            'category_name':   YT_CATEGORY_NAMES.get(vsnip.get('categoryId', ''), 'Other'),
+        }
+
+        # For week/month windows: filter out videos older than window
+        if pub_dt and window in ('week', 'month'):
+            if pub_dt < cutoff_dt:
+                # Still include but mark as outside window
+                entry['outside_window'] = True
+            else:
+                entry['outside_window'] = False
+        else:
+            entry['outside_window'] = False
+
+        if is_short:
+            shorts.append(entry)
+        else:
+            long_form.append(entry)
+
+    # Sort each by view velocity (freshness-weighted)
+    shorts.sort(key=lambda x: x['view_velocity'], reverse=True)
+    long_form.sort(key=lambda x: x['view_velocity'], reverse=True)
+
+    return {
+        'window':      window,
+        'region_code': region_code,
+        'category_id': category_id,
+        'category_name': YT_CATEGORY_NAMES.get(category_id, 'All Categories') if category_id != '0' else 'All Categories',
+        'shorts':      shorts,
+        'long_form':   long_form,
+        'total':       len(shorts) + len(long_form),
+        'fetched_at':  datetime.utcnow().isoformat(),
+    }
+

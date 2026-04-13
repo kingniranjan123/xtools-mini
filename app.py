@@ -348,6 +348,49 @@ def api_analytics_snapshots(channel_id):
     return jsonify({'snapshots': snaps})
 
 
+@app.route('/api/analytics/video', methods=['POST'])
+def api_analytics_video():
+    """Single video deep-dive analysis."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    video_input = data.get('video', '').strip()
+    channel_avg = data.get('channel_avg')  # optional, passed from frontend
+    if not video_input: return jsonify({'error': 'No video URL or ID provided'}), 400
+    api_key = _read_setting('yt_api_key')
+    if not api_key: return jsonify({'error': 'YouTube API key not configured.'}), 400
+    try:
+        from modules.analytics import get_youtube_video_deep_analysis
+        result = get_youtube_video_deep_analysis(video_input, api_key, channel_avg)
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        app.logger.error(f'Video analytics error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/trending', methods=['POST'])
+def api_analytics_trending():
+    """YouTube trending videos for day/week/month split by Shorts vs Long."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    window      = data.get('window', 'day')
+    region_code = data.get('region', 'US').upper()
+    category_id = data.get('category', '0')
+    api_key = _read_setting('yt_api_key')
+    if not api_key: return jsonify({'error': 'YouTube API key not configured.'}), 400
+    try:
+        from modules.analytics import get_youtube_trending
+        result = get_youtube_trending(api_key, region_code, category_id, window)
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        app.logger.error(f'Trending analytics error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+
 @app.route('/api/analytics/instagram', methods=['POST'])
 def api_analytics_instagram():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401

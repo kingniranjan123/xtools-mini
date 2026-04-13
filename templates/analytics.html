@@ -13,6 +13,7 @@
 <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:24px;">
   <button class="btn btn-sm active" id="tab-yt-btn" onclick="switchPlatformTab('yt')" style="background:var(--bg-card);border:1px solid var(--border);">🎬 YouTube</button>
   <button class="btn btn-sm btn-ghost" id="tab-ig-btn" onclick="switchPlatformTab('ig')">📸 Instagram</button>
+  <button class="btn btn-sm btn-ghost" id="tab-trend-btn" onclick="switchPlatformTab('trend')">🔥 Trending</button>
 </div>
 
 <!-- ════════════════════════════════════════════
@@ -196,7 +197,10 @@
     <div class="card" style="margin-bottom:20px;">
       <div class="card-header">
         <div class="card-title">📹 All Analysed Videos</div>
-        <span class="badge badge-gray" id="yt-video-total">0 videos</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="badge badge-gray" id="yt-video-total">0 videos</span>
+          <span style="font-size:11px;color:var(--text-muted);">Click any row for deep analysis</span>
+        </div>
       </div>
       <div class="card-body" style="padding:0;overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:800px;">
@@ -212,6 +216,7 @@
               <th style="padding:8px 10px;text-align:right;">Velocity</th>
               <th style="padding:8px 10px;text-align:right;">Tags</th>
               <th style="padding:8px 10px;">Published</th>
+              <th style="padding:8px 10px;"></th>
             </tr>
           </thead>
           <tbody id="yt-video-tbody"></tbody>
@@ -229,8 +234,173 @@
 </div><!-- /tab-yt -->
 
 <!-- ════════════════════════════════════════════
-     INSTAGRAM TAB
+     TRENDING TAB
 ════════════════════════════════════════════ -->
+<div id="tab-trend" style="display:none;">
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+      <div class="card-title">🔥 YouTube Trending</div>
+      <span class="badge badge-orange">Live from YouTube</span>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label" style="font-size:11px;">Region</label>
+          <select class="form-input" id="trend-region" style="padding:6px 10px;">
+            <option value="US">🇺🇸 United States</option>
+            <option value="IN">🇮🇳 India</option>
+            <option value="GB">🇬🇧 United Kingdom</option>
+            <option value="AU">🇦🇺 Australia</option>
+            <option value="CA">🇨🇦 Canada</option>
+            <option value="DE">🇩🇪 Germany</option>
+            <option value="JP">🇯🇵 Japan</option>
+            <option value="BR">🇧🇷 Brazil</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label" style="font-size:11px;">Category</label>
+          <select class="form-input" id="trend-category" style="padding:6px 10px;">
+            <option value="0">All Categories</option>
+            <option value="10">🎵 Music</option>
+            <option value="20">🎮 Gaming</option>
+            <option value="24">🎭 Entertainment</option>
+            <option value="25">📰 News & Politics</option>
+            <option value="17">⚽ Sports</option>
+            <option value="28">🔬 Science & Tech</option>
+            <option value="27">📚 Education</option>
+            <option value="22">👤 People & Blogs</option>
+            <option value="26">💄 How-to & Style</option>
+          </select>
+        </div>
+      </div>
+      <!-- Day / Week / Month sub-tabs -->
+      <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-top:16px;">
+        <button class="btn btn-sm active" id="win-day-btn" onclick="loadTrending('day')" style="background:var(--bg-card);border:1px solid var(--border);">📅 Today</button>
+        <button class="btn btn-sm btn-ghost" id="win-week-btn" onclick="loadTrending('week')">📆 This Week</button>
+        <button class="btn btn-sm btn-ghost" id="win-month-btn" onclick="loadTrending('month')">🗓 This Month</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trending Results -->
+  <div id="trending-results" style="display:none;">
+    <div style="display:flex;gap:12px;margin-bottom:12px;">
+      <div style="background:rgba(255,60,172,.08);border:1px solid rgba(255,60,172,.2);padding:10px 16px;border-radius:var(--radius-sm);font-size:12px;">
+        📱 <strong id="trend-shorts-count">0</strong> Shorts
+      </div>
+      <div style="background:rgba(78,158,255,.08);border:1px solid rgba(78,158,255,.2);padding:10px 16px;border-radius:var(--radius-sm);font-size:12px;">
+        🎬 <strong id="trend-long-count">0</strong> Long-form videos
+      </div>
+      <div style="background:var(--bg-card-2);padding:10px 16px;border-radius:var(--radius-sm);font-size:12px;color:var(--text-muted);">
+        Region: <strong id="trend-region-label">US</strong> · Window: <strong id="trend-window-label">Today</strong>
+      </div>
+    </div>
+
+    <!-- Shorts section -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <div class="card-title">📱 Trending Shorts (≤3 min)</div>
+        <span class="badge badge-orange" id="trend-shorts-badge">0</span>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px;">
+          <thead><tr style="border-bottom:1px solid var(--border);color:var(--text-muted);background:var(--bg-card-2);">
+            <th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Title</th>
+            <th style="padding:8px 10px;text-align:right;">Views</th>
+            <th style="padding:8px 10px;text-align:right;">Engagement</th>
+            <th style="padding:8px 10px;text-align:right;">Duration</th>
+            <th style="padding:8px 10px;text-align:right;">Velocity/Day</th>
+            <th style="padding:8px 10px;">Channel</th>
+            <th style="padding:8px 10px;">Published</th>
+            <th style="padding:8px 10px;"></th>
+          </tr></thead>
+          <tbody id="trend-shorts-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Long-form section -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🎬 Trending Long-Form Videos (&gt;3 min)</div>
+        <span class="badge badge-blue" id="trend-long-badge">0</span>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px;">
+          <thead><tr style="border-bottom:1px solid var(--border);color:var(--text-muted);background:var(--bg-card-2);">
+            <th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Title</th>
+            <th style="padding:8px 10px;text-align:right;">Views</th>
+            <th style="padding:8px 10px;text-align:right;">Engagement</th>
+            <th style="padding:8px 10px;text-align:right;">Duration</th>
+            <th style="padding:8px 10px;text-align:right;">Velocity/Day</th>
+            <th style="padding:8px 10px;">Channel</th>
+            <th style="padding:8px 10px;">Published</th>
+            <th style="padding:8px 10px;"></th>
+          </tr></thead>
+          <tbody id="trend-long-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ VIDEO DEEP-DIVE MODAL ════════ -->
+<div id="video-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;">
+  <div style="max-width:860px;margin:0 auto;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;position:relative;">
+    <button onclick="closeVideoModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;">&times;</button>
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:20px;">
+      <img id="vm-thumb" src="" style="width:200px;border-radius:var(--radius-sm);flex-shrink:0;">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+          <span id="vm-grade-badge" class="badge" style="font-size:16px;padding:4px 12px;">A+</span>
+          <span id="vm-short-badge" style="display:none;" class="badge badge-orange">📱 Short</span>
+          <span id="vm-long-badge" class="badge badge-blue">🎬 Long-form</span>
+        </div>
+        <div id="vm-title" style="font-size:18px;font-weight:700;line-height:1.3;margin-bottom:6px;"></div>
+        <div id="vm-channel" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <a id="vm-link" href="" target="_blank" class="btn btn-primary btn-sm">▶ Watch on YouTube</a>
+          <div id="vm-tags-row" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deep stats grid -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:20px;">
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">👁 Views</div><div class="grad-text" style="font-size:16px;font-weight:800;" id="vm-views">—</div></div>
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">👍 Likes</div><div class="grad-text" style="font-size:16px;font-weight:800;" id="vm-likes">—</div></div>
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">💬 Comments</div><div class="grad-text" style="font-size:16px;font-weight:800;" id="vm-comments">—</div></div>
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">📈 Engagement</div><div class="grad-text" style="font-size:16px;font-weight:800;" id="vm-eng">—</div></div>
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">⏱ Duration</div><div style="font-size:16px;font-weight:700;" id="vm-dur">—</div></div>
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">🚀 Views/Day</div><div style="font-size:16px;font-weight:700;" id="vm-vel">—</div></div>
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">📅 Published</div><div style="font-size:13px;font-weight:700;" id="vm-pub">—</div></div>
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">📅 Days Live</div><div style="font-size:16px;font-weight:700;" id="vm-days">—</div></div>
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">👍 Like Ratio</div><div style="font-size:16px;font-weight:700;" id="vm-likeratio">—</div></div>
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">🏷 Tags Used</div><div style="font-size:16px;font-weight:700;" id="vm-tagcount">—</div></div>
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">🕐 Posted At</div><div style="font-size:13px;font-weight:700;" id="vm-hour">—</div></div>
+      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">📝 Desc Len</div><div style="font-size:16px;font-weight:700;" id="vm-desclen">—</div></div>
+    </div>
+
+    <!-- vs Channel Avg (if available) -->
+    <div id="vm-vs-section" style="display:none;margin-bottom:20px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">vs Channel Average</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;" id="vm-vs-row"></div>
+    </div>
+
+    <!-- Top desc keywords -->
+    <div style="margin-bottom:20px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">Description Keywords</div>
+      <div id="vm-keywords" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+
+    <!-- Tags full list -->
+    <div>
+      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">All Tags</div>
+      <div id="vm-tags-full" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+  </div>
+</div>
+
 <div id="tab-ig" style="display:none;">
   <div class="card" style="margin-bottom:20px;">
     <div class="card-header"><div class="card-title">📸 Analyse Instagram Profile</div></div>
@@ -312,12 +482,19 @@ function setEl(id, val) { const e = document.getElementById(id); if(e) e.textCon
 
 // ── Tab switches ─────────────────────────────────────────────
 function switchPlatformTab(t) {
-  ['yt','ig'].forEach(id => {
-    document.getElementById('tab-'+id).style.display = id===t?'block':'none';
-    document.getElementById('tab-'+id+'-btn').classList.toggle('active', id===t);
-    document.getElementById('tab-'+id+'-btn').style.background = id===t?'var(--bg-card)':'transparent';
-    document.getElementById('tab-'+id+'-btn').style.border = id===t?'1px solid var(--border)':'none';
+  ['yt','ig','trend'].forEach(id => {
+    const el=document.getElementById('tab-'+id);
+    if(el) el.style.display = id===t?'block':'none';
+    const b=document.getElementById('tab-'+id+'-btn');
+    if(b){
+      b.classList.toggle('active', id===t);
+      b.style.background = id===t?'var(--bg-card)':'transparent';
+      b.style.border = id===t?'1px solid var(--border)':'none';
+    }
   });
+  if(t==='trend' && !document.getElementById('trending-results').style.display.includes('block')){
+    loadTrending('day');
+  }
 }
 function switchMode(m) {
   ['single','multi'].forEach(id => {
@@ -454,28 +631,8 @@ function renderYTDashboard(d) {
   buildVideoTable('perf-table-vel', tp.by_velocity, 'view_velocity');
   buildVideoTable('perf-table-breakout', tp.breakouts, 'view_velocity');
 
-  // All videos
-  const tbody=document.getElementById('yt-video-tbody');
-  setEl('yt-video-total', d.videos_analyzed+' videos');
-  tbody.innerHTML=d.videos.map((v,i)=>`
-    <tr style="border-bottom:1px solid var(--border);">
-      <td style="padding:7px 10px;color:var(--text-muted);">${i+1}</td>
-      <td style="padding:7px 10px;max-width:260px;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <img src="${v.thumbnail||''}" style="width:36px;height:24px;object-fit:cover;border-radius:2px;flex-shrink:0;">
-          <a href="https://youtube.com/watch?v=${v.id}" target="_blank" style="color:var(--text);text-decoration:none;font-size:11px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">${v.title}</a>
-        </div>
-      </td>
-      <td style="padding:7px 10px;text-align:right;">${fmt(v.views)}</td>
-      <td style="padding:7px 10px;text-align:right;">${fmt(v.likes)}</td>
-      <td style="padding:7px 10px;text-align:right;">${fmt(v.comments)}</td>
-      <td style="padding:7px 10px;text-align:right;color:${v.engagement_rate>5?'var(--accent-green)':'var(--text-secondary)'};">${v.engagement_rate}%</td>
-      <td style="padding:7px 10px;text-align:right;">${v.duration_fmt||'—'}</td>
-      <td style="padding:7px 10px;text-align:right;">${fmt(v.view_velocity)}</td>
-      <td style="padding:7px 10px;text-align:right;">${v.tag_count}</td>
-      <td style="padding:7px 10px;color:var(--text-muted);">${fmtDate(v.published_at)}</td>
-    </tr>
-  `).join('');
+  // All videos — uses renderAllVideosTable for Deep Dive buttons
+  renderAllVideosTable(d.videos, d.content_analysis);
 
   // Own channel badge + history
   if(d.is_own_channel) {
@@ -595,6 +752,168 @@ async function analyzeInstagram() {
     showToast('Instagram analysis complete!','success');
   } catch(e){showToast(e.message,'error');}
   finally{btn.disabled=false;btn.textContent='📊 Analyse Profile';}
+}
+
+// ── Video Table with click-to-deep-dive ──────────────────────
+let _currentChannelAvg = null;
+
+function renderAllVideosTable(videos, channel_avg) {
+  _currentChannelAvg = channel_avg;
+  const tbody=document.getElementById('yt-video-tbody');
+  setEl('yt-video-total', videos.length+' videos');
+  tbody.innerHTML=videos.map((v,i)=>`
+    <tr style="border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;" 
+        onmouseover="this.style.background='var(--bg-hover)'" 
+        onmouseout="this.style.background=''">
+      <td style="padding:7px 10px;color:var(--text-muted);">${i+1}</td>
+      <td style="padding:7px 10px;max-width:260px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <img src="${v.thumbnail||''}" style="width:36px;height:24px;object-fit:cover;border-radius:2px;flex-shrink:0;">
+          <a href="https://youtube.com/watch?v=${v.id}" target="_blank" style="color:var(--text);text-decoration:none;font-size:11px;" onclick="event.stopPropagation()" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">${v.title}</a>
+        </div>
+      </td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.views)}</td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.likes)}</td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.comments)}</td>
+      <td style="padding:7px 10px;text-align:right;color:${v.engagement_rate>5?'var(--accent-green)':'var(--text-secondary)'};"> ${v.engagement_rate}%</td>
+      <td style="padding:7px 10px;text-align:right;">${v.duration_fmt||'—'}</td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.view_velocity)}</td>
+      <td style="padding:7px 10px;text-align:right;">${v.tag_count}</td>
+      <td style="padding:7px 10px;color:var(--text-muted);">${fmtDate(v.published_at)}</td>
+      <td style="padding:7px 10px;">
+        <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px;" onclick="openVideoModal('${v.id}', event)">🔍 Deep Dive</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ── Video Deep-Dive Modal ─────────────────────────────────────
+async function openVideoModal(videoId, event) {
+  if(event) event.stopPropagation();
+  const modal=document.getElementById('video-modal');
+  modal.style.display='block';
+  document.body.style.overflow='hidden';
+  // Show loading state
+  document.getElementById('vm-title').textContent='⏳ Loading deep analysis…';
+  document.getElementById('vm-thumb').src='';
+  try {
+    const resp=await postJSON('/api/analytics/video',{
+      video: videoId,
+      channel_avg: _currentChannelAvg
+    });
+    if(resp.error){showToast(resp.error,'error');closeVideoModal();return;}
+    renderVideoModal(resp);
+  } catch(e){showToast(e.message,'error');closeVideoModal();}
+}
+
+function closeVideoModal() {
+  document.getElementById('video-modal').style.display='none';
+  document.body.style.overflow='';
+}
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeVideoModal(); });
+
+function renderVideoModal(v) {
+  document.getElementById('vm-thumb').src=v.thumbnails?.high||v.thumbnails?.medium||'';
+  document.getElementById('vm-link').href=v.url;
+  setEl('vm-title', v.title);
+  setEl('vm-channel', v.channel_title+' · '+fmtDate(v.published_at));
+  // Grade badge
+  const gb=document.getElementById('vm-grade-badge');
+  gb.textContent=v.performance_grade;
+  const gradeColors={'A+':'badge-green','A':'badge-green','B':'badge-blue','C':'badge-gray','D':'badge-red'};
+  gb.className='badge '+(gradeColors[v.performance_grade]||'badge-gray');
+  // Short/Long
+  document.getElementById('vm-short-badge').style.display=v.is_short?'inline-block':'none';
+  document.getElementById('vm-long-badge').style.display=v.is_short?'none':'inline-block';
+  // Stats
+  setEl('vm-views',fmt(v.views));
+  setEl('vm-likes',fmt(v.likes));
+  setEl('vm-comments',fmt(v.comments));
+  setEl('vm-eng',v.engagement_rate+'%');
+  setEl('vm-dur',v.duration_fmt);
+  setEl('vm-vel',fmt(v.view_velocity)+'/day');
+  setEl('vm-pub',fmtDate(v.published_at));
+  setEl('vm-days',v.days_live+' days');
+  setEl('vm-likeratio',v.like_ratio+'%');
+  setEl('vm-tagcount',v.tag_count);
+  setEl('vm-hour',v.publish_hour_utc!=null?`${String(v.publish_hour_utc).padStart(2,'0')}:00 UTC (${v.publish_day})`:'—');
+  setEl('vm-desclen',v.description_length+' chars');
+  // vs channel
+  const vsSection=document.getElementById('vm-vs-section');
+  const vsRow=document.getElementById('vm-vs-row');
+  if(v.vs_channel && Object.keys(v.vs_channel).length) {
+    vsSection.style.display='block';
+    const labels={'views_vs_avg':'Views','likes_vs_avg':'Likes','comments_vs_avg':'Comments','eng_vs_avg':'Engagement','velocity_vs_avg':'Velocity'};
+    vsRow.innerHTML=Object.entries(v.vs_channel).map(([k,pct])=>{
+      if(pct==null) return '';
+      const pos=pct>=0;
+      return `<div style="background:${pos?'rgba(0,212,168,.08)':'rgba(255,65,65,.08)'};border:1px solid ${pos?'rgba(0,212,168,.25)':'rgba(255,65,65,.25)'};padding:8px 12px;border-radius:var(--radius-sm);text-align:center;">
+        <div style="font-size:10px;color:var(--text-muted);">${labels[k]||k}</div>
+        <div style="font-size:15px;font-weight:700;color:${pos?'var(--accent-green)':'var(--accent-red)'}">${pos?'+':''}${pct}%</div>
+      </div>`;
+    }).join('');
+  } else {
+    vsSection.style.display='none';
+  }
+  // Keywords
+  const kw=document.getElementById('vm-keywords');
+  kw.innerHTML=(v.top_desc_keywords||[]).map(k=>`<span style="background:var(--bg-card-2);border:1px solid var(--border);padding:3px 8px;border-radius:3px;font-size:11px;">${k.word} <span style="color:var(--text-muted);">×${k.count}</span></span>`).join('');
+  // Tags
+  const tf=document.getElementById('vm-tags-full');
+  tf.innerHTML=(v.tags||[]).map(t=>`<span style="background:rgba(255,60,172,.08);border:1px solid rgba(255,60,172,.2);padding:3px 8px;border-radius:3px;font-size:11px;">#${t}</span>`).join('')||(v.tag_count===0?'<span style="color:var(--text-muted);font-size:12px;">No tags used</span>':'');
+}
+
+// ── Trending ─────────────────────────────────────────────────
+async function loadTrending(window) {
+  ['day','week','month'].forEach(w=>{
+    const b=document.getElementById('win-'+w+'-btn');
+    b.classList.toggle('active',w===window);
+    b.style.background=w===window?'var(--bg-card)':'transparent';
+    b.style.border=w===window?'1px solid var(--border)':'none';
+  });
+  const region=document.getElementById('trend-region').value;
+  const category=document.getElementById('trend-category').value;
+  document.getElementById('trending-results').style.display='none';
+  try{
+    const resp=await postJSON('/api/analytics/trending',{window,region,category});
+    if(resp.error){showToast(resp.error,'error');return;}
+    renderTrending(resp, window, region);
+  } catch(e){showToast(e.message,'error');}
+}
+
+function buildTrendRow(v, i) {
+  return `<tr style="border-bottom:1px solid var(--border);">
+    <td style="padding:7px 10px;color:var(--text-muted);">${i+1}</td>
+    <td style="padding:7px 10px;max-width:280px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <img src="${v.thumbnail||''}" style="width:38px;height:26px;object-fit:cover;border-radius:2px;flex-shrink:0;">
+        <a href="${v.url}" target="_blank" style="color:var(--text);text-decoration:none;font-size:11px;line-height:1.4;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">${v.title}</a>
+      </div>
+    </td>
+    <td style="padding:7px 10px;text-align:right;">${fmt(v.views)}</td>
+    <td style="padding:7px 10px;text-align:right;color:${v.engagement_rate>5?'var(--accent-green)':'var(--text-secondary)'}">${v.engagement_rate}%</td>
+    <td style="padding:7px 10px;text-align:right;">${v.duration_fmt}</td>
+    <td style="padding:7px 10px;text-align:right;">${fmt(v.view_velocity)}/day</td>
+    <td style="padding:7px 10px;max-width:130px;"><a href="https://youtube.com/channel/${v.channel_id}" target="_blank" style="color:var(--text-muted);text-decoration:none;font-size:11px;">${v.channel_title}</a></td>
+    <td style="padding:7px 10px;color:var(--text-muted);">${fmtDate(v.published_at)}</td>
+    <td style="padding:7px 10px;">
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px;" onclick="openVideoModal('${v.id}', event)">🔍 Deep Dive</button>
+    </td>
+  </tr>`;
+}
+
+function renderTrending(d, window, region) {
+  const winLabels={day:'Today',week:'This Week',month:'This Month'};
+  setEl('trend-region-label', region);
+  setEl('trend-window-label', winLabels[window]||window);
+  setEl('trend-shorts-count', d.shorts.length);
+  setEl('trend-long-count', d.long_form.length);
+  document.getElementById('trend-shorts-badge').textContent=d.shorts.length;
+  document.getElementById('trend-long-badge').textContent=d.long_form.length;
+  document.getElementById('trend-shorts-tbody').innerHTML=d.shorts.map(buildTrendRow).join('');
+  document.getElementById('trend-long-tbody').innerHTML=d.long_form.map(buildTrendRow).join('');
+  document.getElementById('trending-results').style.display='block';
+  showToast(`Loaded ${d.total} trending videos!`,'success');
 }
 </script>
 {% endblock %}
