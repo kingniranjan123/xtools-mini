@@ -5,7 +5,7 @@ Supports: multiple URLs, quality selection, MP3-only mode
 import os, re, json, subprocess, shutil, sys
 
 def download_youtube(urls: list, quality: str, output_dir: str,
-                     audio_only: bool = False, progress_cb=None) -> list:
+                     audio_only: bool = False, custom_dir: bool = False, progress_cb=None) -> list:
     """
     Download a list of YouTube URLs via yt-dlp.
     Returns list of result dicts.
@@ -26,7 +26,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
 
         try:
             result = _download_yt_single(
-                url, quality, output_dir, audio_only, ytdlp, progress_cb, pct_base, total
+                url, quality, output_dir, custom_dir, audio_only, ytdlp, progress_cb, pct_base, total
             )
             results.append(result)
             if progress_cb:
@@ -39,7 +39,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
     return results
 
 
-def _download_yt_single(url, quality, output_dir, audio_only,
+def _download_yt_single(url, quality, output_dir, custom_dir, audio_only,
                         ytdlp, progress_cb, pct_base, total):
     """Download one YouTube URL."""
 
@@ -53,7 +53,10 @@ def _download_yt_single(url, quality, output_dir, audio_only,
     channel = re.sub(r'[^\w.-]', '_', info.get('channel', info.get('uploader', 'youtube')))
     duration = info.get('duration', 0)
 
-    channel_dir = os.path.join(output_dir, channel)
+    if custom_dir:
+        channel_dir = output_dir
+    else:
+        channel_dir = os.path.join(output_dir, channel)
     os.makedirs(channel_dir, exist_ok=True)
     out_template = os.path.join(channel_dir, f'{vid_id}.%(ext)s')
 

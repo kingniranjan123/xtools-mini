@@ -287,18 +287,22 @@ def api_download():
     out_dir = data.get('output_dir', '').strip()
     if not urls:
         return jsonify({'error': 'No URLs provided'}), 400
-    if not out_dir:
-        return jsonify({'error': 'Output directory is required'}), 400
 
     job_id = str(uuid.uuid4())
     job    = _make_job(job_id)
 
     def run():
+        custom_dir = True
+        _out = out_dir
+        if not _out:
+            _out = DOWNLOADS_DIR
+            custom_dir = False
         results = download_reels(
             urls=urls,
             quality=quality,
             cookies_file=COOKIES_FILE,
-            downloads_dir=out_dir,
+            downloads_dir=_out,
+            custom_dir=custom_dir,
             progress_cb=lambda line, pct=None: _emit(job, line, pct),
             db_cb=_save_reel_to_db,
         )
@@ -336,12 +340,10 @@ def api_download_progress(job_id):
 def api_pick_folder():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     try:
-        root = tk.Tk()
-        root.attributes('-topmost', True)
-        root.withdraw()
-        folder = filedialog.askdirectory(parent=root, title="Select Output Folder")
-        root.destroy()
-        return jsonify({'folder': folder or ''})
+        code = "import tkinter as tk, tkinter.filedialog as fd; root=tk.Tk(); root.attributes('-topmost', True); root.withdraw(); print(fd.askdirectory(parent=root, title='Select Output Folder'))"
+        out = subprocess.check_output([sys.executable, '-c', code], text=True).strip()
+        if out == "None" or not out: out = ""
+        return jsonify({'folder': out})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -821,9 +823,12 @@ def api_youtube_download():
 
     def run():
         yt_dir = data.get('output_dir', '').strip()
-        if not yt_dir: yt_dir = os.path.join(DOWNLOADS_DIR, '_youtube')
+        custom_dir = True
+        if not yt_dir: 
+            yt_dir = os.path.join(DOWNLOADS_DIR, '_youtube')
+            custom_dir = False
         results = download_youtube(
-            urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only,
+            urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only, custom_dir=custom_dir,
             progress_cb=lambda line, pct=None: _emit(job, line, pct)
         )
         ok = sum(1 for r in results if r.get('status') == 'ok')
@@ -1002,10 +1007,13 @@ def api_download_userid():
     def run():
         import re as _re
         base_dir    = data.get('output_dir', '').strip()
-        if not base_dir: base_dir = DOWNLOADS_DIR
-        
+        if not base_dir: 
+            base_dir = DOWNLOADS_DIR
+            out_dir  = os.path.join(base_dir, username)
+        else:
+            out_dir  = base_dir
+            
         profile_url = f'https://www.instagram.com/{username}/reels/'
-        out_dir     = os.path.join(base_dir, username)
         os.makedirs(out_dir, exist_ok=True)
 
         if quality == 'best':

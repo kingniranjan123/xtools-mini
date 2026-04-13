@@ -5,7 +5,7 @@ import os, re, json, subprocess, shutil, sys
 from modules.metadata import extract_metadata_from_info
 
 def download_reels(urls, quality, cookies_file, downloads_dir,
-                   progress_cb=None, db_cb=None):
+                   custom_dir=False, progress_cb=None, db_cb=None):
     """
     Download a list of Instagram Reel URLs using yt-dlp.
     Returns list of result dicts.
@@ -23,7 +23,7 @@ def download_reels(urls, quality, cookies_file, downloads_dir,
             progress_cb(f'[{idx}/{total}] Starting: {url}', pct_base)
 
         try:
-            info = _download_single(url, quality, cookies_file, downloads_dir, progress_cb, pct_base, total)
+            info = _download_single(url, quality, cookies_file, downloads_dir, custom_dir, progress_cb, pct_base, total)
             if info:
                 results.append(info)
                 if db_cb:
@@ -41,7 +41,7 @@ def download_reels(urls, quality, cookies_file, downloads_dir,
     return results
 
 
-def _download_single(url, quality, cookies_file, downloads_dir, progress_cb, pct_base, total):
+def _download_single(url, quality, cookies_file, downloads_dir, custom_dir, progress_cb, pct_base, total):
     """Run yt-dlp for one URL, return info dict."""
     ytdlp = [sys.executable, '-m', 'yt_dlp', '--rm-cache-dir']
 
@@ -58,7 +58,10 @@ def _download_single(url, quality, cookies_file, downloads_dir, progress_cb, pct
     account = raw_info.get('uploader_id') or raw_info.get('uploader') or 'unknown'
     account = re.sub(r'[^\w.-]', '_', account)  # sanitise folder name
 
-    out_dir = os.path.join(downloads_dir, account)
+    if custom_dir:
+        out_dir = downloads_dir
+    else:
+        out_dir = os.path.join(downloads_dir, account)
     os.makedirs(out_dir, exist_ok=True)
 
     # Format string
