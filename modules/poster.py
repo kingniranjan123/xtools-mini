@@ -3,7 +3,7 @@ import time
 import os
 import random
 from instagrapi import Client
-from modules.db import get_db
+from db import get_db
 
 def run_poster_daemon(app_context_fetcher):
     """
