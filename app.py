@@ -258,6 +258,58 @@ def post_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
     return render_template('post.html', settings=_get_settings_dict())
 
+@app.route('/analytics')
+def analytics_page():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    settings = _get_settings_dict()
+    yt_api_configured = bool(settings.get('yt_api_key', '').strip())
+    return render_template('analytics.html', settings=settings, yt_api_configured=yt_api_configured)
+
+@app.route('/api/analytics/youtube', methods=['POST'])
+def api_analytics_youtube():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    channel = data.get('channel', '').strip()
+    if not channel: return jsonify({'error': 'No channel provided'}), 400
+    api_key = _read_setting('yt_api_key')
+    if not api_key: return jsonify({'error': 'YouTube API key not configured. Go to Settings → API Keys.'}), 400
+    try:
+        from modules.analytics import get_youtube_channel_stats
+        result = get_youtube_channel_stats(channel, api_key)
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        app.logger.error(f'YouTube analytics error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/analytics/instagram', methods=['POST'])
+def api_analytics_instagram():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    username = data.get('username', '').strip().lstrip('@')
+    if not username: return jsonify({'error': 'No username provided'}), 400
+    try:
+        from modules.analytics import get_instagram_profile_stats
+        cookie_path = COOKIES_FILE if os.path.isfile(COOKIES_FILE) else ''
+        result = get_instagram_profile_stats(username, cookie_path)
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f'Instagram analytics error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/settings/keys/save', methods=['POST'])
+def api_save_keys():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    db = get_db()
+    for k in ['yt_api_key']:
+        if k in data:
+            db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (k, data[k]))
+    db.commit()
+    return jsonify({'ok': True})
+
+
 # ── Thumbnail / watermark preview ─────────────────────────────
 @app.route('/thumb/<reel_id>')
 def serve_thumbnail(reel_id):

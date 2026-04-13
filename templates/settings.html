@@ -40,15 +40,57 @@
 
 <!-- ── TABS NAV ──────────────────────────────────────────────── -->
 <div style="display:flex; border-bottom:1px solid var(--border); margin-bottom:20px; overflow-x:auto;" class="hide-scrollbar">
-  <button class="settings-tab-btn active" id="tabbtn-dirs" onclick="showSettingsTab('dirs')">📁 Directories</button>
+  <button class="settings-tab-btn active" id="tabbtn-keys" onclick="showSettingsTab('keys')">🔑 API Keys</button>
+  <button class="settings-tab-btn" id="tabbtn-dirs" onclick="showSettingsTab('dirs')">📁 Directories</button>
   <button class="settings-tab-btn" id="tabbtn-auth" onclick="showSettingsTab('auth')">🍪 Authentication</button>
   <button class="settings-tab-btn" id="tabbtn-wm" onclick="showSettingsTab('wm')">◎ Watermarks</button>
   <button class="settings-tab-btn" id="tabbtn-rates" onclick="showSettingsTab('rates')">⏱ Rate Limits</button>
   <button class="settings-tab-btn" id="tabbtn-sys" onclick="showSettingsTab('sys')">⚙️ System & GPU</button>
 </div>
 
+<!-- ── 0. API Keys ─────────────────────────────────────────── -->
+<div id="settings-tab-keys" class="settings-tab-content active">
+<div class="section-heading">External API Keys</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">
+    <div class="card-title">🎬 YouTube Data API v3</div>
+    {% if settings.yt_api_key %}
+      <span class="badge badge-green">✓ Configured</span>
+    {% else %}
+      <span class="badge badge-orange">Not Set</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <div class="form-hint" style="margin-bottom:16px; padding:12px; background:rgba(78,158,255,0.06); border:1px solid rgba(78,158,255,0.2); border-radius:var(--radius-sm);">
+      <strong style="color:var(--accent-blue);">ℹ Your API key, not the channel's.</strong> One key lets you analyze <em>any</em> public YouTube channel worldwide.
+      <br><br>
+      Get a free key in under 2 minutes:
+      <ol style="margin: 8px 0 0 16px; font-size:12px; line-height:1.8;">
+        <li>Go to <strong>console.cloud.google.com</strong> → Create a project</li>
+        <li>Search <strong>"YouTube Data API v3"</strong> → Enable it</li>
+        <li>Go to <strong>Credentials</strong> → Create API Key</li>
+        <li>Paste it below — free quota is <strong>10,000 units/day</strong></li>
+      </ol>
+    </div>
+    <div class="form-group">
+      <label class="form-label">YouTube Data API Key</label>
+      <div style="display:flex; gap:8px;">
+        <input class="form-input mono" id="yt-api-key" type="password"
+          placeholder="AIzaSy..."
+          value="{{ settings.yt_api_key or '' }}" style="flex:1;">
+        <button class="btn btn-ghost btn-sm" onclick="toggleKeyVisibility('yt-api-key', this)">👁 Show</button>
+      </div>
+      <div class="form-hint">Stored locally in your database. Never sent externally.</div>
+    </div>
+    <button class="btn btn-primary" onclick="saveApiKeys()">💾 Save API Keys</button>
+  </div>
+</div>
+
+</div>
+
 <!-- ── 1. General Paths ─────────────────────────────────────────── -->
-<div id="settings-tab-dirs" class="settings-tab-content active">
+<div id="settings-tab-dirs" class="settings-tab-content">
 <div class="section-heading">Download Directories</div>
 
 <div class="card" style="margin-bottom:20px;">
@@ -397,7 +439,6 @@
 
 {% block scripts %}
 <script>
-// ── Settings Tabs ────────────────────────────────────────
 function showSettingsTab(tabId) {
   document.querySelectorAll('.settings-tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.settings-tab-btn').forEach(el => el.classList.remove('active'));
@@ -405,6 +446,26 @@ function showSettingsTab(tabId) {
   document.getElementById('settings-tab-' + tabId).classList.add('active');
   document.getElementById('tabbtn-' + tabId).classList.add('active');
 }
+
+// ── API Keys ──────────────────────────────────────────────
+function toggleKeyVisibility(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = '🙈 Hide';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁 Show';
+  }
+}
+
+async function saveApiKeys() {
+  const key = document.getElementById('yt-api-key').value.trim();
+  const resp = await postJSON('/api/settings/keys/save', { yt_api_key: key });
+  if (resp.ok) { showToast('API key saved!', 'success'); setTimeout(() => location.reload(), 900); }
+  else showToast(resp.error || 'Failed', 'error');
+}
+
 
 // ── GPU Tester ────────────────────────────────────────
 async function testGPUsystem() {
