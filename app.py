@@ -1169,7 +1169,145 @@ def api_youtube_download():
 def api_youtube_progress(job_id):
     return _sse_stream(job_id)
 
-# ══════════════════════════════════════════════════════════════
+
+@app.route('/api/youtube/reel-convert', methods=['POST'])
+def api_youtube_reel_convert():
+    """
+    All-in-one: Download YouTube URL → convert to Instagram 9:16 Reel parts.
+    Supports: equal split, optional clip range, title/part label/watermark overlays.
+    """
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+
+    url          = data.get('url', '').strip()
+    output_dir   = data.get('output_dir', '').strip()
+    title        = data.get('title', '').strip()
+    watermark    = data.get('watermark', '').strip()
+    part_secs    = int(data.get('part_duration', 60))
+    show_title   = bool(data.get('show_title', True))
+    show_part    = bool(data.get('show_part_label', True))
+    show_wm      = bool(data.get('show_watermark', bool(watermark)))
+    clip_start   = float(data.get('clip_start', 0))
+    clip_end     = float(data.get('clip_end', 0))
+    quality      = data.get('quality', '1080')
+
+    if not url:
+        return jsonify({'error': 'No YouTube URL provided'}), 400
+
+    job_id = str(uuid.uuid4())
+    job    = _make_job(job_id)
+
+    def run():
+        # ── Step 1: Download ──────────────────────────────
+        yt_dir = output_dir or _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube')
+        os.makedirs(yt_dir, exist_ok=True)
+        _emit(job, f'📥 Downloading: {url}', 5)
+
+        results = download_youtube(
+            urls=[url], quality=quality, output_dir=yt_dir, audio_only=False,
+            custom_dir=bool(output_dir),
+            progress_cb=lambda line, pct=None: _emit(job, line, pct)
+        )
+        if not results or results[0].get('status') != 'ok':
+            err = results[0].get('error', 'Download failed') if results else 'Download failed'
+            _finish(job, f'Download failed: {err}', results=[])
+            return
+
+        video_path = results[0].get('file_path') or results[0].get('path', '')
+        if not video_path or not os.path.isfile(video_path):
+            # Fallback: find newest mp4 in yt_dir
+            import glob as _g
+            files = sorted(_g.glob(os.path.join(yt_dir, '**', '*.mp4'), recursive=True),
+                           key=os.path.getmtime, reverse=True)
+            video_path = files[0] if files else ''
+
+        if not video_path or not os.path.isfile(video_path):
+            _finish(job, 'Could not locate downloaded file', results=[])
+            return
+
+        video_title = results[0].get('title', title or 'Video')
+        used_title  = title or video_title
+
+        _emit(job, f'✅ Downloaded: {os.path.basename(video_path)}', 30)
+
+        # ── Step 2: Convert → Reel parts ─────────────────
+        reel_dir = os.path.join(os.path.dirname(video_path), '_reels')
+        _emit(job, f'🎬 Converting to 9:16 Reels (parts of {part_secs}s)…', 35)
+
+        from modules.reel_converter import convert_to_reels
+        conv = convert_to_reels(
+            input_path      = video_path,
+            output_dir      = reel_dir,
+            title           = used_title,
+            watermark       = watermark,
+            part_duration_sec = part_secs,
+            show_title      = show_title,
+            show_part_label = show_part,
+            show_watermark  = show_wm,
+            clip_start_sec  = clip_start,
+            clip_end_sec    = clip_end,
+            progress_cb     = lambda line: _emit(job, line),
+        )
+
+        parts  = conv.get('parts', [])
+        errors = conv.get('errors', [])
+
+        reel_results = [{'file': os.path.basename(p), 'path': p, 'status': 'ok'} for p in parts]
+        reel_results += [{'file': e, 'status': 'error'} for e in errors]
+
+        _emit(job, f'🎉 Done! {len(parts)} reel parts created.', 100)
+        _finish(job, f'{len(parts)} parts created in {reel_dir}',
+                results=reel_results, reel_dir=reel_dir, source_video=video_path)
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({'job_id': job_id})
+
+
+@app.route('/api/youtube/reel-convert-local', methods=['POST'])
+def api_youtube_reel_convert_local():
+    """Convert a local video file (already downloaded) to Reel parts."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+
+    video_path = data.get('video_path', '').strip()
+    if not video_path or not os.path.isfile(video_path):
+        return jsonify({'error': 'File not found: ' + video_path}), 400
+
+    title        = data.get('title', '').strip()
+    watermark    = data.get('watermark', '').strip()
+    part_secs    = int(data.get('part_duration', 60))
+    show_title   = bool(data.get('show_title', True))
+    show_part    = bool(data.get('show_part_label', True))
+    show_wm      = bool(data.get('show_watermark', bool(watermark)))
+    clip_start   = float(data.get('clip_start', 0))
+    clip_end     = float(data.get('clip_end', 0))
+
+    job_id = str(uuid.uuid4())
+    job    = _make_job(job_id)
+
+    def run():
+        reel_dir = os.path.join(os.path.dirname(video_path), '_reels')
+        _emit(job, f'🎬 Converting: {os.path.basename(video_path)}', 5)
+        from modules.reel_converter import convert_to_reels
+        conv = convert_to_reels(
+            input_path=video_path, output_dir=reel_dir,
+            title=title, watermark=watermark,
+            part_duration_sec=part_secs,
+            show_title=show_title, show_part_label=show_part, show_watermark=show_wm,
+            clip_start_sec=clip_start, clip_end_sec=clip_end,
+            progress_cb=lambda line: _emit(job, line),
+        )
+        parts  = conv.get('parts', [])
+        errors = conv.get('errors', [])
+        reel_results = [{'file': os.path.basename(p), 'path': p, 'status': 'ok'} for p in parts]
+        reel_results += [{'file': e, 'status': 'error'} for e in errors]
+        _finish(job, f'{len(parts)} parts in {reel_dir}',
+                results=reel_results, reel_dir=reel_dir)
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({'job_id': job_id})
+
+
 #  API — Audio Tools (Extract MP3 + Merge)
 # ══════════════════════════════════════════════════════════════
 @app.route('/api/audio/upload', methods=['POST'])

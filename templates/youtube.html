@@ -5,11 +5,24 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title"><span class="grad-text">YouTube Downloader</span></h1>
-  <p class="page-subtitle">Paste multiple YouTube links — download as MP4 video or extract MP3 audio.</p>
+  <p class="page-subtitle">Download · Extract MP3 · Convert to Instagram Reels with splits, text overlays, and 9:16 formatting.</p>
 </div>
 
+<!-- ════════ Top Tab Bar ════════ -->
+<div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:24px;">
+  <button class="btn btn-sm active" id="ytab-dl-btn" onclick="switchYTab('dl')" style="background:var(--bg-card);border:1px solid var(--border);">🎬 Download</button>
+  <button class="btn btn-sm btn-ghost" id="ytab-audio-btn" onclick="switchYTab('audio')">🎵 Audio Only</button>
+  <button class="btn btn-sm btn-ghost" id="ytab-reel-btn" onclick="switchYTab('reel')">
+    📱 Reel Converter
+    <span class="nav-badge" style="background:rgba(255,60,172,.15);color:#ff3cac;border-color:rgba(255,60,172,.3);">NEW</span>
+  </button>
+</div>
+
+<!-- ═══════════════════════════════════
+     TAB 1: VIDEO DOWNLOAD
+═══════════════════════════════════ -->
+<div id="ytab-dl">
 <div class="two-col">
-  <!-- Left: Config -->
   <div style="display:flex;flex-direction:column;gap:16px;">
     <div class="card">
       <div class="card-header">
@@ -20,32 +33,11 @@
         <div class="form-group">
           <label class="form-label">YouTube Links <span style="color:var(--text-muted);font-weight:400;">(one per line)</span></label>
           <textarea class="form-textarea mono" id="yt-urls" rows="9"
-            placeholder="https://www.youtube.com/watch?v=XXXX&#10;https://youtu.be/YYYY&#10;https://www.youtube.com/watch?v=ZZZZ&#10;…"
+            placeholder="https://www.youtube.com/watch?v=XXXX&#10;https://youtu.be/YYYY&#10;…"
             oninput="countYTUrls(this)"></textarea>
-          <div class="form-hint">Supports youtube.com, youtu.be, and YouTube Shorts links.</div>
+          <div class="form-hint">Supports youtube.com, youtu.be, and Shorts links.</div>
         </div>
-
         <div class="form-group">
-          <label class="form-label">Download Mode</label>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" id="mode-video-box">
-              <input type="radio" name="yt-mode" value="video" checked style="accent-color:var(--accent);margin-top:2px;" onchange="updateModeUI()" />
-              <div>
-                <div style="font-size:13px;font-weight:600;">🎬 Video (MP4)</div>
-                <div style="font-size:11px;color:var(--text-muted);">Download as video file with audio</div>
-              </div>
-            </label>
-            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" id="mode-audio-box">
-              <input type="radio" name="yt-mode" value="audio" style="accent-color:var(--accent);margin-top:2px;" onchange="updateModeUI()" />
-              <div>
-                <div style="font-size:13px;font-weight:600;">🎵 Audio Only (MP3)</div>
-                <div style="font-size:11px;color:var(--text-muted);">Extract high-quality MP3 audio only</div>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <div class="form-group" id="quality-group">
           <label class="form-label">Video Quality</label>
           <select class="form-select" id="yt-quality">
             <option value="best">Best available</option>
@@ -55,35 +47,25 @@
             <option value="360">360p</option>
           </select>
         </div>
-
         <div class="form-group">
           <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
           <div style="display:flex;gap:8px;">
             <input class="form-input mono" id="yt-out-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_yt', '') }}" />
             <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
           </div>
-          <div class="form-hint">Defaults to the location in Settings.</div>
         </div>
-
-        <button class="btn btn-primary btn-full btn-lg" id="yt-btn" onclick="startYTDownload()">
-          ↓ Start Download
-        </button>
+        <button class="btn btn-primary btn-full btn-lg" id="yt-btn" onclick="startYTDownload()">↓ Start Download</button>
       </div>
     </div>
-
-    <!-- Info -->
     <div class="card">
       <div class="card-header"><div class="card-title">ℹ Notes</div></div>
       <div class="card-body" style="font-size:12px;color:var(--text-secondary);line-height:1.9;">
-        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:var(--accent-green);">✓</span><span>No authentication required for public YouTube videos</span></div>
-        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:var(--accent-green);">✓</span><span>Downloads are saved in <code>downloads/[channel]/</code></span></div>
-        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:var(--accent-gold);">⚠</span><span>Age-restricted or private videos may fail</span></div>
-        <div style="display:flex;gap:8px;"><span style="color:var(--accent-gold);">⚠</span><span>Playlists: only the linked video is downloaded (no-playlist mode)</span></div>
+        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:var(--accent-green);">✓</span><span>No authentication required for public videos</span></div>
+        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:var(--accent-green);">✓</span><span>Saved in <code>downloads/[channel]/</code></span></div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--accent-gold);">⚠</span><span>Age-restricted or private videos may fail</span></div>
       </div>
     </div>
   </div>
-
-  <!-- Right: Progress + Results -->
   <div style="display:flex;flex-direction:column;gap:16px;">
     <div class="card" id="yt-progress-card" style="display:none;">
       <div class="card-header">
@@ -92,28 +74,20 @@
       </div>
       <div class="card-body">
         <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:6px;">
-          <span id="yt-current">Starting…</span>
-          <span id="yt-pct">0%</span>
+          <span id="yt-current">Starting…</span><span id="yt-pct">0%</span>
         </div>
-        <div class="progress-wrap">
-          <div class="progress-bar animated" id="yt-bar" style="width:0%"></div>
-        </div>
+        <div class="progress-wrap"><div class="progress-bar animated" id="yt-bar" style="width:0%"></div></div>
         <div class="sse-log" id="yt-log" style="margin-top:12px;"></div>
         <button class="btn btn-ghost btn-sm btn-full" style="margin-top:12px;" onclick="cancelYT()">✕ Cancel</button>
       </div>
     </div>
-
     <div class="card" id="yt-results-card" style="display:none;">
       <div class="card-header">
         <div class="card-title">✅ Downloaded</div>
         <span class="badge badge-green" id="yt-results-summary">0 videos</span>
       </div>
-      <div class="card-body" style="padding:0;">
-        <div id="yt-results-list"></div>
-      </div>
+      <div class="card-body" style="padding:0;"><div id="yt-results-list"></div></div>
     </div>
-
-    <!-- Placeholder -->
     <div class="card" id="yt-placeholder">
       <div class="card-body" style="text-align:center;padding:48px 20px;">
         <div style="font-size:48px;margin-bottom:12px;">▶</div>
@@ -123,100 +97,483 @@
     </div>
   </div>
 </div>
+</div><!-- /ytab-dl -->
+
+<!-- ═══════════════════════════════════
+     TAB 2: AUDIO ONLY
+═══════════════════════════════════ -->
+<div id="ytab-audio" style="display:none;">
+<div class="two-col">
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🎵 YouTube → MP3</div>
+        <span class="badge badge-gray">Audio Only</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">YouTube Links (one per line)</label>
+          <textarea class="form-textarea mono" id="yt-audio-urls" rows="7" placeholder="https://www.youtube.com/watch?v=XXXX&#10;…"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Output Folder (optional)</label>
+          <div style="display:flex;gap:8px;">
+            <input class="form-input mono" id="yt-audio-dir" type="text" placeholder="Leave blank for default">
+            <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-audio-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full btn-lg" id="yt-audio-btn" onclick="startYTAudio()">🎵 Extract MP3</button>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card" id="yta-progress-card" style="display:none;">
+      <div class="card-header"><div class="card-title">⏳ Extracting Audio</div><span class="badge badge-orange" id="yta-status">Running</span></div>
+      <div class="card-body">
+        <div class="progress-wrap"><div class="progress-bar animated" id="yta-bar" style="width:0%"></div></div>
+        <div class="sse-log" id="yta-log" style="margin-top:12px;"></div>
+      </div>
+    </div>
+    <div class="card" id="yta-results-card" style="display:none;">
+      <div class="card-header"><div class="card-title">✅ Extracted</div><span class="badge badge-green" id="yta-summary">0 files</span></div>
+      <div class="card-body" style="padding:0;"><div id="yta-results-list"></div></div>
+    </div>
+    <div class="card" id="yta-placeholder">
+      <div class="card-body" style="text-align:center;padding:48px 20px;">
+        <div style="font-size:48px;margin-bottom:12px;">🎵</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text-secondary);">Enter YouTube URLs to extract audio</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- /ytab-audio -->
+
+<!-- ═══════════════════════════════════
+     TAB 3: REEL CONVERTER
+═══════════════════════════════════ -->
+<div id="ytab-reel" style="display:none;">
+<div class="two-col">
+
+  <!-- Left: Config -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <!-- Source -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📹 Source</div>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:16px;">
+          <button class="btn btn-sm active" id="src-yt-btn" onclick="setReelSource('yt')" style="background:var(--bg-card);border:1px solid var(--border);">▶ YouTube URL</button>
+          <button class="btn btn-sm btn-ghost" id="src-local-btn" onclick="setReelSource('local')">📁 Local File</button>
+        </div>
+
+        <!-- YouTube source -->
+        <div id="reel-src-yt">
+          <div class="form-group">
+            <label class="form-label">YouTube URL</label>
+            <input class="form-input mono" id="reel-yt-url" type="text" placeholder="https://www.youtube.com/watch?v=...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Quality</label>
+            <select class="form-select" id="reel-quality">
+              <option value="1080" selected>1080p (recommended)</option>
+              <option value="720">720p</option>
+              <option value="best">Best available</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Local source -->
+        <div id="reel-src-local" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Video File Path</label>
+            <div style="display:flex;gap:8px;">
+              <input class="form-input mono" id="reel-local-path" type="text" placeholder="C:\videos\movie.mp4" style="flex:1;">
+              <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-local-path')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reel Settings -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">✂ Split Settings</div></div>
+      <div class="card-body">
+
+        <div class="form-group">
+          <label class="form-label">Split Mode</label>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" id="split-equal-box" onclick="setSplitMode('equal')">
+              <input type="radio" name="split-mode" value="equal" checked style="accent-color:var(--accent);margin-top:2px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;">⚡ Equal Duration Parts</div>
+                <div style="font-size:11px;color:var(--text-muted);">Splits entire video into equal segments</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" id="split-clip-box" onclick="setSplitMode('clip')">
+              <input type="radio" name="split-mode" value="clip" style="accent-color:var(--accent);margin-top:2px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;">✂ Clip Specific Range + Split</div>
+                <div style="font-size:11px;color:var(--text-muted);">Extract a section first, then split that section</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Equal split options -->
+        <div id="split-equal-opts">
+          <div class="form-group">
+            <label class="form-label">Part Duration (seconds)</label>
+            <input class="form-input" id="reel-part-dur" type="number" value="60" min="10" max="3600">
+            <div class="form-hint">Each output Reel will be exactly this long. 60s = Instagram max. Use 30s for Shorts-style.</div>
+          </div>
+        </div>
+
+        <!-- Clip range options -->
+        <div id="split-clip-opts" style="display:none;">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" style="font-size:10px;">Clip Start (sec)</label>
+              <input class="form-input" id="reel-clip-start" type="number" value="0" min="0">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" style="font-size:10px;">Clip End (sec)</label>
+              <input class="form-input" id="reel-clip-end" type="number" value="0" min="0">
+              <div class="form-hint" style="font-size:9px;">0 = until end</div>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" style="font-size:10px;">Part Duration (sec)</label>
+              <input class="form-input" id="reel-part-dur-clip" type="number" value="60" min="10">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Text Overlays -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">✏ Text Overlays</div></div>
+      <div class="card-body">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
+            <input type="checkbox" id="overlay-title" checked style="accent-color:var(--accent);margin-top:3px;">
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:600;">📌 Title (top-center)</div>
+              <div style="font-size:11px;color:var(--text-muted);">e.g. "Movie Name - Part 1"</div>
+              <input class="form-input" id="reel-title" type="text" placeholder="Video title (auto-filled from YouTube if blank)" style="margin-top:8px;font-size:12px;">
+            </div>
+          </label>
+
+          <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
+            <input type="checkbox" id="overlay-part" checked style="accent-color:var(--accent);">
+            <div>
+              <div style="font-size:13px;font-weight:600;">🔢 Part Number (bottom area)</div>
+              <div style="font-size:11px;color:var(--text-muted);">"Part -1", "Part -2" … auto-increments</div>
+            </div>
+          </label>
+
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
+            <input type="checkbox" id="overlay-watermark" style="accent-color:var(--accent);margin-top:3px;">
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:600;">💧 Watermark (bottom-right, semi-transparent)</div>
+              <input class="form-input" id="reel-watermark" type="text" placeholder="@YourChannel or channel name" style="margin-top:8px;font-size:12px;">
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Output folder -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">📂 Output</div></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">Output Folder (optional)</label>
+          <div style="display:flex;gap:8px;">
+            <input class="form-input mono" id="reel-out-dir" type="text" placeholder="Default: ./downloads/_youtube/_reels" style="flex:1;">
+            <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+          </div>
+        </div>
+        <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);font-size:11px;color:var(--text-muted);">
+          <strong>Output format:</strong> 9:16 · 1080×1920 · H.264 · AAC · Cinemascope bars preserved<br>
+          Parts saved as: <code>videoname_part01.mp4</code>, <code>_part02.mp4</code>…
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-full btn-lg" id="reel-btn" onclick="startReelConvert()"
+            style="background:linear-gradient(135deg,#ff3cac,#8250ff);">
+      📱 Download &amp; Convert to Reels
+    </button>
+  </div>
+
+  <!-- Right: Progress + Results -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <!-- Preview card -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">🖼 Output Preview</div></div>
+      <div class="card-body" style="display:flex;justify-content:center;align-items:center;padding:16px;">
+        <!-- 9:16 mockup -->
+        <div style="width:140px;height:249px;background:#000;border-radius:8px;border:2px solid var(--border);position:relative;overflow:hidden;flex-shrink:0;">
+          <div style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,.7);padding:6px;text-align:center;">
+            <div style="font-size:8px;color:#fff;font-weight:600;" id="mock-title">Title - Part 1</div>
+          </div>
+          <!-- Simulated letterbox video area -->
+          <div style="position:absolute;top:50%;left:0;right:0;transform:translateY(-50%);">
+            <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);height:78px;display:flex;align-items:center;justify-content:center;">
+              <span style="font-size:24px;">🎬</span>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:6px;text-align:center;">
+            <div style="font-size:10px;color:#fff;font-weight:700;" id="mock-part">Part -1</div>
+          </div>
+          <div style="position:absolute;bottom:4px;right:5px;font-size:6px;color:rgba(255,255,255,.5);" id="mock-wm"></div>
+        </div>
+        <div style="margin-left:16px;font-size:11px;color:var(--text-muted);line-height:1.8;">
+          <div>📐 <strong>1080×1920</strong></div>
+          <div>🎞 H.264 / AAC</div>
+          <div>⬛ Letterbox bars preserved</div>
+          <div>✂ Equal parts</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="card" id="reel-progress-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">⏳ Processing</div>
+        <span class="badge badge-orange" id="reel-status">Running</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:6px;">
+          <span id="reel-current">Starting…</span><span id="reel-pct">0%</span>
+        </div>
+        <div class="progress-wrap"><div class="progress-bar animated" id="reel-bar" style="width:0%;background:linear-gradient(90deg,#ff3cac,#8250ff);"></div></div>
+        <div class="sse-log" id="reel-log" style="margin-top:12px;max-height:200px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="card" id="reel-results-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">✅ Reel Parts Created</div>
+        <span class="badge badge-green" id="reel-results-count">0 parts</span>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div id="reel-results-list"></div>
+        <div id="reel-output-dir" style="padding:12px;font-size:11px;color:var(--text-muted);border-top:1px solid var(--border);"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div><!-- /ytab-reel -->
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-let ytSSE = null;
+let ytSSE = null, ytaSSE = null, reelSSE = null;
+let _reelSource = 'yt';
+let _splitMode  = 'equal';
 
+// ── Tab switch ────────────────────────────────────────────────
+function switchYTab(t) {
+  ['dl','audio','reel'].forEach(id => {
+    const el = document.getElementById('ytab-'+id); if(el) el.style.display = id===t?'block':'none';
+    const b  = document.getElementById('ytab-'+id+'-btn');
+    if(b){ b.classList.toggle('active',id===t); b.style.background=id===t?'var(--bg-card)':'transparent'; b.style.border=id===t?'1px solid var(--border)':'none'; }
+  });
+}
+function setReelSource(s) {
+  _reelSource = s;
+  document.getElementById('reel-src-yt').style.display    = s==='yt' ? 'block' : 'none';
+  document.getElementById('reel-src-local').style.display = s==='local' ? 'block' : 'none';
+  const byt  = document.getElementById('src-yt-btn');
+  const bloc = document.getElementById('src-local-btn');
+  byt.classList.toggle('active', s==='yt');   byt.style.background  = s==='yt'?'var(--bg-card)':'transparent'; byt.style.border  = s==='yt'?'1px solid var(--border)':'none';
+  bloc.classList.toggle('active', s==='local'); bloc.style.background = s==='local'?'var(--bg-card)':'transparent'; bloc.style.border = s==='local'?'1px solid var(--border)':'none';
+}
+function setSplitMode(m) {
+  _splitMode = m;
+  document.getElementById('split-equal-opts').style.display = m==='equal' ? 'block' : 'none';
+  document.getElementById('split-clip-opts').style.display  = m==='clip'  ? 'block' : 'none';
+}
+
+// ── Live mock preview ─────────────────────────────────────────
+function updateMock() {
+  const title = document.getElementById('reel-title').value.trim() || 'Video Title';
+  const wm    = document.getElementById('reel-watermark').value.trim();
+  document.getElementById('mock-title').textContent = title + ' - Part 1';
+  document.getElementById('mock-wm').textContent    = wm || '';
+  document.getElementById('mock-title').style.display = document.getElementById('overlay-title').checked ? '' : 'none';
+  document.getElementById('mock-part').style.display  = document.getElementById('overlay-part').checked  ? '' : 'none';
+  document.getElementById('mock-wm').style.display    = (document.getElementById('overlay-watermark').checked && wm) ? '' : 'none';
+}
+['reel-title','reel-watermark','overlay-title','overlay-part','overlay-watermark'].forEach(id => {
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('input', updateMock);
+  if(el) el.addEventListener('change', updateMock);
+});
+
+// ── Download tab ──────────────────────────────────────────────
 function countYTUrls(textarea) {
   const lines = textarea.value.split('\n').filter(l => l.trim().startsWith('http'));
   document.getElementById('yt-url-count').textContent = lines.length + ' URL' + (lines.length !== 1 ? 's' : '');
 }
 
-function updateModeUI() {
-  const isAudio = document.querySelector('input[name="yt-mode"]:checked').value === 'audio';
-  document.getElementById('quality-group').style.display = isAudio ? 'none' : 'block';
-}
-
 async function startYTDownload() {
   const raw = document.getElementById('yt-urls').value.trim();
-  if (!raw) { showToast('Enter at least one YouTube URL', 'warn'); return; }
+  if(!raw){ showToast('Enter at least one YouTube URL','warn'); return; }
   const urls = raw.split('\n').filter(l => l.trim().startsWith('http'));
-  if (!urls.length) { showToast('No valid YouTube URLs found', 'warn'); return; }
-
-  const audioOnly = document.querySelector('input[name="yt-mode"]:checked').value === 'audio';
-  const quality   = document.getElementById('yt-quality').value;
-  const outDir    = document.getElementById('yt-out-dir').value.trim();
+  if(!urls.length){ showToast('No valid URLs','warn'); return; }
+  const quality = document.getElementById('yt-quality').value;
+  const outDir  = document.getElementById('yt-out-dir').value.trim();
 
   document.getElementById('yt-progress-card').style.display = 'block';
   document.getElementById('yt-results-card').style.display  = 'none';
   document.getElementById('yt-placeholder').style.display   = 'none';
-  document.getElementById('yt-log').textContent             = '';
-  document.getElementById('yt-bar').style.width             = '0%';
-  document.getElementById('yt-btn').disabled                = true;
-  document.getElementById('yt-btn').textContent             = 'Downloading…';
+  document.getElementById('yt-log').textContent = '';
+  document.getElementById('yt-bar').style.width = '0%';
+  document.getElementById('yt-btn').disabled    = true;
+  document.getElementById('yt-btn').textContent = 'Downloading…';
 
-  const resp = await postJSON('/api/youtube/download', { urls, quality, audio_only: audioOnly, output_dir: outDir });
-  if (!resp.job_id) {
-    showToast(resp.error || 'Failed to start', 'error');
-    document.getElementById('yt-btn').disabled = false;
-    document.getElementById('yt-btn').textContent = '↓ Start Download';
-    return;
-  }
-
+  const resp = await postJSON('/api/youtube/download', {urls, quality, audio_only: false, output_dir: outDir});
+  if(!resp.job_id){ showToast(resp.error||'Failed','error'); document.getElementById('yt-btn').disabled=false; document.getElementById('yt-btn').textContent='↓ Start Download'; return; }
   ytSSE = startSSEProgress({
-    url: '/api/youtube/progress/' + resp.job_id,
-    logId: 'yt-log',
-    barId: 'yt-bar',
-    statusId: 'yt-status',
+    url: '/api/youtube/progress/'+resp.job_id,
+    logId:'yt-log', barId:'yt-bar', statusId:'yt-status',
     onComplete: function(d) {
-      document.getElementById('yt-btn').disabled = false;
-      document.getElementById('yt-btn').textContent = '↓ Start Download';
-      document.getElementById('yt-status').className = 'badge badge-green';
-      document.getElementById('yt-status').textContent = 'Done';
-      showYTResults(d.results || []);
+      document.getElementById('yt-btn').disabled=false; document.getElementById('yt-btn').textContent='↓ Start Download';
+      document.getElementById('yt-status').className='badge badge-green'; document.getElementById('yt-status').textContent='Done';
+      showYTResults(d.results||[]);
+    }
+  });
+}
+function cancelYT(){ if(ytSSE){ytSSE.close();ytSSE=null;} document.getElementById('yt-btn').disabled=false; document.getElementById('yt-btn').textContent='↓ Start Download'; document.getElementById('yt-progress-card').style.display='none'; showToast('Cancelled','warn'); }
+function showYTResults(results) {
+  const ok = results.filter(r=>r.status==='ok').length;
+  document.getElementById('yt-results-summary').textContent=`${ok} / ${results.length}`;
+  document.getElementById('yt-results-card').style.display='block';
+  document.getElementById('yt-results-list').innerHTML=results.map(r=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);">
+      <span style="font-size:22px;">🎬</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title||r.url}</div>
+        <div style="font-size:11px;color:var(--text-muted);">@${r.channel||'—'}${r.duration?' · '+Math.round(r.duration/60)+'m':''}</div>
+        ${r.error?`<div style="font-size:11px;color:var(--accent-red);">${r.error}</div>`:''}
+      </div>
+      <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
+    </div>`).join('');
+}
+
+// ── Audio tab ─────────────────────────────────────────────────
+async function startYTAudio() {
+  const raw = document.getElementById('yt-audio-urls').value.trim();
+  if(!raw){ showToast('Enter at least one URL','warn'); return; }
+  const urls = raw.split('\n').filter(l=>l.trim().startsWith('http'));
+  const outDir = document.getElementById('yt-audio-dir').value.trim();
+  document.getElementById('yta-progress-card').style.display='block';
+  document.getElementById('yta-placeholder').style.display='none';
+  document.getElementById('yta-results-card').style.display='none';
+  document.getElementById('yta-bar').style.width='0%';
+  document.getElementById('yt-audio-btn').disabled=true; document.getElementById('yt-audio-btn').textContent='Extracting…';
+  const resp = await postJSON('/api/audio/extract', {source:'youtube', yt_urls: urls, output_dir: outDir});
+  if(!resp.job_id){ showToast(resp.error||'Failed','error'); document.getElementById('yt-audio-btn').disabled=false; document.getElementById('yt-audio-btn').textContent='🎵 Extract MP3'; return; }
+  ytaSSE = startSSEProgress({
+    url:'/api/audio/progress/'+resp.job_id, logId:'yta-log', barId:'yta-bar', statusId:'yta-status',
+    onComplete: function(d){
+      document.getElementById('yt-audio-btn').disabled=false; document.getElementById('yt-audio-btn').textContent='🎵 Extract MP3';
+      const res=d.results||[];
+      document.getElementById('yta-summary').textContent=res.filter(r=>r.status==='ok').length+'/'+res.length+' files';
+      document.getElementById('yta-results-card').style.display='block';
+      document.getElementById('yta-results-list').innerHTML=res.map(r=>`
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);">
+          <span>🎵</span><div style="flex:1;font-size:12px;">${r.output||r.url||'file'}</div>
+          <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
+        </div>`).join('');
     }
   });
 }
 
-function cancelYT() {
-  if (ytSSE) { ytSSE.close(); ytSSE = null; }
-  document.getElementById('yt-btn').disabled = false;
-  document.getElementById('yt-btn').textContent = '↓ Start Download';
-  document.getElementById('yt-progress-card').style.display = 'none';
-  showToast('Download cancelled', 'warn');
-}
+// ── Reel Converter ────────────────────────────────────────────
+async function startReelConvert() {
+  const showTitle = document.getElementById('overlay-title').checked;
+  const showPart  = document.getElementById('overlay-part').checked;
+  const showWm    = document.getElementById('overlay-watermark').checked;
+  const title     = document.getElementById('reel-title').value.trim();
+  const wm        = document.getElementById('reel-watermark').value.trim();
+  const outDir    = document.getElementById('reel-out-dir').value.trim();
+  const isEqual   = _splitMode === 'equal';
+  const partDur   = parseInt(isEqual ? document.getElementById('reel-part-dur').value : document.getElementById('reel-part-dur-clip').value) || 60;
+  const clipStart = isEqual ? 0 : (parseFloat(document.getElementById('reel-clip-start').value)||0);
+  const clipEnd   = isEqual ? 0 : (parseFloat(document.getElementById('reel-clip-end').value)||0);
+  const quality   = document.getElementById('reel-quality').value;
 
-function showYTResults(results) {
-  const ok = results.filter(r => r.status === 'ok').length;
-  document.getElementById('yt-results-summary').textContent = `${ok} / ${results.length}`;
-  document.getElementById('yt-results-card').style.display  = 'block';
-  document.getElementById('yt-results-list').innerHTML = results.map(r => `
-    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);">
-      <span style="font-size:22px;">${r.audio_only ? '🎵' : '🎬'}</span>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title || r.url}</div>
-        <div style="font-size:11px;color:var(--text-muted);">@${r.channel||'—'}${r.duration ? ' · ' + Math.round(r.duration/60) + 'm' : ''}</div>
-        ${r.error ? `<div style="font-size:11px;color:var(--accent-red);">${r.error}</div>` : ''}
-      </div>
-      <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
-    </div>
-  `).join('');
+  let payload = {title, watermark: wm, part_duration: partDur,
+                  show_title: showTitle, show_part_label: showPart, show_watermark: showWm,
+                  clip_start: clipStart, clip_end: clipEnd, output_dir: outDir, quality};
+
+  let endpoint;
+  if(_reelSource === 'yt') {
+    const url = document.getElementById('reel-yt-url').value.trim();
+    if(!url){ showToast('Enter a YouTube URL','warn'); return; }
+    payload.url = url;
+    endpoint = '/api/youtube/reel-convert';
+  } else {
+    const vp = document.getElementById('reel-local-path').value.trim();
+    if(!vp){ showToast('Enter a video file path','warn'); return; }
+    payload.video_path = vp;
+    endpoint = '/api/youtube/reel-convert-local';
+  }
+
+  document.getElementById('reel-progress-card').style.display='block';
+  document.getElementById('reel-results-card').style.display='none';
+  document.getElementById('reel-log').textContent='';
+  document.getElementById('reel-bar').style.width='0%';
+  document.getElementById('reel-btn').disabled=true;
+  document.getElementById('reel-btn').textContent='⏳ Processing…';
+
+  const resp = await postJSON(endpoint, payload);
+  if(!resp.job_id){ showToast(resp.error||'Failed to start','error'); document.getElementById('reel-btn').disabled=false; document.getElementById('reel-btn').textContent='📱 Download & Convert to Reels'; return; }
+
+  reelSSE = startSSEProgress({
+    url:'/api/youtube/progress/'+resp.job_id,
+    logId:'reel-log', barId:'reel-bar', statusId:'reel-status',
+    onComplete: function(d) {
+      document.getElementById('reel-btn').disabled=false;
+      document.getElementById('reel-btn').textContent='📱 Download & Convert to Reels';
+      document.getElementById('reel-status').className='badge badge-green';
+      document.getElementById('reel-status').textContent='Done';
+      const res = d.results||[];
+      const ok  = res.filter(r=>r.status==='ok').length;
+      document.getElementById('reel-results-count').textContent = ok+' parts';
+      document.getElementById('reel-results-card').style.display='block';
+      document.getElementById('reel-results-list').innerHTML = res.map((r,i)=>`
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);">
+          <span style="background:linear-gradient(135deg,rgba(255,60,172,.15),rgba(130,80,255,.1));padding:4px 10px;border-radius:3px;font-size:11px;font-family:var(--font-mono);white-space:nowrap;">
+            Part ${i+1}
+          </span>
+          <div style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.file||r.path||'—'}</div>
+          <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
+        </div>`).join('');
+      if(d.reel_dir) document.getElementById('reel-output-dir').textContent='📁 Saved to: '+d.reel_dir;
+      if(ok>0) showToast(`✅ ${ok} Reel parts created!`,'success');
+    }
+  });
 }
 
 async function browseFolder(inputId) {
   try {
     const resp = await fetch('/api/utils/pick-folder');
     const data = await resp.json();
-    if (data.folder) {
-      document.getElementById(inputId).value = data.folder;
-    } else if (data.error) {
-      showToast('Error opening folder picker: ' + data.error, 'error');
-    }
-  } catch (err) {
-    showToast('Failed to open folder picker', 'error');
-  }
+    if(data.folder) document.getElementById(inputId).value=data.folder;
+    else if(data.error) showToast('Error: '+data.error,'error');
+  } catch { showToast('Folder picker unavailable — type path manually','warn'); }
 }
 </script>
 {% endblock %}
