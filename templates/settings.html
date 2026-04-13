@@ -78,74 +78,73 @@
 
 </div>
 
-<!-- ── 2. Cookies ───────────────────────────────────────────── -->
+<!-- ── 2. Cookies & Profiles ───────────────────────────────────── -->
 <div id="settings-tab-auth" class="settings-tab-content">
-<div class="section-heading">Authentication</div>
+<div class="section-heading">Authentication & Accounts</div>
 
 <div class="card" style="margin-bottom:20px;">
   <div class="card-header">
-    <div class="card-title">🍪 Instagram Cookies</div>
-    {% if cookie_status.ok %}
-      <span class="badge badge-green">Active · {{ cookie_status.size_kb }} KB · Updated {{ cookie_status.modified }}</span>
-    {% else %}
-      <span class="badge badge-red">Not Found</span>
-    {% endif %}
+    <div class="card-title">🍪 Multi-Profile Cookie Manager</div>
+    <span class="badge badge-blue">Auto-Rotates on Rate Limits</span>
   </div>
   <div class="card-body">
-
-    <!-- Tab switcher -->
-    <div style="display:flex; gap:4px; background:var(--bg-card-2); padding:4px; border-radius:var(--radius-sm); width:fit-content; margin-bottom:16px;">
-      <button class="btn btn-sm" id="tab-paste-btn" onclick="switchCookieTab('paste')" style="background:var(--bg-card); border:1px solid var(--border);">
-        ✎ Paste Content
-      </button>
-      <button class="btn btn-sm btn-ghost" id="tab-upload-btn" onclick="switchCookieTab('upload')">
-        ↑ Upload File
-      </button>
+    <div class="form-hint" style="margin-bottom: 16px;">
+      Configure up to 5 profiles. P1 is the primary fallback. 
+      If a profile hits 10 downloads in 2 hours or throws a 429 Error, the backend will automatically cycle to the next healthy profile!
     </div>
 
-    <!-- Paste tab -->
-    <div id="tab-paste">
-      <div class="form-group">
-        <label class="form-label" for="cookie-text">Paste cookies.txt content</label>
-        <textarea class="form-textarea mono" id="cookie-text" rows="10"
-          placeholder="# Netscape HTTP Cookie File&#10;# https://curl.haxx.se/rfc/cookie_spec.html&#10;# This is a generated file! Do not edit.&#10;&#10;.instagram.com	TRUE	/	TRUE	..."></textarea>
-        <div class="form-hint">Export from your browser using the <strong>"Get cookies.txt LOCALLY"</strong> extension while logged into instagram.com</div>
-      </div>
-      <button class="btn btn-primary" onclick="saveCookiePaste()">
-        💾 Save Cookies
-      </button>
-    </div>
-
-    <!-- Upload tab -->
-    <div id="tab-upload" style="display:none;">
-      <div class="drop-zone" id="cookie-drop" onclick="document.getElementById('cookie-file-input').click()">
-        <input type="file" id="cookie-file-input" accept=".txt" style="display:none;" onchange="uploadCookieFile(this)" />
-        <div class="drop-icon">📄</div>
-        <div class="drop-label" id="cookie-drop-label">Click or drag cookies.txt file</div>
-        <div class="drop-hint">Netscape format .txt file exported from browser extension</div>
-      </div>
-    </div>
-
-    <!-- Current status detail -->
-    {% if cookie_status.ok %}
-    <div style="margin-top:16px; padding:12px 14px; background:var(--bg-card-2); border:1px solid var(--border); border-radius:var(--radius-sm);">
-      <div class="section-heading" style="margin-bottom:8px;">Current Cookie File</div>
-      <div style="display:grid; grid-template-columns:120px 1fr; gap:4px 12px; font-size:12px;">
-        <span style="color:var(--text-muted);">Path</span>
-        <span style="font-family:var(--font-mono); color:var(--text-secondary);">{{ cookie_status.path }}</span>
-        <span style="color:var(--text-muted);">Size</span>
-        <span>{{ cookie_status.size_kb }} KB</span>
-        <span style="color:var(--text-muted);">Modified</span>
-        <span>{{ cookie_status.modified }}</span>
-        <span style="color:var(--text-muted);">Lines</span>
-        <span>{{ cookie_status.lines }}</span>
-      </div>
-      <div style="margin-top:10px; display:flex; gap:8px;">
-        <button class="btn btn-ghost btn-sm" onclick="previewCookies()">👁 Preview</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteCookies()">🗑 Delete</button>
-      </div>
-    </div>
-    {% endif %}
+    <!-- Accounts Table -->
+    <table class="table" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+      <thead>
+        <tr style="border-bottom: 1px solid var(--border); text-align: left; color: var(--text-muted);">
+          <th style="padding: 8px;">Priority</th>
+          <th style="padding: 8px;">Label</th>
+          <th style="padding: 8px;">Status</th>
+          <th style="padding: 8px;">Usage Limit</th>
+          <th style="padding: 8px; text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for acc in accounts %}
+        <tr style="border-bottom: 1px solid var(--border-light);">
+          <td style="padding: 12px 8px; font-weight: bold; color: var(--accent);">P{{ acc.priority }}</td>
+          <td style="padding: 12px 8px;">{{ acc.label }}</td>
+          
+          <td style="padding: 12px 8px;">
+            {% if acc.is_active == 0 %}
+                <span class="badge badge-dim">Disabled</span>
+            {% elif acc.error_count > 3 %}
+                <span class="badge badge-red">Failing</span>
+            {% elif not acc.has_cookie %}
+                <span class="badge badge-orange">Missing Cookie</span>
+            {% elif acc.cooldown %}
+                <span class="badge badge-orange">Rate Limited</span>
+            {% else %}
+                <span class="badge badge-green">Healthy</span>
+            {% endif %}
+          </td>
+          
+          <td style="padding: 12px 8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+               <div style="flex:1; height:6px; background:var(--bg-card-2); border-radius:3px; overflow:hidden;">
+                  <div style="height:100%; width:{{ (acc.used_slots / acc.limit * 100) if acc.limit else 0 }}%; background:var(--accent);"></div>
+               </div>
+               <span class="mono" style="font-size:11px;">{{ acc.used_slots }} / {{ acc.limit }}</span>
+            </div>
+          </td>
+          
+          <td style="padding: 12px 8px; text-align: right; display:flex; gap:6px; justify-content:flex-end;">
+            {% if acc.has_cookie %}
+                <button class="btn btn-ghost btn-sm" onclick="previewCookies('{{ acc.id }}')">👁</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteCookies('{{ acc.id }}')">🗑</button>
+            {% else %}
+                <button class="btn btn-primary btn-sm" onclick="openCookieModal('{{ acc.id }}')">+ Add Cookie</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endendfor %}
+      </tbody>
+    </table>
 
   </div>
 </div>
@@ -350,12 +349,43 @@
   </div>
 </div>
 
-<!-- Cookie preview modal -->
-<div id="cookie-modal" style="display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+<!-- Cookie Modals -->
+<div id="cookie-manager-modal" style="display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+  <div class="card" style="width:100%; max-width:600px; margin:20px;">
+    <div class="card-header">
+      <div class="card-title">🍪 Manage Profile: <span id="current-account-label" style="color:var(--accent);">P1</span></div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cookie-manager-modal').style.display='none'">✕</button>
+    </div>
+    <div class="card-body">
+      <input type="hidden" id="current-account-id" value="p1">
+      
+      <div style="display:flex; gap:4px; background:var(--bg-card-2); padding:4px; border-radius:var(--radius-sm); width:fit-content; margin-bottom:16px;">
+        <button class="btn btn-sm" id="tab-paste-btn" onclick="switchCookieTab('paste')" style="background:var(--bg-card); border:1px solid var(--border);">✎ Paste</button>
+        <button class="btn btn-sm btn-ghost" id="tab-upload-btn" onclick="switchCookieTab('upload')">↑ Upload</button>
+      </div>
+
+      <div id="tab-paste">
+        <label class="form-label">Paste cookies.txt content</label>
+        <textarea class="form-textarea mono" id="cookie-text" rows="10" placeholder=".instagram.com	TRUE	/	TRUE..."></textarea>
+        <button class="btn btn-primary" style="margin-top:12px;" onclick="saveCookiePaste()">💾 Save Cookies</button>
+      </div>
+
+      <div id="tab-upload" style="display:none;">
+        <div class="drop-zone" onclick="document.getElementById('cookie-file-input').click()">
+          <input type="file" id="cookie-file-input" accept=".txt" style="display:none;" onchange="uploadCookieFile(this)" />
+          <div class="drop-icon">📄</div>
+          <div class="drop-label" id="cookie-drop-label">Click or drag cookies.txt file</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="cookie-preview-modal" style="display:none; position:fixed; inset:0; z-index:210; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
   <div class="card" style="width:100%; max-width:680px; margin:20px;">
     <div class="card-header">
-      <div class="card-title">🍪 cookies.txt Preview</div>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cookie-modal').style.display='none'">✕</button>
+      <div class="card-title">🍪 Preview Cookies</div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cookie-preview-modal').style.display='none'">✕</button>
     </div>
     <div class="card-body">
       <div class="code-block" id="cookie-preview-content" style="max-height:400px; overflow-y:auto; font-size:11px;"></div>
@@ -413,7 +443,15 @@ async function testGPUsystem() {
   }
 }
 
-// ── Cookie tab switch ────────────────────────────────────
+// ── Cookie Management ────────────────────────────────────
+function openCookieModal(accountId) {
+  document.getElementById('current-account-id').value = accountId;
+  document.getElementById('current-account-label').textContent = accountId.toUpperCase();
+  document.getElementById('cookie-text').value = '';
+  document.getElementById('cookie-manager-modal').style.display = 'flex';
+  switchCookieTab('paste');
+}
+
 function switchCookieTab(tab) {
   document.getElementById('tab-paste').style.display    = tab === 'paste'  ? 'block' : 'none';
   document.getElementById('tab-upload').style.display   = tab === 'upload' ? 'block' : 'none';
@@ -425,35 +463,37 @@ function switchCookieTab(tab) {
 
 async function saveCookiePaste() {
   const text = document.getElementById('cookie-text').value.trim();
+  const accId = document.getElementById('current-account-id').value;
   if (!text) { showToast('Paste your cookies.txt content first', 'warn'); return; }
   if (!text.includes('instagram.com')) { showToast('This does not look like Instagram cookies', 'warn'); return; }
-  const resp = await postJSON('/api/settings/cookies/save', { content: text });
-  if (resp.ok) { showToast('Cookies saved! ' + resp.lines + ' cookie lines.', 'success'); setTimeout(() => location.reload(), 1200); }
+  const resp = await postJSON('/api/settings/cookies/save', { content: text, account_id: accId });
+  if (resp.ok) { showToast('Profile ' + accId.toUpperCase() + ' saved! (' + resp.lines + ' lines)', 'success'); setTimeout(() => location.reload(), 1200); }
   else showToast(resp.error || 'Failed to save', 'error');
 }
 
 async function uploadCookieFile(input) {
   const file = input.files[0];
+  const accId = document.getElementById('current-account-id').value;
   if (!file) return;
-  document.getElementById('cookie-drop-label').textContent = file.name;
+  
   const text = await file.text();
   if (!text.includes('instagram.com')) { showToast('This does not look like Instagram cookies', 'warn'); return; }
-  const resp = await postJSON('/api/settings/cookies/save', { content: text });
-  if (resp.ok) { showToast('Cookies uploaded! ' + resp.lines + ' lines.', 'success'); setTimeout(() => location.reload(), 1200); }
+  const resp = await postJSON('/api/settings/cookies/save', { content: text, account_id: accId });
+  if (resp.ok) { showToast('Profile ' + accId.toUpperCase() + ' saved!', 'success'); setTimeout(() => location.reload(), 1200); }
   else showToast(resp.error || 'Failed', 'error');
 }
 
-async function previewCookies() {
-  const resp = await fetch('/api/settings/cookies/preview');
+async function previewCookies(accountId) {
+  const resp = await fetch('/api/settings/cookies/preview?account_id=' + accountId);
   const data = await resp.json();
   document.getElementById('cookie-preview-content').textContent = data.content || '(empty)';
-  document.getElementById('cookie-modal').style.display = 'flex';
+  document.getElementById('cookie-preview-modal').style.display = 'flex';
 }
 
-async function deleteCookies() {
-  if (!confirm('Delete cookies.txt? You will need to re-upload to download Reels.')) return;
-  const resp = await postJSON('/api/settings/cookies/delete', {});
-  if (resp.ok) { showToast('Cookies deleted.', 'success'); setTimeout(() => location.reload(), 800); }
+async function deleteCookies(accountId) {
+  if (!confirm(`Clear cookies for ${accountId.toUpperCase()}?`)) return;
+  const resp = await postJSON('/api/settings/cookies/delete', { account_id: accountId });
+  if (resp.ok) { location.reload(); }
 }
 
 // ── Watermark position ───────────────────────────────────

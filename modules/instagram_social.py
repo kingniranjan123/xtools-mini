@@ -159,34 +159,59 @@ def _build_session(cookies_file: str) -> requests.Session:
 
 # ── User lookup ───────────────────────────────────────────────
 
-def lookup_user(username: str, cookies_file: str) -> dict:
-    s = _build_session(cookies_file)
-    try:
-        url  = f'https://www.instagram.com/api/v1/users/web_profile_info/?username={username}'
-        resp = s.get(url, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-        user = data.get('data', {}).get('user', {})
-        if not user:
-            return {'error': 'User not found or private'}
-        timeline = user.get('edge_owner_to_timeline_media', {}).get('edges', [])
-        shortcodes = [edge['node']['shortcode'] for edge in timeline if 'node' in edge and 'shortcode' in edge['node']]
-        return {
-            'user_id':         user.get('id'),
-            'username':        user.get('username', username),
-            'full_name':       user.get('full_name', ''),
-            'followers_count': user.get('edge_followed_by', {}).get('count', 0),
-            'following_count': user.get('edge_follow', {}).get('count', 0),
-            'is_private':      user.get('is_private', False),
-            'profile_pic_url': user.get('profile_pic_url', ''),
-            'recent_posts':    shortcodes,
-        }
-    except requests.exceptions.HTTPError as exc:
-        if resp.status_code == 429:
-            return {'error': 'Instagram is currently rate-limiting profile previews (Error 429). The preview cannot be loaded, but you can still try clicking Download 10 Reels to proceed with the extraction backend.'}
-        return {'error': str(exc)}
-    except Exception as exc:
-        return {'error': str(exc)}
+def lookup_user(username: str, cookies_file: str = None) -> dict:
+    from modules.account_manager import get_active_profile, mark_profile_failed
+    
+    # Try up to 5 profiles if they keep hitting 429
+    profile = get_active_profile()
+    if not profile and not cookies_file:
+         return {'error': 'No active Instagram profiles configured or all are rate-limited'}
+         
+    attempt_count = 0
+    while True:
+        target_cookie = cookies_file or profile['cookie_path']
+        s = _build_session(target_cookie)
+        
+        try:
+            url  = f'https://www.instagram.com/api/v1/users/web_profile_info/?username={username}'
+            resp = s.get(url, timeout=12)
+            resp.raise_for_status()
+            data = resp.json()
+            user = data.get('data', {}).get('user', {})
+            if not user:
+                # Instagram might send empty user if not found
+                return {'error': 'User not found or private'}
+                
+            timeline = user.get('edge_owner_to_timeline_media', {}).get('edges', [])
+            shortcodes = [edge['node']['shortcode'] for edge in timeline if 'node' in edge and 'shortcode' in edge['node']]
+            return {
+                'user_id':         user.get('id'),
+                'username':        user.get('username', username),
+                'full_name':       user.get('full_name', ''),
+                'followers_count': user.get('edge_followed_by', {}).get('count', 0),
+                'following_count': user.get('edge_follow', {}).get('count', 0),
+                'is_private':      user.get('is_private', False),
+                'profile_pic_url': user.get('profile_pic_url', ''),
+                'recent_posts':    shortcodes,
+                'used_profile':    profile['label'] if profile else 'legacy',
+                'profile_id':      profile['id'] if profile else 'none'
+            }
+            
+        except requests.exceptions.HTTPError as exc:
+            if resp.status_code == 429:
+                # Blocked! Mark taking profile as failed.
+                if profile:
+                    mark_profile_failed(profile['id'])
+                    attempt_count += 1
+                    # Rotate to next priority
+                    profile = get_active_profile()
+                    if profile and attempt_count < 5:
+                        continue # Try again with new profile!
+                        
+                return {'error': 'Instagram rate-limit (429) hit and no alternative profiles are left.'}
+            return {'error': f'HTTP Error {resp.status_code}: {exc}'}
+        except Exception as exc:
+            return {'error': str(exc)}
 
 
 # ── Followers / Following extractor ───────────────────────────

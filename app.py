@@ -222,19 +222,26 @@ def settings_page():
             except: pass
 
     # Cookie status
-    cookie_status = {'ok': False, 'path': COOKIES_FILE, 'size_kb': 0, 'lines': 0, 'modified': ''}
-    if os.path.isfile(COOKIES_FILE):
-        stat = os.stat(COOKIES_FILE)
-        with open(COOKIES_FILE, 'r', encoding='utf-8', errors='ignore') as f:
-            lines = [l for l in f if l.strip() and not l.startswith('#')]
-        cookie_status.update({
-            'ok':       True,
-            'size_kb':  f'{stat.st_size / 1024:.1f}',
-            'lines':    len(lines),
-            'modified': _dt_module.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'),
-        })
+    from modules.account_manager import ensure_default_profiles_exist, get_account_status
+    ensure_default_profiles_exist()
+    
+    accounts = [dict(r) for r in db.execute("SELECT * FROM ig_accounts ORDER BY priority ASC").fetchall()]
+    for acc in accounts:
+        cookie_path = os.path.join(BASE_DIR, acc['cookie_path']) if acc['cookie_path'] else ''
+        acc['has_cookie'] = os.path.isfile(cookie_path)
+        if acc['has_cookie']:
+             stat = os.stat(cookie_path)
+             acc['cookie_size'] = f'{stat.st_size / 1024:.1f} KB'
+        else:
+             acc['cookie_size'] = ''
+        
+        # Merge recent limit status
+        status = get_account_status(acc['id'])
+        acc['used_slots'] = status['used']
+        acc['limit'] = status['used'] + status['remaining']
+        acc['cooldown'] = status['in_cooldown']
 
-    return render_template('settings.html', settings=settings, cookie_status=cookie_status)
+    return render_template('settings.html', settings=settings, accounts=accounts)
 
 @app.route('/instagram')
 def instagram_page():
@@ -526,25 +533,43 @@ def api_directories_save():
 def api_cookies_save():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     data    = request.get_json()
+    account_id = data.get('account_id', 'p1')
     content = data.get('content', '').strip()
     if not content: return jsonify({'error': 'Empty content'}), 400
+    
     lines = [l for l in content.splitlines() if l.strip() and not l.startswith('#')]
-    with open(COOKIES_FILE, 'w', encoding='utf-8') as f:
+    cookie_path = os.path.join('downloads', 'cookies', f'{account_id}.txt')
+    abs_cookie_path = os.path.join(BASE_DIR, cookie_path)
+    os.makedirs(os.path.dirname(abs_cookie_path), exist_ok=True)
+    
+    with open(abs_cookie_path, 'w', encoding='utf-8') as f:
         f.write(content)
+        
+    db = get_db()
+    db.execute("UPDATE ig_accounts SET cookie_path=? WHERE id=?", (cookie_path, account_id))
+    db.commit()
     return jsonify({'ok': True, 'lines': len(lines)})
 
 @app.route('/api/settings/cookies/preview')
 def api_cookies_preview():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
-    if not os.path.isfile(COOKIES_FILE): return jsonify({'content': '(file not found)'})
-    with open(COOKIES_FILE, 'r', encoding='utf-8', errors='ignore') as f:
+    account_id = request.args.get('account_id', 'p1')
+    abs_cookie_path = os.path.join(BASE_DIR, 'downloads', 'cookies', f'{account_id}.txt')
+    if not os.path.isfile(abs_cookie_path): return jsonify({'content': '(file not found)'})
+    with open(abs_cookie_path, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read(4096)  # first 4KB preview
     return jsonify({'content': content})
 
 @app.route('/api/settings/cookies/delete', methods=['POST'])
 def api_cookies_delete():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
-    if os.path.isfile(COOKIES_FILE): os.remove(COOKIES_FILE)
+    data = request.get_json() or {}
+    account_id = data.get('account_id', 'p1')
+    abs_cookie_path = os.path.join(BASE_DIR, 'downloads', 'cookies', f'{account_id}.txt')
+    if os.path.isfile(abs_cookie_path): os.remove(abs_cookie_path)
+    db = get_db()
+    db.execute("UPDATE ig_accounts SET cookie_path=NULL WHERE id=?", (account_id,))
+    db.commit()
     return jsonify({'ok': True})
 
 @app.route('/api/settings/watermark/save', methods=['POST'])
@@ -990,29 +1015,20 @@ from modules.instagram_social import _load_state, _save_state, WINDOW_SECONDS, B
 import time as _time
 
 def _get_uid_dl_status():
-    state     = _load_state()
-    now       = _time.time()
-    win_start = state.get('uid_dl_window_start', 0.0)
-    count     = state.get('uid_dl_count', 0)
-    elapsed   = now - win_start
-    if elapsed >= WINDOW_SECONDS:
-        return {'in_cooldown': False, 'used': 0, 'remaining': BATCH_LIMIT,
-                'window_start': now, 'cooldown_ends': now + WINDOW_SECONDS, 'seconds_left': 0}
-    remaining     = max(0, BATCH_LIMIT - count)
-    in_cooldown   = count >= BATCH_LIMIT
-    cooldown_ends = win_start + WINDOW_SECONDS
-    seconds_left  = max(0, int(cooldown_ends - now))
-    return {'in_cooldown': in_cooldown, 'used': count, 'remaining': remaining,
-            'window_start': win_start, 'cooldown_ends': cooldown_ends, 'seconds_left': seconds_left}
+    from modules.account_manager import get_active_profile, get_account_status
+    profile = get_active_profile()
+    if not profile:
+        return {'in_cooldown': True, 'used': 10, 'remaining': 0, 'window_start': 0, 'cooldown_ends': 0, 'seconds_left': 7200, 'error': 'No active/healthy profiles available'}
+    return get_account_status(profile['id'])
 
-def _record_uid_dl(n):
-    state = _load_state()
-    now   = _time.time()
-    if now - state.get('uid_dl_window_start', 0.0) >= WINDOW_SECONDS:
-        state['uid_dl_window_start'] = now
-        state['uid_dl_count'] = 0
-    state['uid_dl_count'] = state.get('uid_dl_count', 0) + n
-    _save_state(state)
+def _record_uid_dl(n, profile_id=None):
+    from modules.account_manager import record_account_usage, get_active_profile
+    pid = profile_id
+    if not pid:
+        p = get_active_profile()
+        pid = p['id'] if p else None
+    if pid:
+        record_account_usage(pid, n)
 
 @app.route('/api/download/userid/status')
 def api_uid_dl_status():
@@ -1062,9 +1078,9 @@ def api_download_userid():
         if os.path.isfile(COOKIES_FILE):
             cmd += ['--cookies', COOKIES_FILE]
             
-        _emit(job, f'Looking up latest {limit} reels for @{username}...')
+        _emit(job, f'Looking up latest reels for @{username}...')
         from modules.instagram_social import lookup_user
-        info = lookup_user(username, COOKIES_FILE)
+        info = lookup_user(username)  # we don't pass COOKIES_FILE, let it auto-rotate
         
         if 'error' in info:
             _emit(job, f'API Error: {info["error"]}')
@@ -1072,14 +1088,47 @@ def api_download_userid():
             return
             
         shortcodes = info.get('recent_posts', [])
+        used_profile = info.get('profile_id', None)
         if not shortcodes:
             _emit(job, 'No recent posts found for this user.')
             _finish(job, 'Extraction complete (0 found).', error=True)
             return
 
-        # Cap at requested limit
-        shortcodes = shortcodes[:limit]
+        # Duplicate checking
+        db = get_db()
+        fresh_shortcodes = []
+        for sc in shortcodes:
+            # yt-dlp 'id' equals shortcode usually
+            if not db.execute("SELECT 1 FROM reels WHERE id=?", (sc,)).fetchone():
+                fresh_shortcodes.append(sc)
+            if len(fresh_shortcodes) >= limit:
+                break
+                
+        if not fresh_shortcodes:
+            _emit(job, f'All {len(shortcodes)} recent reels are already downloaded (duplicates skipped).')
+            _finish(job, 'Skipped 100% duplicates.')
+            return
+
+        # Cap at requested limit again just in case
+        shortcodes = fresh_shortcodes[:limit]
         urls = [f'https://www.instagram.com/p/{sc}/' for sc in shortcodes]
+        
+        # Determine actual cookie to give to yt-dlp
+        working_cookie_path = None
+        from modules.account_manager import get_active_profile
+        p = get_active_profile()
+        if p and p['cookie_path']:
+             working_cookie_path = p['cookie_path']
+        elif os.path.isfile(COOKIES_FILE):
+             working_cookie_path = COOKIES_FILE
+             
+        if working_cookie_path:
+             try:
+                 idx = cmd.index('--cookies')
+                 cmd[idx+1] = working_cookie_path
+             except ValueError:
+                 cmd += ['--cookies', working_cookie_path]
+                 
         cmd.extend(urls)
 
         downloaded = 0

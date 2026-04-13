@@ -37,6 +37,16 @@ CREATE TABLE IF NOT EXISTS ig_extractions (
   data_path    TEXT,
   extracted_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS ig_accounts (
+  id            TEXT PRIMARY KEY,
+  label         TEXT,
+  priority      INTEGER DEFAULT 1,
+  cookie_path   TEXT,
+  is_active     INTEGER DEFAULT 1,
+  error_count   INTEGER DEFAULT 0,
+  last_used     DATETIME
+);
 """
 
 def get_db():
