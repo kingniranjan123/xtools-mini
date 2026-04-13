@@ -2,7 +2,7 @@
 YouTube Downloader — yt-dlp backed
 Supports: multiple URLs, quality selection, MP3-only mode
 """
-import os, re, json, subprocess, shutil
+import os, re, json, subprocess, shutil, sys
 
 def download_youtube(urls: list, quality: str, output_dir: str,
                      audio_only: bool = False, progress_cb=None) -> list:
@@ -10,7 +10,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
     Download a list of YouTube URLs via yt-dlp.
     Returns list of result dicts.
     """
-    ytdlp = shutil.which('yt-dlp') or 'yt-dlp'
+    ytdlp = [sys.executable, '-m', 'yt_dlp']
     os.makedirs(output_dir, exist_ok=True)
     results = []
     total   = len(urls)
@@ -44,7 +44,7 @@ def _download_yt_single(url, quality, output_dir, audio_only,
     """Download one YouTube URL."""
 
     # Get metadata first
-    info_cmd = [ytdlp, '--print-json', '--no-download', '--no-playlist', url]
+    info_cmd = ytdlp + ['--rm-cache-dir', '--print-json', '--no-download', '--no-playlist', url]
     raw = subprocess.check_output(info_cmd, stderr=subprocess.DEVNULL, text=True, timeout=60)
     info = json.loads(raw.splitlines()[0])
 
@@ -58,8 +58,8 @@ def _download_yt_single(url, quality, output_dir, audio_only,
     out_template = os.path.join(channel_dir, f'{vid_id}.%(ext)s')
 
     if audio_only:
-        dl_cmd = [
-            ytdlp, '--no-playlist',
+        dl_cmd = ytdlp + [
+            '--no-playlist', '--rm-cache-dir',
             '-x', '--audio-format', 'mp3',
             '--audio-quality', '0',
             '--output', out_template,
@@ -71,8 +71,8 @@ def _download_yt_single(url, quality, output_dir, audio_only,
         else:
             fmt = (f'bestvideo[height<={quality}][ext=mp4]+'
                    f'bestaudio[ext=m4a]/best[height<={quality}][ext=mp4]/best')
-        dl_cmd = [
-            ytdlp, '--no-playlist',
+        dl_cmd = ytdlp + [
+            '--no-playlist', '--rm-cache-dir',
             '--format', fmt,
             '--output', out_template,
             '--write-thumbnail', '--convert-thumbnails', 'jpg',

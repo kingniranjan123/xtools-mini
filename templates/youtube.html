@@ -56,6 +56,15 @@
           </select>
         </div>
 
+        <div class="form-group">
+          <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+          <div style="display:flex;gap:8px;">
+            <input class="form-input mono" id="yt-out-dir" type="text" placeholder="Leave blank for default" />
+            <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+          </div>
+          <div class="form-hint">Defaults to the location in Settings.</div>
+        </div>
+
         <button class="btn btn-primary btn-full btn-lg" id="yt-btn" onclick="startYTDownload()">
           ↓ Start Download
         </button>
@@ -138,6 +147,7 @@ async function startYTDownload() {
 
   const audioOnly = document.querySelector('input[name="yt-mode"]:checked').value === 'audio';
   const quality   = document.getElementById('yt-quality').value;
+  const outDir    = document.getElementById('yt-out-dir').value.trim();
 
   document.getElementById('yt-progress-card').style.display = 'block';
   document.getElementById('yt-results-card').style.display  = 'none';
@@ -147,7 +157,7 @@ async function startYTDownload() {
   document.getElementById('yt-btn').disabled                = true;
   document.getElementById('yt-btn').textContent             = 'Downloading…';
 
-  const resp = await postJSON('/api/youtube/download', { urls, quality, audio_only: audioOnly });
+  const resp = await postJSON('/api/youtube/download', { urls, quality, audio_only: audioOnly, output_dir: outDir });
   if (!resp.job_id) {
     showToast(resp.error || 'Failed to start', 'error');
     document.getElementById('yt-btn').disabled = false;
@@ -193,6 +203,20 @@ function showYTResults(results) {
       <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
     </div>
   `).join('');
+}
+
+async function browseFolder(inputId) {
+  try {
+    const resp = await fetch('/api/utils/pick-folder');
+    const data = await resp.json();
+    if (data.folder) {
+      document.getElementById(inputId).value = data.folder;
+    } else if (data.error) {
+      showToast('Error opening folder picker: ' + data.error, 'error');
+    }
+  } catch (err) {
+    showToast('Failed to open folder picker', 'error');
+  }
 }
 </script>
 {% endblock %}

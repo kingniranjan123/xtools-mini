@@ -105,8 +105,11 @@
 
         <div class="form-group">
           <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-          <input class="form-input mono" id="output-dir" type="text"
-            placeholder="Leave blank — saves to mp3_output/ subfolder or YouTube folder from settings" />
+          <div style="display:flex;gap:8px;">
+            <input class="form-input mono" id="output-dir" type="text"
+              placeholder="Leave blank — saves to mp3_output/ subfolder" />
+            <button class="btn btn-secondary btn-sm" onclick="browseFolder('output-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+          </div>
           <div class="form-hint">Defaults to <code>mp3_output/</code> inside the source folder, or the YouTube download folder set in Settings.</div>
         </div>
 
@@ -322,6 +325,20 @@ function showResults(results) {
       <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
     </div>
   `).join('');
+}
+
+async function browseFolder(inputId) {
+  try {
+    const resp = await fetch('/api/utils/pick-folder');
+    const data = await resp.json();
+    if (data.folder) {
+      document.getElementById(inputId).value = data.folder;
+    } else if (data.error) {
+      showToast('Error opening folder picker: ' + data.error, 'error');
+    }
+  } catch (err) {
+    showToast('Failed to open folder picker', 'error');
+  }
 }
 </script>
 {% endblock %}

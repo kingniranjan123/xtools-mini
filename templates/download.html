@@ -39,10 +39,19 @@
             <label class="form-label">Video Quality</label>
             <select class="form-select" name="quality" id="quality">
               <option value="best">Best available</option>
-              <option value="720">720p</option>
+              <option value="1080">1080p</option>
+              <option value="720" selected>720p</option>
               <option value="480">480p</option>
               <option value="360">360p</option>
             </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+            <div style="display:flex;gap:8px;">
+              <input class="form-input mono" id="links-out-dir" type="text" placeholder="Leave blank for default" />
+              <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolder('links-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+            </div>
+            <div class="form-hint">Defaults to the location in Settings.</div>
           </div>
           <div class="form-group">
             <label class="form-label">Cookies File</label>
@@ -190,6 +199,15 @@
           </select>
         </div>
 
+        <div class="form-group">
+          <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+          <div style="display:flex;gap:8px;">
+            <input class="form-input mono" id="uid-out-dir" type="text" placeholder="Leave blank for default" />
+            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolder('uid-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+          </div>
+          <div class="form-hint">Defaults to the location in Settings.</div>
+        </div>
+
         <div style="padding:12px;background:rgba(255,170,0,0.06);border:1px solid rgba(255,170,0,0.2);border-radius:var(--radius-sm);margin-bottom:16px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
           <strong style="color:var(--accent-gold);">Rate Limit:</strong> Max 10 reels per 2-hour window. Same safety rules as Auto-Follow.
         </div>
@@ -248,22 +266,20 @@ let currentESS = null;
 
 document.getElementById('download-form').addEventListener('submit', async function(e) {
   e.preventDefault();
-  const urls = document.getElementById('urls').value.trim();
-  if (!urls) { showToast('Please enter at least one URL', 'warn'); return; }
-  const lines = urls.split('\n').filter(l => l.trim().startsWith('http'));
-  if (!lines.length) { showToast('No valid Instagram URLs found', 'error'); return; }
+  const urlsArea = document.getElementById('urls');
+  const urls = urlsArea.value.split('\n').filter(l => l.trim().startsWith('http'));
+  if (urls.length === 0) { urlsArea.focus(); return; }
+  const quality = document.getElementById('quality').value;
+  const outDir  = document.getElementById('links-out-dir').value.trim();
 
   document.getElementById('progress-card').style.display = 'block';
-  document.getElementById('results-card').style.display  = 'none';
+  document.getElementById('results-card').style.display = 'none';
   document.getElementById('dl-log').textContent          = '';
   document.getElementById('dl-bar').style.width          = '0%';
   document.getElementById('dl-btn').disabled             = true;
   document.getElementById('dl-btn').textContent          = 'Downloading…';
 
-  const resp = await postJSON('/api/download', {
-    urls: lines,
-    quality: document.getElementById('quality').value
-  });
+  const resp = await postJSON('/api/download', { urls: urls, quality: quality, output_dir: outDir });
 
   if (!resp.job_id) {
     showToast(resp.error || 'Failed to start download', 'error');
@@ -387,14 +403,16 @@ async function startUserIDDownload() {
   const username = document.getElementById('ig-userid').value.trim().replace('@','');
   if (!username) { showToast('Enter a username first', 'warn'); return; }
   const quality = document.getElementById('uid-quality').value;
+  const outDir  = document.getElementById('uid-out-dir').value.trim();
 
   document.getElementById('uid-progress-card').style.display = 'block';
   document.getElementById('uid-results-card').style.display  = 'none';
   document.getElementById('uid-log').textContent             = '';
-  document.getElementById('uid-dl-btn').textContent          = 'Downloading…';
+  document.getElementById('uid-bar').style.width             = '5%';
   document.getElementById('uid-dl-btn').disabled             = true;
+  document.getElementById('uid-dl-btn').textContent          = 'Downloading…';
 
-  const resp = await postJSON('/api/download/userid', { username, quality });
+  const resp = await postJSON('/api/download/userid', { username, quality, output_dir: outDir });
 
   if (!resp.job_id) {
     if (resp.in_cooldown) {
@@ -440,6 +458,20 @@ function showUIDResults(results) {
       <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
     </div>
   `).join('');
+}
+
+async function browseFolder(inputId) {
+  try {
+    const resp = await fetch('/api/utils/pick-folder');
+    const data = await resp.json();
+    if (data.folder) {
+      document.getElementById(inputId).value = data.folder;
+    } else if (data.error) {
+      showToast('Error opening folder picker: ' + data.error, 'error');
+    }
+  } catch (err) {
+    showToast('Failed to open folder picker', 'error');
+  }
 }
 
 // Init

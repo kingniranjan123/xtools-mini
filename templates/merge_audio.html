@@ -46,16 +46,25 @@
         <div id="merge-batch" style="display:none;">
           <div class="form-group">
             <label class="form-label">Video Folder</label>
-            <input class="form-input mono" id="batch-vid-dir" type="text" placeholder="C:\path\to\videos\" />
+            <div style="display:flex;gap:8px;">
+              <input class="form-input mono" id="batch-vid-dir" type="text" placeholder="C:\path\to\videos\" />
+              <button class="btn btn-secondary btn-sm" onclick="browseFolder('batch-vid-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Audio Folder</label>
-            <input class="form-input mono" id="batch-aud-dir" type="text" placeholder="C:\path\to\mp3_output\" />
+            <div style="display:flex;gap:8px;">
+              <input class="form-input mono" id="batch-aud-dir" type="text" placeholder="C:\path\to\mp3_output\" />
+              <button class="btn btn-secondary btn-sm" onclick="browseFolder('batch-aud-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+            </div>
             <div class="form-hint">Files are paired by matching filename (e.g. <code>clip01.mp4</code> + <code>clip01.mp3</code>).</div>
           </div>
           <div class="form-group">
             <label class="form-label">Output Folder</label>
-            <input class="form-input mono" id="batch-out-dir" type="text" placeholder="Leave blank for merged_output/ subfolder" />
+            <div style="display:flex;gap:8px;">
+              <input class="form-input mono" id="batch-out-dir" type="text" placeholder="Leave blank for merged_output/ subfolder" />
+              <button class="btn btn-secondary btn-sm" onclick="browseFolder('batch-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+            </div>
           </div>
         </div>
 
@@ -264,6 +273,20 @@ function showResults(results) {
       <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
     </div>
   `).join('');
+}
+
+async function browseFolder(inputId) {
+  try {
+    const resp = await fetch('/api/utils/pick-folder');
+    const data = await resp.json();
+    if (data.folder) {
+      document.getElementById(inputId).value = data.folder;
+    } else if (data.error) {
+      showToast('Error opening folder picker: ' + data.error, 'error');
+    }
+  } catch (err) {
+    showToast('Failed to open folder picker', 'error');
+  }
 }
 </script>
 {% endblock %}

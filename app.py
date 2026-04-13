@@ -2,7 +2,8 @@
 Nikethan Reels Toolkit — Flask App
 Password: nikethan
 """
-import os, json, uuid, threading, subprocess, shutil
+import os, json, uuid, threading, subprocess, shutil, sys, tkinter as tk
+from tkinter import filedialog
 from datetime import datetime
 import datetime as _dt_module
 from flask import (Flask, render_template, redirect, url_for,
@@ -66,7 +67,7 @@ def system_status():
             stderr=subprocess.STDOUT, text=True).splitlines()[0].split('version')[1].split()[0]
     except: pass
     try:
-        ytdlp_ver = subprocess.check_output(['yt-dlp', '--version'],
+        ytdlp_ver = subprocess.check_output([sys.executable, '-m', 'yt_dlp', '--version'],
             text=True).strip()[:12]
     except: pass
     return {
@@ -283,15 +284,16 @@ def api_download():
     data    = request.get_json()
     urls    = data.get('urls', [])
     quality = data.get('quality', 'best')
+    out_dir = data.get('output_dir', '').strip()
     if not urls:
         return jsonify({'error': 'No URLs provided'}), 400
+    if not out_dir:
+        return jsonify({'error': 'Output directory is required'}), 400
 
     job_id = str(uuid.uuid4())
     job    = _make_job(job_id)
 
     def run():
-        settings = _get_settings()
-        out_dir = settings.get('dir_ig') or DOWNLOADS_DIR
         results = download_reels(
             urls=urls,
             quality=quality,
@@ -326,6 +328,22 @@ def _save_reel_to_db(info: dict):
 @app.route('/api/download/progress/<job_id>')
 def api_download_progress(job_id):
     return _sse_stream(job_id)
+
+# ══════════════════════════════════════════════════════════════
+#  API — Utils
+# ══════════════════════════════════════════════════════════════
+@app.route('/api/utils/pick-folder')
+def api_pick_folder():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    try:
+        root = tk.Tk()
+        root.attributes('-topmost', True)
+        root.withdraw()
+        folder = filedialog.askdirectory(parent=root, title="Select Output Folder")
+        root.destroy()
+        return jsonify({'folder': folder or ''})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ══════════════════════════════════════════════════════════════
 #  API — Metadata
@@ -802,8 +820,8 @@ def api_youtube_download():
     job    = _make_job(job_id)
 
     def run():
-        settings = _get_settings()
-        yt_dir = settings.get('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube')
+        yt_dir = data.get('output_dir', '').strip()
+        if not yt_dir: yt_dir = os.path.join(DOWNLOADS_DIR, '_youtube')
         results = download_youtube(
             urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only,
             progress_cb=lambda line, pct=None: _emit(job, line, pct)
@@ -867,11 +885,10 @@ def api_audio_extract():
 
     def run():
         source = data.get('source')
-        settings = _get_settings()
 
         if source == 'youtube':
             yt_urls = data.get('yt_urls', [])
-            out = output_dir or settings.get('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube_mp3')
+            out = output_dir or os.path.join(DOWNLOADS_DIR, '_youtube_mp3')
             os.makedirs(out, exist_ok=True)
             results = download_youtube(
                 urls=yt_urls, quality='best', output_dir=out, audio_only=True,
@@ -984,9 +1001,9 @@ def api_download_userid():
 
     def run():
         import re as _re
-        settings    = _get_settings()
-        base_dir    = settings.get('dir_ig') or DOWNLOADS_DIR
-        ytdlp       = shutil.which('yt-dlp') or 'yt-dlp'
+        base_dir    = data.get('output_dir', '').strip()
+        if not base_dir: base_dir = DOWNLOADS_DIR
+        
         profile_url = f'https://www.instagram.com/{username}/reels/'
         out_dir     = os.path.join(base_dir, username)
         os.makedirs(out_dir, exist_ok=True)
@@ -996,7 +1013,7 @@ def api_download_userid():
         else:
             fmt = f'bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best'
 
-        cmd = [ytdlp, '--playlist-end', str(limit), '--format', fmt,
+        cmd = [sys.executable, '-m', 'yt_dlp', '--rm-cache-dir', '--playlist-end', str(limit), '--format', fmt,
                '--output', os.path.join(out_dir, '%(id)s.%(ext)s'),
                '--write-info-json', '--no-warnings']
         if os.path.isfile(COOKIES_FILE):

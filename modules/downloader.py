@@ -1,7 +1,7 @@
 """
 Instagram Reels downloader — yt-dlp backed
 """
-import os, re, json, subprocess, shutil
+import os, re, json, subprocess, shutil, sys
 from modules.metadata import extract_metadata_from_info
 
 def download_reels(urls, quality, cookies_file, downloads_dir,
@@ -43,10 +43,10 @@ def download_reels(urls, quality, cookies_file, downloads_dir,
 
 def _download_single(url, quality, cookies_file, downloads_dir, progress_cb, pct_base, total):
     """Run yt-dlp for one URL, return info dict."""
-    ytdlp = shutil.which('yt-dlp') or 'yt-dlp'
+    ytdlp = [sys.executable, '-m', 'yt_dlp', '--rm-cache-dir']
 
     # First: extract info (no download) to get the account name for folder
-    info_cmd = [ytdlp, '--print-json', '--no-download', url]
+    info_cmd = ytdlp + ['--print-json', '--no-download', url]
     if cookies_file and os.path.isfile(cookies_file):
         info_cmd += ['--cookies', cookies_file]
 
@@ -70,8 +70,7 @@ def _download_single(url, quality, cookies_file, downloads_dir, progress_cb, pct
     reel_id = raw_info.get('id', 'unknown')
     out_template = os.path.join(out_dir, f'{reel_id}.%(ext)s')
 
-    dl_cmd = [
-        ytdlp,
+    dl_cmd = ytdlp + [
         '--format', fmt,
         '--output', out_template,
         '--write-info-json',
