@@ -15,7 +15,35 @@
   <p class="page-subtitle">Configure cookies, watermark defaults, and application preferences.</p>
 </div>
 
-<!-- ── 1. Cookies ───────────────────────────────────────────── -->
+<!-- ── 1. General Paths ─────────────────────────────────────────── -->
+<div class="section-heading">Download Directories</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">
+    <div class="card-title">📁 Storage Locations</div>
+  </div>
+  <div class="card-body">
+    <div class="form-group">
+      <label class="form-label">Instagram Downloads Folder</label>
+      <input class="form-input mono" id="dir-ig" type="text"
+        placeholder="Default: nikethan/downloads/instagram"
+        value="{{ settings.dir_ig or '' }}" />
+      <div class="form-hint">Where Instagram Reels will be saved. Leave blank for default.</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">YouTube Downloads Folder</label>
+      <input class="form-input mono" id="dir-yt" type="text"
+        placeholder="Default: nikethan/downloads/youtube"
+        value="{{ settings.dir_yt or '' }}" />
+      <div class="form-hint">Where YouTube Videos & Audio will be saved. Leave blank for default.</div>
+    </div>
+    <button class="btn btn-primary" onclick="saveDirectories()">
+      💾 Save Directories
+    </button>
+  </div>
+</div>
+
+<!-- ── 2. Cookies ───────────────────────────────────────────── -->
 <div class="section-heading">Authentication</div>
 
 <div class="card" style="margin-bottom:20px;">
@@ -86,7 +114,7 @@
   </div>
 </div>
 
-<!-- ── 2. Watermark Defaults ──────────────────────────────── -->
+<!-- ── 3. Watermark Defaults ──────────────────────────────── -->
 <div class="section-heading">Watermark Defaults</div>
 
 <div class="card" style="margin-bottom:20px;">
@@ -189,7 +217,7 @@
   </div>
 </div>
 
-<!-- ── 3. Rate Limits ─────────────────────────────────────── -->
+<!-- ── 4. Rate Limits ─────────────────────────────────────── -->
 <div class="section-heading">Rate Limits</div>
 
 <div class="card" style="margin-bottom:20px;">
@@ -378,7 +406,17 @@ async function saveRateLimits() {
   else showToast(resp.error || 'Failed', 'error');
 }
 
+async function saveDirectories() {
+  const resp = await postJSON('/api/settings/directories/save', {
+    dir_ig: document.getElementById('dir-ig').value.trim(),
+    dir_yt: document.getElementById('dir-yt').value.trim(),
+  });
+  if (resp.ok) showToast('Download directories saved!', 'success');
+  else showToast(resp.error || 'Failed', 'error');
+}
+
 async function saveAllSettings() {
+  await saveDirectories();
   await saveWatermarkSettings();
   await saveRateLimits();
 }

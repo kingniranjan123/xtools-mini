@@ -33,6 +33,9 @@
       <a class="nav-item {% if request.endpoint == 'download_page' %}active{% endif %}" href="{{ url_for('download_page') }}">
         <span class="nav-icon">↓</span> Download Reels
       </a>
+      <a class="nav-item {% if request.endpoint == 'youtube_page' %}active{% endif %}" href="{{ url_for('youtube_page') }}">
+        <span class="nav-icon">▶</span> YouTube
+      </a>
       <a class="nav-item {% if request.endpoint == 'metadata_page' %}active{% endif %}" href="{{ url_for('metadata_page') }}">
         <span class="nav-icon">◈</span> Metadata
         {% set rcount = g.get('reel_count', 0) %}
@@ -48,6 +51,12 @@
       </a>
       <a class="nav-item {% if request.endpoint == 'split_trailer_page' %}active{% endif %}" href="{{ url_for('split_trailer_page') }}">
         <span class="nav-icon">▷</span> Trailer Clip
+      </a>
+      <a class="nav-item {% if request.endpoint == 'extract_audio_page' %}active{% endif %}" href="{{ url_for('extract_audio_page') }}">
+        <span class="nav-icon">🎵</span> Extract MP3
+      </a>
+      <a class="nav-item {% if request.endpoint == 'merge_audio_page' %}active{% endif %}" href="{{ url_for('merge_audio_page') }}">
+        <span class="nav-icon">🔀</span> Merge Audio
       </a>
 
       <div class="nav-label" style="margin-top:12px;">Instagram</div>

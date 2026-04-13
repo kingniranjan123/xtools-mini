@@ -1,0 +1,327 @@
+{% extends "layout.html" %}
+{% block title %}Extract MP3 — Nikethan{% endblock %}
+{% block breadcrumb %}Extract MP3{% endblock %}
+
+{% block head %}
+<style>
+/* Mode tab buttons */
+.src-tab-row { display:flex; gap:4px; background:var(--bg-card-2); padding:4px; border-radius:var(--radius-sm); margin-bottom:16px; }
+.src-tab { flex:1; padding:8px 10px; font-size:12px; font-weight:600; border:none; border-radius:6px; cursor:pointer; background:transparent; color:var(--text-muted); transition:all .15s; }
+.src-tab.active { background:var(--bg-card); color:#fff; border:1px solid var(--border-strong); }
+/* Queue */
+.file-queue { display:flex; flex-direction:column; gap:4px; max-height:220px; overflow-y:auto; }
+.file-row { display:flex; align-items:center; gap:10px; padding:7px 10px; background:var(--bg-card-2); border:1px solid var(--border); border-radius:var(--radius-sm); }
+.file-row .fname { flex:1; font-size:11.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#fff; }
+.file-row .fsize { font-size:10px; color:var(--text-muted); font-family:var(--font-mono); flex-shrink:0; }
+.yt-url-row { display:flex; gap:8px; margin-bottom:6px; }
+.yt-url-row input { flex:1; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">Extract MP3</span></h1>
+  <p class="page-subtitle">Extract audio from local video files or directly from YouTube links — in any format.</p>
+</div>
+
+<div class="two-col">
+  <!-- Left: Config -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🎵 Source Selection</div>
+        <span id="queue-badge" class="badge badge-gray">0 items</span>
+      </div>
+      <div class="card-body">
+
+        <!-- Source mode tabs -->
+        <div class="src-tab-row">
+          <button class="src-tab active" id="stab-files"   onclick="switchSrc('files')">📄 Upload Files</button>
+          <button class="src-tab"         id="stab-folder"  onclick="switchSrc('folder')">📁 From Folder</button>
+          <button class="src-tab"         id="stab-youtube" onclick="switchSrc('youtube')">▶ From YouTube</button>
+        </div>
+
+        <!-- ── Upload Files ── -->
+        <div id="src-files">
+          <div class="form-group">
+            <label class="form-label">Video / Audio Files</label>
+            <div class="drop-zone" id="video-drop" onclick="document.getElementById('video-input').click()" style="padding:20px 10px;">
+              <input type="file" id="video-input" multiple
+                accept=".mp4,.mov,.avi,.mkv,.webm,.m4v,.wmv,.flv,.ts,.mts,.m2ts,.mp4,.3gp"
+                style="display:none;" onchange="addFilesToQueue(this.files)" />
+              <div class="drop-icon" style="font-size:28px;">🎬</div>
+              <div class="drop-label" id="video-drop-label">Click or drag files here</div>
+              <div class="drop-hint">MP4, MKV, MOV, AVI, WEBM, WMV, FLV, TS and more</div>
+            </div>
+          </div>
+          <!-- File queue -->
+          <div id="file-queue-wrap" style="display:none;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;">Queue</span>
+              <button class="btn btn-ghost btn-sm" onclick="clearQueue()" style="padding:3px 8px;">Clear All</button>
+            </div>
+            <div class="file-queue" id="file-queue-list"></div>
+          </div>
+        </div>
+
+        <!-- ── Folder ── -->
+        <div id="src-folder" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Folder Path</label>
+            <div style="display:flex;gap:8px;">
+              <input class="form-input mono" id="folder-path" type="text" placeholder="C:\Users\...\downloads\username" />
+              <button class="btn btn-ghost btn-sm" onclick="scanFolder()" style="white-space:nowrap;">Scan →</button>
+            </div>
+            <div class="form-hint" id="folder-scan-result" style="color:var(--text-muted);">Enter a folder containing video files (searches all supported formats).</div>
+          </div>
+        </div>
+
+        <!-- ── YouTube URLs ── -->
+        <div id="src-youtube" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">YouTube Links <span style="color:var(--text-muted);font-weight:400;">(one per line)</span></label>
+            <textarea class="form-textarea mono" id="yt-links" rows="6"
+              placeholder="https://www.youtube.com/watch?v=XXXX&#10;https://youtu.be/YYYY&#10;…"
+              oninput="updateYTCount()"></textarea>
+            <div class="form-hint" id="yt-count-hint" style="color:var(--text-muted);">0 YouTube URLs entered. Audio will be extracted directly as MP3.</div>
+          </div>
+          <div style="padding:10px 12px;background:rgba(78,158,255,0.07);border:1px solid rgba(78,158,255,0.2);border-radius:var(--radius-sm);font-size:11.5px;color:var(--text-secondary);line-height:1.7;">
+            <strong style="color:var(--accent-blue);">How it works:</strong> yt-dlp downloads the audio stream directly — no full video download needed. Output is saved to your configured YouTube folder or <code>downloads/_youtube_mp3/</code>.
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;" />
+
+        <!-- Common options -->
+        <div class="form-group">
+          <label class="form-label">Audio Bitrate</label>
+          <select class="form-select" id="bitrate">
+            <option value="320k">320 kbps — Maximum quality</option>
+            <option value="192k" selected>192 kbps — High quality (recommended)</option>
+            <option value="128k">128 kbps — Standard</option>
+            <option value="96k">96 kbps — Small file size</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+          <input class="form-input mono" id="output-dir" type="text"
+            placeholder="Leave blank — saves to mp3_output/ subfolder or YouTube folder from settings" />
+          <div class="form-hint">Defaults to <code>mp3_output/</code> inside the source folder, or the YouTube download folder set in Settings.</div>
+        </div>
+
+        <button class="btn btn-primary btn-full btn-lg" id="extract-btn" onclick="startExtraction()">
+          🎵 Extract MP3
+        </button>
+      </div>
+    </div>
+
+    <!-- Info -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">📋 Supported Formats</div></div>
+      <div class="card-body" style="font-size:12px;color:var(--text-secondary);">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          {% for fmt in ['MP4','MKV','MOV','AVI','WEBM','WMV','FLV','TS','MTS','M2TS','3GP','M4V'] %}
+          <span style="padding:3px 8px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:4px;font-family:var(--font-mono);font-size:11px;color:#fff;">{{ fmt }}</span>
+          {% endfor %}
+          <span style="padding:3px 8px;background:rgba(78,158,255,0.1);border:1px solid rgba(78,158,255,0.25);border-radius:4px;font-size:11px;color:var(--accent-blue);">YouTube URL</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Progress + Results -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card" id="progress-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">⏳ Extracting Audio</div>
+        <span class="badge badge-orange" id="extract-status">Running</span>
+      </div>
+      <div class="card-body">
+        <div class="progress-wrap"><div class="progress-bar animated" id="extract-bar" style="width:5%"></div></div>
+        <div class="sse-log" id="extract-log" style="margin-top:12px;max-height:300px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <div class="card" id="results-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">✅ Extraction Complete</div>
+        <span class="badge badge-green" id="result-summary">0 files</span>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div id="results-list" style="display:flex;flex-direction:column;"></div>
+      </div>
+    </div>
+
+    <!-- Tip -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">💡 Tip</div></div>
+      <div class="card-body" style="font-size:12px;color:var(--text-secondary);line-height:1.8;">
+        <div style="margin-bottom:6px;">🎬 + 🎵 = Use <strong>Merge Audio</strong> to swap the audio track on a video with your extracted MP3.</div>
+        <div>▶ For YouTube extraction, no cookie is required for public videos.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedFiles = [];
+let currentSrc = 'files';
+
+// ── Mode switcher ─────────────────────────────────────────
+function switchSrc(mode) {
+  currentSrc = mode;
+  ['files','folder','youtube'].forEach(m => {
+    document.getElementById('src-' + m).style.display = m === mode ? 'block' : 'none';
+    const btn = document.getElementById('stab-' + m);
+    btn.classList.toggle('active', m === mode);
+  });
+  updateQueueBadge();
+}
+
+// ── File queue ────────────────────────────────────────────
+function addFilesToQueue(files) {
+  const newFiles = Array.from(files);
+  newFiles.forEach(f => {
+    if (!selectedFiles.find(x => x.name === f.name && x.size === f.size)) {
+      selectedFiles.push(f);
+    }
+  });
+  renderQueue();
+}
+
+function renderQueue() {
+  const wrap = document.getElementById('file-queue-wrap');
+  const list = document.getElementById('file-queue-list');
+  if (!selectedFiles.length) { wrap.style.display = 'none'; document.getElementById('video-drop-label').textContent = 'Click or drag files here'; updateQueueBadge(); return; }
+  wrap.style.display = 'block';
+  document.getElementById('video-drop-label').textContent = `${selectedFiles.length} file(s) in queue`;
+  list.innerHTML = selectedFiles.map((f, i) => `
+    <div class="file-row">
+      <span style="font-size:14px;">🎬</span>
+      <div class="fname">${f.name}</div>
+      <div class="fsize">${(f.size/1024/1024).toFixed(1)} MB</div>
+      <button onclick="removeFile(${i})" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 4px;font-size:14px;" title="Remove">✕</button>
+    </div>
+  `).join('');
+  updateQueueBadge();
+}
+
+function removeFile(i) { selectedFiles.splice(i, 1); renderQueue(); }
+function clearQueue() { selectedFiles = []; renderQueue(); }
+function updateQueueBadge() {
+  const el = document.getElementById('queue-badge');
+  if (currentSrc === 'youtube') {
+    const n = (document.getElementById('yt-links').value.split('\n').filter(l => l.trim().startsWith('http'))).length;
+    el.textContent = n + ' URL' + (n !== 1 ? 's' : '');
+    el.className = n > 0 ? 'badge badge-blue' : 'badge badge-gray';
+  } else {
+    el.textContent = selectedFiles.length + ' file' + (selectedFiles.length !== 1 ? 's' : '');
+    el.className = selectedFiles.length > 0 ? 'badge badge-orange' : 'badge badge-gray';
+  }
+}
+
+// Drag & drop
+const dz = document.getElementById('video-drop');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); addFilesToQueue(e.dataTransfer.files); });
+
+function updateYTCount() {
+  const n = document.getElementById('yt-links').value.split('\n').filter(l => l.trim().startsWith('http')).length;
+  document.getElementById('yt-count-hint').textContent = `${n} YouTube URL${n !== 1 ? 's' : ''} entered. Audio will be extracted directly as MP3.`;
+  updateQueueBadge();
+}
+
+async function scanFolder() {
+  const path = document.getElementById('folder-path').value.trim();
+  if (!path) return;
+  const resp = await postJSON('/api/audio/scan-folder', { path });
+  const label = document.getElementById('folder-scan-result');
+  if (resp.error) { label.textContent = '✗ ' + resp.error; label.style.color = 'var(--accent-red)'; return; }
+  label.textContent = `✓ Found ${resp.count} video file(s)`;
+  label.style.color = 'var(--accent-green)';
+  updateQueueBadge();
+}
+
+// ── Start extraction ──────────────────────────────────────
+async function startExtraction() {
+  const bitrate   = document.getElementById('bitrate').value;
+  const outputDir = document.getElementById('output-dir').value.trim();
+  let payload = { bitrate, output_dir: outputDir, source: currentSrc };
+
+  if (currentSrc === 'files') {
+    if (!selectedFiles.length) { showToast('Add video files to the queue first', 'warn'); return; }
+    showToast('Uploading files…', 'info');
+    const form = new FormData();
+    selectedFiles.forEach(f => form.append('files', f));
+    const uploadResp = await fetch('/api/audio/upload', { method: 'POST', body: form });
+    const uploaded   = await uploadResp.json();
+    if (!uploaded.paths) { showToast(uploaded.error || 'Upload failed', 'error'); return; }
+    payload.file_paths = uploaded.paths;
+
+  } else if (currentSrc === 'folder') {
+    const path = document.getElementById('folder-path').value.trim();
+    if (!path) { showToast('Enter a folder path first', 'warn'); return; }
+    payload.folder = path;
+
+  } else {
+    const raw = document.getElementById('yt-links').value.trim();
+    const urls = raw.split('\n').filter(l => l.trim().startsWith('http'));
+    if (!urls.length) { showToast('Enter YouTube links first', 'warn'); return; }
+    payload.yt_urls = urls;
+  }
+
+  document.getElementById('progress-card').style.display = 'block';
+  document.getElementById('results-card').style.display  = 'none';
+  document.getElementById('extract-log').textContent     = '';
+  document.getElementById('extract-bar').style.width     = '5%';
+  document.getElementById('extract-status').className    = 'badge badge-orange';
+  document.getElementById('extract-status').textContent  = 'Running';
+  document.getElementById('extract-btn').disabled        = true;
+  document.getElementById('extract-btn').textContent     = 'Extracting…';
+
+  const resp = await postJSON('/api/audio/extract', payload);
+  if (!resp.job_id) {
+    showToast(resp.error || 'Failed to start', 'error');
+    document.getElementById('extract-btn').disabled = false;
+    document.getElementById('extract-btn').textContent = '🎵 Extract MP3';
+    return;
+  }
+
+  startSSEProgress({
+    url: '/api/audio/progress/' + resp.job_id,
+    logId: 'extract-log',
+    barId: 'extract-bar',
+    statusId: 'extract-status',
+    onComplete: function(d) {
+      document.getElementById('extract-btn').disabled    = false;
+      document.getElementById('extract-btn').textContent = '🎵 Extract MP3';
+      document.getElementById('extract-status').className   = 'badge badge-green';
+      document.getElementById('extract-status').textContent = 'Done';
+      showResults(d.results || []);
+    }
+  });
+}
+
+function showResults(results) {
+  const ok = results.filter(r => r.status === 'ok');
+  document.getElementById('result-summary').textContent = `${ok.length} ok · ${results.length - ok.length} failed`;
+  document.getElementById('results-card').style.display = 'block';
+  document.getElementById('results-list').innerHTML = results.map(r => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);">
+      <span>${r.status==='ok' ? '🎵' : '❌'}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;">
+          ${r.output ? r.output.split(/[\\/]/).pop() : (r.source||r.url||'?').split(/[\\/]/).pop()}
+        </div>
+        ${r.error ? `<div style="font-size:11px;color:var(--accent-red);">${r.error}</div>` : ''}
+      </div>
+      <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
+    </div>
+  `).join('');
+}
+</script>
+{% endblock %}

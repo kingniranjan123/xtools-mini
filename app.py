@@ -18,6 +18,13 @@ from modules.splitter import split_equal, split_trailer
 from modules.instagram_social import (lookup_user, extract_followers,
                                       follow_users, unfollow_users,
                                       get_follow_status, get_unfollow_status)
+from modules.audio_tools import (extract_mp3, extract_mp3_from_folder,
+                                 merge_audio_video, batch_merge)
+from modules.youtube_downloader import download_youtube
+
+# Upload temp dir for file uploads
+UPLOAD_TEMP = os.path.join(os.path.dirname(__file__), 'tmp_uploads')
+os.makedirs(UPLOAD_TEMP, exist_ok=True)
 
 # ── App setup ─────────────────────────────────────────────────
 app = Flask(__name__)
@@ -180,6 +187,21 @@ def split_trailer_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
     return render_template('split_trailer.html')
 
+@app.route('/extract-audio')
+def extract_audio_page():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    return render_template('extract_audio.html')
+
+@app.route('/merge-audio')
+def merge_audio_page():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    return render_template('merge_audio.html')
+
+@app.route('/youtube')
+def youtube_page():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    return render_template('youtube.html')
+
 @app.route('/settings')
 def settings_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
@@ -268,11 +290,13 @@ def api_download():
     job    = _make_job(job_id)
 
     def run():
+        settings = _get_settings()
+        out_dir = settings.get('dir_ig') or DOWNLOADS_DIR
         results = download_reels(
             urls=urls,
             quality=quality,
             cookies_file=COOKIES_FILE,
-            downloads_dir=DOWNLOADS_DIR,
+            downloads_dir=out_dir,
             progress_cb=lambda line, pct=None: _emit(job, line, pct),
             db_cb=_save_reel_to_db,
         )
@@ -428,10 +452,23 @@ def api_wm_progress(job_id):
 # ══════════════════════════════════════════════════════════════
 #  API — Settings
 # ══════════════════════════════════════════════════════════════
+def _get_settings():
+    db = get_db()
+    rows = db.execute('SELECT key, value FROM settings').fetchall()
+    return {r['key']: r['value'] for r in rows}
+
 def _save_setting(key, value):
     db = get_db()
     db.execute('INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)', (key, str(value)))
     db.commit()
+
+@app.route('/api/settings/directories/save', methods=['POST'])
+def api_directories_save():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json()
+    _save_setting('dir_ig', data.get('dir_ig', '').strip())
+    _save_setting('dir_yt', data.get('dir_yt', '').strip())
+    return jsonify({'ok': True})
 
 @app.route('/api/settings/cookies/save', methods=['POST'])
 def api_cookies_save():
@@ -747,6 +784,252 @@ def _sse_stream(job_id):
 
     return Response(generate(), mimetype='text/event-stream',
                     headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+
+# ══════════════════════════════════════════════════════════════
+#  API — YouTube Download
+# ══════════════════════════════════════════════════════════════
+@app.route('/api/youtube/download', methods=['POST'])
+def api_youtube_download():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data       = request.get_json()
+    urls       = data.get('urls', [])
+    quality    = data.get('quality', '720')
+    audio_only = data.get('audio_only', False)
+    if not urls: return jsonify({'error': 'No URLs'}), 400
+
+    job_id = str(uuid.uuid4())
+    job    = _make_job(job_id)
+
+    def run():
+        settings = _get_settings()
+        yt_dir = settings.get('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube')
+        results = download_youtube(
+            urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only,
+            progress_cb=lambda line, pct=None: _emit(job, line, pct)
+        )
+        ok = sum(1 for r in results if r.get('status') == 'ok')
+        _finish(job, f'Downloaded {ok}/{len(results)} videos', results=results)
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({'job_id': job_id})
+
+@app.route('/api/youtube/progress/<job_id>')
+def api_youtube_progress(job_id):
+    return _sse_stream(job_id)
+
+# ══════════════════════════════════════════════════════════════
+#  API — Audio Tools (Extract MP3 + Merge)
+# ══════════════════════════════════════════════════════════════
+@app.route('/api/audio/upload', methods=['POST'])
+def api_audio_upload():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    files = request.files.getlist('files')
+    if not files: return jsonify({'error': 'No files'}), 400
+    paths = []
+    for f in files:
+        dest = os.path.join(UPLOAD_TEMP, f.filename)
+        f.save(dest)
+        paths.append(dest)
+    return jsonify({'paths': paths})
+
+@app.route('/api/audio/upload-merge', methods=['POST'])
+def api_audio_upload_merge():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    video = request.files.get('video')
+    audio = request.files.get('audio')
+    if not video or not audio: return jsonify({'error': 'Missing files'}), 400
+    vpath = os.path.join(UPLOAD_TEMP, video.filename)
+    apath = os.path.join(UPLOAD_TEMP, audio.filename)
+    video.save(vpath)
+    audio.save(apath)
+    return jsonify({'video_path': vpath, 'audio_path': apath})
+
+@app.route('/api/audio/scan-folder', methods=['POST'])
+def api_audio_scan_folder():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    path = request.get_json().get('path', '').strip()
+    if not os.path.isdir(path): return jsonify({'error': 'Folder not found'}), 404
+    exts  = ('.mp4','.mov','.avi','.mkv','.webm','.m4v')
+    count = sum(1 for f in os.listdir(path) if f.lower().endswith(exts))
+    return jsonify({'count': count, 'path': path})
+
+@app.route('/api/audio/extract', methods=['POST'])
+def api_audio_extract():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data       = request.get_json()
+    bitrate    = data.get('bitrate', '192k')
+    output_dir = data.get('output_dir', '').strip() or None
+    file_paths = data.get('file_paths')
+    folder     = data.get('folder')
+
+    job_id = str(uuid.uuid4())
+    job    = _make_job(job_id)
+
+    def run():
+        source = data.get('source')
+        settings = _get_settings()
+
+        if source == 'youtube':
+            yt_urls = data.get('yt_urls', [])
+            out = output_dir or settings.get('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube_mp3')
+            os.makedirs(out, exist_ok=True)
+            results = download_youtube(
+                urls=yt_urls, quality='best', output_dir=out, audio_only=True,
+                progress_cb=lambda l, p=None: _emit(job, l, p)
+            )
+            # rename yt_dlp output status 'ok' -> map properly for UI
+            for r in results: r['output'] = r.get('id') or r.get('url')
+        elif folder:
+            out = output_dir or os.path.join(folder, 'mp3_output')
+            os.makedirs(out, exist_ok=True)
+            exts = ('.mp4','.mov','.avi','.mkv','.webm','.m4v','.ts','.mts','.m2ts','.3gp','.flv','.wmv')
+            vids = [os.path.join(folder, f) for f in os.listdir(folder)
+                    if f.lower().endswith(exts)]
+            results = extract_mp3(vids, out, bitrate,
+                                  progress_cb=lambda l, p=None: _emit(job, l, p))
+        else:
+            out = output_dir or os.path.join(UPLOAD_TEMP, 'mp3_output')
+            results = extract_mp3(file_paths or [], out, bitrate,
+                                  progress_cb=lambda l, p=None: _emit(job, l, p))
+            
+        ok = sum(1 for r in results if r.get('status') == 'ok')
+        _finish(job, f'Extracted {ok}/{len(results)} files', results=results)
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({'job_id': job_id})
+
+@app.route('/api/audio/merge', methods=['POST'])
+def api_audio_merge():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json()
+    mode = data.get('mode', 'replace')
+
+    job_id = str(uuid.uuid4())
+    job    = _make_job(job_id)
+
+    def run():
+        if 'video_path' in data:
+            out = os.path.join(UPLOAD_TEMP, 'merged_' + os.path.basename(data['video_path']))
+            result = merge_audio_video(
+                data['video_path'], data['audio_path'], out, mode,
+                progress_cb=lambda l, p=None: _emit(job, l, p)
+            )
+            _finish(job, 'Merge complete', **result, results=[result])
+        else:
+            vid_dir = data['video_dir']
+            aud_dir = data['audio_dir']
+            out_dir = data.get('output_dir') or os.path.join(vid_dir, 'merged_output')
+            results = batch_merge(vid_dir, aud_dir, out_dir, mode,
+                                  progress_cb=lambda l, p=None: _emit(job, l, p))
+            ok = sum(1 for r in results if r.get('status') == 'ok')
+            _finish(job, f'Merged {ok}/{len(results)}', results=results)
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({'job_id': job_id})
+
+@app.route('/api/audio/progress/<job_id>')
+def api_audio_progress(job_id):
+    return _sse_stream(job_id)
+
+# ══════════════════════════════════════════════════════════════
+#  API — Download by Instagram User ID (rate limited 10/2hr)
+# ══════════════════════════════════════════════════════════════
+from modules.instagram_social import _load_state, _save_state, WINDOW_SECONDS, BATCH_LIMIT
+import time as _time
+
+def _get_uid_dl_status():
+    state     = _load_state()
+    now       = _time.time()
+    win_start = state.get('uid_dl_window_start', 0.0)
+    count     = state.get('uid_dl_count', 0)
+    elapsed   = now - win_start
+    if elapsed >= WINDOW_SECONDS:
+        return {'in_cooldown': False, 'used': 0, 'remaining': BATCH_LIMIT,
+                'window_start': now, 'cooldown_ends': now + WINDOW_SECONDS, 'seconds_left': 0}
+    remaining     = max(0, BATCH_LIMIT - count)
+    in_cooldown   = count >= BATCH_LIMIT
+    cooldown_ends = win_start + WINDOW_SECONDS
+    seconds_left  = max(0, int(cooldown_ends - now))
+    return {'in_cooldown': in_cooldown, 'used': count, 'remaining': remaining,
+            'window_start': win_start, 'cooldown_ends': cooldown_ends, 'seconds_left': seconds_left}
+
+def _record_uid_dl(n):
+    state = _load_state()
+    now   = _time.time()
+    if now - state.get('uid_dl_window_start', 0.0) >= WINDOW_SECONDS:
+        state['uid_dl_window_start'] = now
+        state['uid_dl_count'] = 0
+    state['uid_dl_count'] = state.get('uid_dl_count', 0) + n
+    _save_state(state)
+
+@app.route('/api/download/userid/status')
+def api_uid_dl_status():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify(_get_uid_dl_status())
+
+@app.route('/api/download/userid', methods=['POST'])
+def api_download_userid():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data     = request.get_json()
+    username = data.get('username', '').strip().replace('@', '')
+    quality  = data.get('quality', 'best')
+    if not username: return jsonify({'error': 'No username'}), 400
+
+    status = _get_uid_dl_status()
+    if status['in_cooldown']:
+        return jsonify({'error': 'Cooling period active', 'in_cooldown': True,
+                        'seconds_left': status['seconds_left']}), 429
+
+    limit  = min(status['remaining'], 10)
+    job_id = str(uuid.uuid4())
+    job    = _make_job(job_id)
+
+    def run():
+        import re as _re
+        settings    = _get_settings()
+        base_dir    = settings.get('dir_ig') or DOWNLOADS_DIR
+        ytdlp       = shutil.which('yt-dlp') or 'yt-dlp'
+        profile_url = f'https://www.instagram.com/{username}/reels/'
+        out_dir     = os.path.join(base_dir, username)
+        os.makedirs(out_dir, exist_ok=True)
+
+        if quality == 'best':
+            fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        else:
+            fmt = f'bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best'
+
+        cmd = [ytdlp, '--playlist-end', str(limit), '--format', fmt,
+               '--output', os.path.join(out_dir, '%(id)s.%(ext)s'),
+               '--write-info-json', '--no-warnings']
+        if os.path.isfile(COOKIES_FILE):
+            cmd += ['--cookies', COOKIES_FILE]
+        cmd.append(profile_url)
+
+        downloaded = 0
+        results    = []
+        _emit(job, f'Downloading up to {limit} reels from @{username}...')
+
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, bufsize=1)
+        for line in proc.stdout:
+            line = line.rstrip()
+            if line:
+                if '[download] Destination:' in line:
+                    downloaded += 1
+                    _record_uid_dl(1)
+                    results.append({'status': 'ok', 'id': str(downloaded)})
+                    _emit(job, f'  [{downloaded}/{limit}] Downloading reel...', int(downloaded/limit*90))
+                else:
+                    _emit(job, line)
+        proc.wait()
+
+        final = _get_uid_dl_status()
+        _finish(job, f'Downloaded {downloaded} reels from @{username}',
+                downloaded=downloaded, results=results,
+                in_cooldown=final['in_cooldown'],
+                seconds_left=final['seconds_left'],
+                remaining=final['remaining'])
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({'job_id': job_id})
 
 # ── Boot ──────────────────────────────────────────────────────
 if __name__ == '__main__':

@@ -1,0 +1,198 @@
+{% extends "layout.html" %}
+{% block title %}YouTube Downloader — Nikethan{% endblock %}
+{% block breadcrumb %}YouTube Downloader{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">YouTube Downloader</span></h1>
+  <p class="page-subtitle">Paste multiple YouTube links — download as MP4 video or extract MP3 audio.</p>
+</div>
+
+<div class="two-col">
+  <!-- Left: Config -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">▶ YouTube URLs</div>
+        <span id="yt-url-count" class="badge badge-gray">0 URLs</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">YouTube Links <span style="color:var(--text-muted);font-weight:400;">(one per line)</span></label>
+          <textarea class="form-textarea mono" id="yt-urls" rows="9"
+            placeholder="https://www.youtube.com/watch?v=XXXX&#10;https://youtu.be/YYYY&#10;https://www.youtube.com/watch?v=ZZZZ&#10;…"
+            oninput="countYTUrls(this)"></textarea>
+          <div class="form-hint">Supports youtube.com, youtu.be, and YouTube Shorts links.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Download Mode</label>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" id="mode-video-box">
+              <input type="radio" name="yt-mode" value="video" checked style="accent-color:var(--accent);margin-top:2px;" onchange="updateModeUI()" />
+              <div>
+                <div style="font-size:13px;font-weight:600;">🎬 Video (MP4)</div>
+                <div style="font-size:11px;color:var(--text-muted);">Download as video file with audio</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" id="mode-audio-box">
+              <input type="radio" name="yt-mode" value="audio" style="accent-color:var(--accent);margin-top:2px;" onchange="updateModeUI()" />
+              <div>
+                <div style="font-size:13px;font-weight:600;">🎵 Audio Only (MP3)</div>
+                <div style="font-size:11px;color:var(--text-muted);">Extract high-quality MP3 audio only</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" id="quality-group">
+          <label class="form-label">Video Quality</label>
+          <select class="form-select" id="yt-quality">
+            <option value="best">Best available</option>
+            <option value="1080">1080p</option>
+            <option value="720" selected>720p</option>
+            <option value="480">480p</option>
+            <option value="360">360p</option>
+          </select>
+        </div>
+
+        <button class="btn btn-primary btn-full btn-lg" id="yt-btn" onclick="startYTDownload()">
+          ↓ Start Download
+        </button>
+      </div>
+    </div>
+
+    <!-- Info -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">ℹ Notes</div></div>
+      <div class="card-body" style="font-size:12px;color:var(--text-secondary);line-height:1.9;">
+        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:var(--accent-green);">✓</span><span>No authentication required for public YouTube videos</span></div>
+        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:var(--accent-green);">✓</span><span>Downloads are saved in <code>downloads/[channel]/</code></span></div>
+        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:var(--accent-gold);">⚠</span><span>Age-restricted or private videos may fail</span></div>
+        <div style="display:flex;gap:8px;"><span style="color:var(--accent-gold);">⚠</span><span>Playlists: only the linked video is downloaded (no-playlist mode)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Progress + Results -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card" id="yt-progress-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">⏳ Downloading</div>
+        <span class="badge badge-orange" id="yt-status">Running</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:6px;">
+          <span id="yt-current">Starting…</span>
+          <span id="yt-pct">0%</span>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-bar animated" id="yt-bar" style="width:0%"></div>
+        </div>
+        <div class="sse-log" id="yt-log" style="margin-top:12px;"></div>
+        <button class="btn btn-ghost btn-sm btn-full" style="margin-top:12px;" onclick="cancelYT()">✕ Cancel</button>
+      </div>
+    </div>
+
+    <div class="card" id="yt-results-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">✅ Downloaded</div>
+        <span class="badge badge-green" id="yt-results-summary">0 videos</span>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div id="yt-results-list"></div>
+      </div>
+    </div>
+
+    <!-- Placeholder -->
+    <div class="card" id="yt-placeholder">
+      <div class="card-body" style="text-align:center;padding:48px 20px;">
+        <div style="font-size:48px;margin-bottom:12px;">▶</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text-secondary);">Paste YouTube links and hit Download</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Results will appear here</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let ytSSE = null;
+
+function countYTUrls(textarea) {
+  const lines = textarea.value.split('\n').filter(l => l.trim().startsWith('http'));
+  document.getElementById('yt-url-count').textContent = lines.length + ' URL' + (lines.length !== 1 ? 's' : '');
+}
+
+function updateModeUI() {
+  const isAudio = document.querySelector('input[name="yt-mode"]:checked').value === 'audio';
+  document.getElementById('quality-group').style.display = isAudio ? 'none' : 'block';
+}
+
+async function startYTDownload() {
+  const raw = document.getElementById('yt-urls').value.trim();
+  if (!raw) { showToast('Enter at least one YouTube URL', 'warn'); return; }
+  const urls = raw.split('\n').filter(l => l.trim().startsWith('http'));
+  if (!urls.length) { showToast('No valid YouTube URLs found', 'warn'); return; }
+
+  const audioOnly = document.querySelector('input[name="yt-mode"]:checked').value === 'audio';
+  const quality   = document.getElementById('yt-quality').value;
+
+  document.getElementById('yt-progress-card').style.display = 'block';
+  document.getElementById('yt-results-card').style.display  = 'none';
+  document.getElementById('yt-placeholder').style.display   = 'none';
+  document.getElementById('yt-log').textContent             = '';
+  document.getElementById('yt-bar').style.width             = '0%';
+  document.getElementById('yt-btn').disabled                = true;
+  document.getElementById('yt-btn').textContent             = 'Downloading…';
+
+  const resp = await postJSON('/api/youtube/download', { urls, quality, audio_only: audioOnly });
+  if (!resp.job_id) {
+    showToast(resp.error || 'Failed to start', 'error');
+    document.getElementById('yt-btn').disabled = false;
+    document.getElementById('yt-btn').textContent = '↓ Start Download';
+    return;
+  }
+
+  ytSSE = startSSEProgress({
+    url: '/api/youtube/progress/' + resp.job_id,
+    logId: 'yt-log',
+    barId: 'yt-bar',
+    statusId: 'yt-status',
+    onComplete: function(d) {
+      document.getElementById('yt-btn').disabled = false;
+      document.getElementById('yt-btn').textContent = '↓ Start Download';
+      document.getElementById('yt-status').className = 'badge badge-green';
+      document.getElementById('yt-status').textContent = 'Done';
+      showYTResults(d.results || []);
+    }
+  });
+}
+
+function cancelYT() {
+  if (ytSSE) { ytSSE.close(); ytSSE = null; }
+  document.getElementById('yt-btn').disabled = false;
+  document.getElementById('yt-btn').textContent = '↓ Start Download';
+  document.getElementById('yt-progress-card').style.display = 'none';
+  showToast('Download cancelled', 'warn');
+}
+
+function showYTResults(results) {
+  const ok = results.filter(r => r.status === 'ok').length;
+  document.getElementById('yt-results-summary').textContent = `${ok} / ${results.length}`;
+  document.getElementById('yt-results-card').style.display  = 'block';
+  document.getElementById('yt-results-list').innerHTML = results.map(r => `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);">
+      <span style="font-size:22px;">${r.audio_only ? '🎵' : '🎬'}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title || r.url}</div>
+        <div style="font-size:11px;color:var(--text-muted);">@${r.channel||'—'}${r.duration ? ' · ' + Math.round(r.duration/60) + 'm' : ''}</div>
+        ${r.error ? `<div style="font-size:11px;color:var(--accent-red);">${r.error}</div>` : ''}
+      </div>
+      <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
+    </div>
+  `).join('');
+}
+</script>
+{% endblock %}

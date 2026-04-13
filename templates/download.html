@@ -6,13 +6,21 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title"><span class="grad-text">Download Reels</span></h1>
-  <p class="page-subtitle">Paste Instagram Reel URLs below. Single or bulk — one URL per line.</p>
+  <p class="page-subtitle">Download by pasting links, or auto-download all videos from an Instagram user ID.</p>
 </div>
 
-<div class="two-col">
+<!-- ── Tabs ─────────────────────────────────────────────── -->
+<div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:24px;">
+  <button class="btn btn-sm active" id="tab-links-btn" onclick="switchDLTab('links')" style="background:var(--bg-card);border:1px solid var(--border);">🔗 By Links</button>
+  <button class="btn btn-sm btn-ghost" id="tab-userid-btn" onclick="switchDLTab('userid')">👤 By User ID</button>
+</div>
 
-  <!-- Left: URL input -->
-  <div style="display:flex; flex-direction:column; gap:16px;">
+<!-- ════════════════════════════════════════════════════════
+     TAB 1 — By Links (original page)
+     ════════════════════════════════════════════════════════ -->
+<div id="tab-links">
+<div class="two-col">
+  <div style="display:flex;flex-direction:column;gap:16px;">
     <div class="card">
       <div class="card-header">
         <div class="card-title">↓ Reel URLs</div>
@@ -22,17 +30,11 @@
         <form id="download-form">
           <div class="form-group">
             <label class="form-label" for="urls">Instagram Reel URLs</label>
-            <textarea
-              class="form-textarea mono"
-              id="urls"
-              name="urls"
-              rows="8"
+            <textarea class="form-textarea mono" id="urls" name="urls" rows="8"
               placeholder="https://www.instagram.com/reel/ABC123/&#10;https://www.instagram.com/reel/XYZ456/&#10;…"
-              oninput="countURLs(this, 'url-count')"
-            ></textarea>
+              oninput="countURLs(this, 'url-count')"></textarea>
             <div class="form-hint">One URL per line. Paste any number of Reel URLs.</div>
           </div>
-
           <div class="form-group">
             <label class="form-label">Video Quality</label>
             <select class="form-select" name="quality" id="quality">
@@ -42,92 +44,61 @@
               <option value="360">360p</option>
             </select>
           </div>
-
-          <div class="form-group" id="setup">
+          <div class="form-group">
             <label class="form-label">Cookies File</label>
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-card-2);">
-              <span style="font-size:12px; color:var(--text-secondary); font-family:var(--font-mono);">cookies.txt</span>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
+              <span style="font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);">cookies.txt</span>
               {% if system.cookies_ok %}
                 <span class="badge badge-green">✓ Loaded</span>
               {% else %}
-                <span class="badge badge-red">✗ Missing</span>
+                <span class="badge badge-red">✗ Missing — <a href="{{ url_for('settings_page') }}" style="color:inherit;">Upload in Settings</a></span>
               {% endif %}
             </div>
-            {% if not system.cookies_ok %}
-            <div class="form-hint" style="color:var(--accent-gold);">
-              ⚠️ Place <code style="font-family:var(--font-mono); background:var(--bg-card-2); padding:1px 5px; border-radius:3px;">cookies.txt</code>
-              in the project root. Use the browser extension <em>"Get cookies.txt LOCALLY"</em> while logged into Instagram.
-            </div>
-            {% endif %}
           </div>
-
-          <button type="submit" class="btn btn-primary btn-full" id="dl-btn">
-            ↓ Start Download
-          </button>
+          <button type="submit" class="btn btn-primary btn-full btn-lg" id="dl-btn">↓ Start Download</button>
         </form>
       </div>
     </div>
 
-    <!-- How it works -->
     <div class="card">
-      <div class="card-header">
-        <div class="card-title">ℹ️ Setup Guide</div>
-      </div>
-      <div class="card-body" style="display:flex; flex-direction:column; gap:14px;">
-        <div style="display:flex; gap:12px;">
-          <div style="width:24px; height:24px; border-radius:50%; background:rgba(255,60,172,0.15); border:1px solid rgba(255,60,172,0.3); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--accent); flex-shrink:0;">1</div>
+      <div class="card-header"><div class="card-title">ℹ Setup Guide</div></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+        {% for n,h,b in [
+          ('1','Install cookies extension','Get "Get cookies.txt LOCALLY" for Chrome / Firefox.'),
+          ('2','Export while on Instagram','Log in to instagram.com, click the extension, export.'),
+          ('3','Upload in Settings','Go to Settings → Cookies and paste/upload the file.'),
+          ('4','Paste URLs & download','The app passes cookies automatically.')
+        ] %}
+        <div style="display:flex;gap:12px;">
+          <div style="width:24px;height:24px;border-radius:50%;background:rgba(255,60,172,.15);border:1px solid rgba(255,60,172,.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--accent);flex-shrink:0;">{{ n }}</div>
           <div>
-            <div style="font-size:13px; font-weight:600; margin-bottom:2px;">Install cookies extension</div>
-            <div style="font-size:12px; color:var(--text-muted);">Get <em>"Get cookies.txt LOCALLY"</em> for Chrome / Firefox.</div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:2px;">{{ h }}</div>
+            <div style="font-size:12px;color:var(--text-muted);">{{ b }}</div>
           </div>
         </div>
-        <div style="display:flex; gap:12px;">
-          <div style="width:24px; height:24px; border-radius:50%; background:rgba(255,60,172,0.15); border:1px solid rgba(255,60,172,0.3); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--accent); flex-shrink:0;">2</div>
-          <div>
-            <div style="font-size:13px; font-weight:600; margin-bottom:2px;">Export cookies while on Instagram</div>
-            <div style="font-size:12px; color:var(--text-muted);">Log in to instagram.com, click the extension, export as <code style="font-family:var(--font-mono);">cookies.txt</code>.</div>
-          </div>
-        </div>
-        <div style="display:flex; gap:12px;">
-          <div style="width:24px; height:24px; border-radius:50%; background:rgba(255,60,172,0.15); border:1px solid rgba(255,60,172,0.3); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--accent); flex-shrink:0;">3</div>
-          <div>
-            <div style="font-size:13px; font-weight:600; margin-bottom:2px;">Place in project root</div>
-            <div style="font-size:12px; color:var(--text-muted);">Save as <code style="font-family:var(--font-mono);">nikethan/cookies.txt</code>.</div>
-          </div>
-        </div>
-        <div style="display:flex; gap:12px;">
-          <div style="width:24px; height:24px; border-radius:50%; background:rgba(255,60,172,0.15); border:1px solid rgba(255,60,172,0.3); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--accent); flex-shrink:0;">4</div>
-          <div>
-            <div style="font-size:13px; font-weight:600; margin-bottom:2px;">Paste Reel URLs &amp; download</div>
-            <div style="font-size:12px; color:var(--text-muted);">The app passes cookies automatically. No credentials stored.</div>
-          </div>
-        </div>
+        {% endfor %}
       </div>
     </div>
   </div>
 
-  <!-- Right: Progress & log -->
-  <div style="display:flex; flex-direction:column; gap:16px;">
+  <!-- Right: Progress -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
     <div class="card" id="progress-card" style="display:none;">
       <div class="card-header">
         <div class="card-title">⏳ Download Progress</div>
         <span class="badge badge-orange" id="dl-status">Running</span>
       </div>
       <div class="card-body">
-        <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px; color:var(--text-secondary);">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px;color:var(--text-secondary);">
           <span id="dl-current-file">Initialising…</span>
           <span id="dl-pct">0%</span>
         </div>
-        <div class="progress-wrap">
-          <div class="progress-bar animated" id="dl-bar" style="width:0%"></div>
-        </div>
+        <div class="progress-wrap"><div class="progress-bar animated" id="dl-bar" style="width:0%"></div></div>
         <div style="margin-top:14px;">
           <div class="section-heading">Live Log</div>
           <div class="sse-log" id="dl-log"></div>
         </div>
-        <button class="btn btn-ghost btn-sm btn-full" style="margin-top:12px;" onclick="cancelDownload()">
-          ✕ Cancel
-        </button>
+        <button class="btn btn-ghost btn-sm btn-full" style="margin-top:12px;" onclick="cancelDownload()">✕ Cancel</button>
       </div>
     </div>
 
@@ -137,32 +108,157 @@
         <a href="{{ url_for('metadata_page') }}" class="btn btn-primary btn-sm">View Metadata →</a>
       </div>
       <div class="card-body">
-        <div id="results-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+        <div id="results-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     TAB 2 — By User ID
+     ════════════════════════════════════════════════════════ -->
+<div id="tab-userid" style="display:none;">
+<div class="two-col">
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">👤 Download by User ID</div>
+        <!-- Rate badge -->
+        <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:20px;">
+          <div style="width:7px;height:7px;border-radius:50%;background:var(--accent-green);box-shadow:0 0 5px var(--accent-green);" id="uid-rate-dot"></div>
+          <span style="font-size:11px;font-family:var(--font-mono);" id="uid-rate-text">0 / 10 used</span>
+        </div>
+      </div>
+      <div class="card-body">
+
+        <!-- Cooldown shield -->
+        <div id="uid-cooldown-block" style="display:none;margin-bottom:16px;">
+          <div class="cooldown-shield">
+            <div style="font-size:32px;">🧊</div>
+            <div style="font-size:14px;font-weight:700;color:var(--accent-gold);">Cooling Period Active</div>
+            <div style="font-size:12px;color:var(--text-muted);">10 reels downloaded in this 2-hour window.</div>
+            <div style="font-family:var(--font-mono);font-size:28px;font-weight:800;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:10px;padding:8px 24px;" id="uid-countdown">2:00:00</div>
+            <div style="font-size:11px;color:var(--text-muted);">Resets automatically.</div>
+          </div>
+        </div>
+
+        <!-- Batch gauge -->
+        <div style="margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:6px;">
+            <span>Batch Usage (10 reels / 2 hours)</span>
+            <span id="uid-window-label">Window: fresh</span>
+          </div>
+          <div class="batch-gauge">
+            <div class="batch-gauge-fill" id="uid-gauge-fill" style="width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-gold));"></div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;" id="uid-gauge-sub">0 of 10 slots used · 10 remaining</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Instagram Username / User ID</label>
+          <div style="display:flex;gap:8px;">
+            <div style="position:relative;flex:1;">
+              <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);">@</span>
+              <input class="form-input" id="ig-userid" type="text" placeholder="username or numeric ID" style="padding-left:26px;" />
+            </div>
+            <button class="btn btn-ghost btn-sm" id="uid-lookup-btn" onclick="lookupUserPreview()">🔍 Lookup</button>
+          </div>
+        </div>
+
+        <!-- User preview -->
+        <div id="uid-user-preview" style="display:none;padding:12px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--grad-from),var(--grad-to));display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👤</div>
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:700;" id="uid-display-name">—</div>
+              <div style="font-size:11px;color:var(--text-muted);" id="uid-tag">—</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:10px;color:var(--text-muted);">Posts</div>
+              <div style="font-weight:700;font-family:var(--font-mono);" id="uid-post-count">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Quality</label>
+          <select class="form-select" id="uid-quality">
+            <option value="best">Best available</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+          </select>
+        </div>
+
+        <div style="padding:12px;background:rgba(255,170,0,0.06);border:1px solid rgba(255,170,0,0.2);border-radius:var(--radius-sm);margin-bottom:16px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+          <strong style="color:var(--accent-gold);">Rate Limit:</strong> Max 10 reels per 2-hour window. Same safety rules as Auto-Follow.
+        </div>
+
+        <button class="btn btn-primary btn-full btn-lg" id="uid-dl-btn" onclick="startUserIDDownload()">
+          ↓ Download 10 Reels
+        </button>
       </div>
     </div>
   </div>
 
+  <!-- Right: progress -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card" id="uid-progress-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">⏳ Downloading from Profile</div>
+        <span class="badge badge-orange" id="uid-status">Running</span>
+      </div>
+      <div class="card-body">
+        <div class="progress-wrap"><div class="progress-bar animated" id="uid-bar" style="width:5%"></div></div>
+        <div class="sse-log" id="uid-log" style="margin-top:12px;"></div>
+      </div>
+    </div>
+    <div class="card" id="uid-results-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">✅ Downloaded</div>
+        <a href="{{ url_for('metadata_page') }}" class="btn btn-primary btn-sm">View Metadata →</a>
+      </div>
+      <div class="card-body">
+        <div id="uid-results-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+// ── Tab switch ────────────────────────────────────────────
+function switchDLTab(t) {
+  ['links','userid'].forEach(id => {
+    document.getElementById('tab-' + id).style.display = id === t ? 'block' : 'none';
+    const btn = document.getElementById('tab-' + id + '-btn');
+    if (btn) {
+      btn.style.background = id === t ? 'var(--bg-card)' : 'transparent';
+      btn.style.border     = id === t ? '1px solid var(--border)' : 'none';
+      btn.classList.toggle('active', id === t);
+    }
+  });
+  if (t === 'userid') refreshUIDStatus();
+}
+
+// ── By Links download ─────────────────────────────────────
 let currentESS = null;
 
 document.getElementById('download-form').addEventListener('submit', async function(e) {
   e.preventDefault();
   const urls = document.getElementById('urls').value.trim();
   if (!urls) { showToast('Please enter at least one URL', 'warn'); return; }
-
   const lines = urls.split('\n').filter(l => l.trim().startsWith('http'));
   if (!lines.length) { showToast('No valid Instagram URLs found', 'error'); return; }
 
   document.getElementById('progress-card').style.display = 'block';
-  document.getElementById('results-card').style.display = 'none';
-  document.getElementById('dl-log').textContent = '';
-  document.getElementById('dl-bar').style.width = '0%';
-  document.getElementById('dl-btn').disabled = true;
-  document.getElementById('dl-btn').textContent = 'Downloading…';
+  document.getElementById('results-card').style.display  = 'none';
+  document.getElementById('dl-log').textContent          = '';
+  document.getElementById('dl-bar').style.width          = '0%';
+  document.getElementById('dl-btn').disabled             = true;
+  document.getElementById('dl-btn').textContent          = 'Downloading…';
 
   const resp = await postJSON('/api/download', {
     urls: lines,
@@ -182,7 +278,7 @@ document.getElementById('download-form').addEventListener('submit', async functi
     statusId: 'dl-status',
     onComplete: function(d) {
       document.getElementById('dl-status').textContent = 'Done';
-      document.getElementById('dl-status').className = 'badge badge-green';
+      document.getElementById('dl-status').className  = 'badge badge-green';
       resetDLBtn();
       showResults(d.results || []);
     }
@@ -206,15 +302,147 @@ function showResults(results) {
   document.getElementById('results-card').style.display = 'block';
   const list = document.getElementById('results-list');
   list.innerHTML = results.map(r => `
-    <div style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-card-2);">
+    <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
       <span style="font-size:20px;">🎬</span>
-      <div style="flex:1; min-width:0;">
-        <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.title || r.id}</div>
-        <div style="font-size:11px; color:var(--text-muted);">@${r.account || '—'} · ${r.duration || '?'}s</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title||r.id}</div>
+        <div style="font-size:11px;color:var(--text-muted);">@${r.account||'—'} · ${r.duration||'?'}s</div>
       </div>
-      <span class="badge ${r.status === 'ok' ? 'badge-green' : 'badge-red'}">${r.status === 'ok' ? 'OK' : 'Error'}</span>
+      <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
     </div>
   `).join('');
 }
+
+// ── By User ID ────────────────────────────────────────────
+let uidCooldownInterval = null;
+
+async function refreshUIDStatus() {
+  const resp = await fetch('/api/download/userid/status');
+  const s    = await resp.json();
+  applyUIDStatus(s);
+}
+
+function applyUIDStatus(s) {
+  const pct = Math.min(100, (s.used / 10) * 100);
+  document.getElementById('uid-gauge-fill').style.width = pct + '%';
+  document.getElementById('uid-gauge-sub').textContent  = `${s.used} of 10 slots used · ${s.remaining} remaining`;
+  document.getElementById('uid-rate-text').textContent  = `${s.used} / 10 used`;
+
+  if (s.in_cooldown) {
+    document.getElementById('uid-cooldown-block').style.display = 'block';
+    document.getElementById('uid-dl-btn').disabled              = true;
+    document.getElementById('uid-rate-dot').style.background    = 'var(--accent-red)';
+    document.getElementById('uid-window-label').textContent     = 'Cooling: ' + fmtDur(s.seconds_left);
+    startUIDCountdown(s.seconds_left);
+  } else {
+    document.getElementById('uid-cooldown-block').style.display = 'none';
+    document.getElementById('uid-dl-btn').disabled              = false;
+    document.getElementById('uid-rate-dot').style.background    = 'var(--accent-green)';
+    document.getElementById('uid-window-label').textContent     = s.used === 0 ? 'Window: fresh' : 'Resets: ' + fmtDur(s.seconds_left);
+    clearInterval(uidCooldownInterval);
+  }
+}
+
+function startUIDCountdown(secs) {
+  clearInterval(uidCooldownInterval);
+  let rem = secs;
+  const el = document.getElementById('uid-countdown');
+  const tick = () => {
+    if (!el) return;
+    el.textContent = fmtCountdown(rem);
+    if (rem <= 0) { clearInterval(uidCooldownInterval); refreshUIDStatus(); return; }
+    rem--;
+  };
+  tick();
+  uidCooldownInterval = setInterval(tick, 1000);
+}
+
+function fmtCountdown(s) {
+  const h  = Math.floor(s / 3600);
+  const m  = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  return `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+}
+
+function fmtDur(s) {
+  if (!s || s <= 0) return 'now';
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m ${s % 60}s`;
+}
+
+async function lookupUserPreview() {
+  const u = document.getElementById('ig-userid').value.trim().replace('@','');
+  if (!u) { showToast('Enter a username', 'warn'); return; }
+  document.getElementById('uid-lookup-btn').textContent = '…';
+  const resp = await postJSON('/api/instagram/lookup', { username: u });
+  document.getElementById('uid-lookup-btn').textContent = '🔍 Lookup';
+  if (resp.error) { showToast(resp.error, 'error'); return; }
+  document.getElementById('uid-user-preview').style.display = 'block';
+  document.getElementById('uid-display-name').textContent   = resp.full_name || u;
+  document.getElementById('uid-tag').textContent            = '@' + u + (resp.is_private ? ' 🔒' : '');
+  document.getElementById('uid-post-count').textContent     = resp.media_count || '—';
+}
+
+async function startUserIDDownload() {
+  const username = document.getElementById('ig-userid').value.trim().replace('@','');
+  if (!username) { showToast('Enter a username first', 'warn'); return; }
+  const quality = document.getElementById('uid-quality').value;
+
+  document.getElementById('uid-progress-card').style.display = 'block';
+  document.getElementById('uid-results-card').style.display  = 'none';
+  document.getElementById('uid-log').textContent             = '';
+  document.getElementById('uid-dl-btn').textContent          = 'Downloading…';
+  document.getElementById('uid-dl-btn').disabled             = true;
+
+  const resp = await postJSON('/api/download/userid', { username, quality });
+
+  if (!resp.job_id) {
+    if (resp.in_cooldown) {
+      showToast(`Cooling period active — ${fmtDur(resp.seconds_left)} remaining`, 'warn');
+      refreshUIDStatus();
+    } else {
+      showToast(resp.error || 'Failed to start', 'error');
+    }
+    document.getElementById('uid-dl-btn').disabled = false;
+    document.getElementById('uid-dl-btn').textContent = '↓ Download 10 Reels';
+    return;
+  }
+
+  startSSEProgress({
+    url: '/api/download/progress/' + resp.job_id,
+    logId: 'uid-log',
+    barId: 'uid-bar',
+    statusId: 'uid-status',
+    onComplete: function(d) {
+      document.getElementById('uid-dl-btn').disabled = false;
+      document.getElementById('uid-dl-btn').textContent = '↓ Download 10 Reels';
+      document.getElementById('uid-status').className = 'badge badge-green';
+      if (d.in_cooldown) {
+        showToast(`Done! Cooling period started — ${fmtDur(d.seconds_left)} until next batch.`, 'warn');
+      } else {
+        showToast(`Downloaded ${d.downloaded || 0} reels.`, 'success');
+      }
+      refreshUIDStatus();
+      showUIDResults(d.results || []);
+    }
+  });
+}
+
+function showUIDResults(results) {
+  document.getElementById('uid-results-card').style.display = 'block';
+  document.getElementById('uid-results-list').innerHTML = results.map(r => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
+      <span>🎬</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title||r.id||'Reel'}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${r.duration ? Math.round(r.duration) + 's' : ''}</div>
+      </div>
+      <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
+    </div>
+  `).join('');
+}
+
+// Init
+refreshUIDStatus();
 </script>
 {% endblock %}

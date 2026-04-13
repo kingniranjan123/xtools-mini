@@ -453,12 +453,14 @@ img { max-width: 100%; }
   background: var(--bg-card-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  color: var(--text);
+  color: #ffffff;
   font-family: var(--font-body);
   font-size: 13px;
   padding: 10px 14px;
   outline: none;
   transition: border-color var(--t), box-shadow var(--t);
+  color-scheme: dark;
+  -webkit-text-fill-color: #ffffff;
 }
 
 .form-input:focus,
@@ -469,9 +471,25 @@ img { max-width: 100%; }
 }
 
 .form-input::placeholder,
-.form-textarea::placeholder { color: var(--text-dim); }
+.form-textarea::placeholder { color: var(--text-dim); -webkit-text-fill-color: var(--text-dim); }
 .form-textarea { resize: vertical; min-height: 100px; }
-.form-select option { background: var(--bg-card); }
+.form-select option { background: #161616; color: #ffffff; }
+.form-select::-ms-expand { background: var(--bg-card-2); color: #fff; }
+
+/* Force all bare inputs/selects inside cards to also be visible */
+.card input[type="text"],
+.card input[type="number"],
+.card input[type="email"],
+.card input[type="url"],
+.card input[type="search"],
+.card textarea,
+.card select {
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+  color-scheme: dark;
+  background: var(--bg-card-2);
+}
+.card select option { background: #161616; color: #fff; }
 
 .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
 .form-error { font-size: 11px; color: var(--accent-red); margin-top: 5px; }

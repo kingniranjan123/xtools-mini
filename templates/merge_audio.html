@@ -1,0 +1,269 @@
+{% extends "layout.html" %}
+{% block title %}Merge Audio — Nikethan{% endblock %}
+{% block breadcrumb %}Merge Audio{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">Merge MP3 with Video</span></h1>
+  <p class="page-subtitle">Replace or mix a video's audio track with an MP3. Perfect for adding music to Shorts.</p>
+</div>
+
+<div class="two-col">
+  <!-- Left: Config -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <!-- Mode: Single or Batch -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">🔀 Merge Configuration</div></div>
+      <div class="card-body">
+
+        <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);margin-bottom:16px;">
+          <button class="btn btn-sm active" id="merge-single-btn" onclick="switchMergeMode('single')" style="flex:1;background:var(--bg-card);border:1px solid var(--border);">🎬 Single File</button>
+          <button class="btn btn-sm btn-ghost" id="merge-batch-btn" onclick="switchMergeMode('batch')" style="flex:1;">📁 Batch (by name)</button>
+        </div>
+
+        <!-- Single file mode -->
+        <div id="merge-single">
+          <div class="form-group">
+            <label class="form-label">Video File</label>
+            <div class="drop-zone" id="vid-drop" style="padding:16px;" onclick="document.getElementById('vid-input').click()">
+              <input type="file" id="vid-input" accept=".mp4,.mov,.avi,.mkv,.webm" style="display:none;" onchange="selectVideo(this)" />
+              <div class="drop-icon" style="font-size:28px;">🎬</div>
+              <div class="drop-label" id="vid-label">Click or drag video file</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">MP3 Audio File</label>
+            <div class="drop-zone" id="aud-drop" style="padding:16px;" onclick="document.getElementById('aud-input').click()">
+              <input type="file" id="aud-input" accept=".mp3,.aac,.wav,.m4a" style="display:none;" onchange="selectAudio(this)" />
+              <div class="drop-icon" style="font-size:28px;">🎵</div>
+              <div class="drop-label" id="aud-label">Click or drag MP3 file</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Batch mode -->
+        <div id="merge-batch" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Video Folder</label>
+            <input class="form-input mono" id="batch-vid-dir" type="text" placeholder="C:\path\to\videos\" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Audio Folder</label>
+            <input class="form-input mono" id="batch-aud-dir" type="text" placeholder="C:\path\to\mp3_output\" />
+            <div class="form-hint">Files are paired by matching filename (e.g. <code>clip01.mp4</code> + <code>clip01.mp3</code>).</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Output Folder</label>
+            <input class="form-input mono" id="batch-out-dir" type="text" placeholder="Leave blank for merged_output/ subfolder" />
+          </div>
+        </div>
+
+        <!-- Merge mode -->
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label">Merge Mode</label>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;">
+              <input type="radio" name="merge-mode" value="replace" checked style="accent-color:var(--accent);margin-top:2px;" />
+              <div>
+                <div style="font-size:13px;font-weight:600;">Replace audio</div>
+                <div style="font-size:11px;color:var(--text-muted);">Mutes the original video audio and uses only the MP3</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;">
+              <input type="radio" name="merge-mode" value="mix" style="accent-color:var(--accent);margin-top:2px;" />
+              <div>
+                <div style="font-size:13px;font-weight:600;">Mix audio</div>
+                <div style="font-size:11px;color:var(--text-muted);">Blends original video audio + MP3 together</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-full btn-lg" id="merge-btn" onclick="startMerge()">
+          🔀 Start Merge
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Progress + Results -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <!-- Preview panel -->
+    <div class="card" id="preview-card">
+      <div class="card-header"><div class="card-title">👁 Preview</div></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;">
+          <div style="text-align:center;padding:16px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius);">
+            <div style="font-size:28px;margin-bottom:6px;">🎬</div>
+            <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="prev-vid">No video</div>
+          </div>
+          <div style="font-size:20px;color:var(--text-muted);">+</div>
+          <div style="text-align:center;padding:16px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius);">
+            <div style="font-size:28px;margin-bottom:6px;">🎵</div>
+            <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="prev-aud">No audio</div>
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:12px;padding:10px;background:rgba(255,60,172,0.06);border:1px solid rgba(255,60,172,0.15);border-radius:var(--radius-sm);">
+          <span style="font-size:20px;">→</span>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;" id="prev-out">merged_output.mp4</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="progress-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">⏳ Merging</div>
+        <span class="badge badge-orange" id="merge-status">Running</span>
+      </div>
+      <div class="card-body">
+        <div class="progress-wrap"><div class="progress-bar animated" id="merge-bar" style="width:10%"></div></div>
+        <div class="sse-log" id="merge-log" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <div class="card" id="results-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">✅ Merge Complete</div>
+        <span class="badge badge-green" id="results-summary">Done</span>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div id="results-list"></div>
+      </div>
+    </div>
+
+    <!-- Info -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">💡 Use Cases</div></div>
+      <div class="card-body" style="font-size:12px;color:var(--text-secondary);line-height:1.9;">
+        <div style="display:flex;gap:8px;margin-bottom:4px;"><span>🎶</span><span>Replace voice with music for silent background Shorts</span></div>
+        <div style="display:flex;gap:8px;margin-bottom:4px;"><span>🔊</span><span>Add theme music to downloaded Reels</span></div>
+        <div style="display:flex;gap:8px;"><span>📱</span><span>Batch process entire folder of Shorts + matching audio</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let videoFile = null, audioFile = null;
+let mergeMode = 'single';
+
+function switchMergeMode(m) {
+  mergeMode = m;
+  document.getElementById('merge-single').style.display = m==='single' ? 'block' : 'none';
+  document.getElementById('merge-batch').style.display  = m==='batch'  ? 'block' : 'none';
+  const sb = document.getElementById('merge-single-btn');
+  const bb = document.getElementById('merge-batch-btn');
+  sb.style.background = m==='single' ? 'var(--bg-card)' : 'transparent';
+  sb.style.border     = m==='single' ? '1px solid var(--border)' : 'none';
+  bb.style.background = m==='batch'  ? 'var(--bg-card)' : 'transparent';
+  bb.style.border     = m==='batch'  ? '1px solid var(--border)' : 'none';
+}
+
+function selectVideo(input) {
+  videoFile = input.files[0];
+  if (videoFile) {
+    document.getElementById('vid-label').textContent = videoFile.name;
+    document.getElementById('prev-vid').textContent   = videoFile.name;
+    document.getElementById('prev-out').textContent   = videoFile.name.replace(/\.\w+$/, '_merged.mp4');
+  }
+}
+
+function selectAudio(input) {
+  audioFile = input.files[0];
+  if (audioFile) {
+    document.getElementById('aud-label').textContent = audioFile.name;
+    document.getElementById('prev-aud').textContent   = audioFile.name;
+  }
+}
+
+// Drag & drop for vid
+['vid-drop','aud-drop'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (!f) return;
+    if (id === 'vid-drop') { document.getElementById('vid-input').files; selectVideo({ files: [f] }); }
+    else                   { selectAudio({ files: [f] }); }
+  });
+});
+
+async function startMerge() {
+  const mode = document.querySelector('input[name="merge-mode"]:checked').value;
+
+  let payload = { mode };
+
+  if (mergeMode === 'single') {
+    if (!videoFile || !audioFile) { showToast('Select both a video and an audio file', 'warn'); return; }
+    // Upload both
+    showToast('Uploading files…', 'info');
+    const form = new FormData();
+    form.append('video', videoFile);
+    form.append('audio', audioFile);
+    const uploadResp = await fetch('/api/audio/upload-merge', { method: 'POST', body: form });
+    const uploaded   = await uploadResp.json();
+    if (!uploaded.video_path) { showToast(uploaded.error || 'Upload failed', 'error'); return; }
+    payload.video_path = uploaded.video_path;
+    payload.audio_path = uploaded.audio_path;
+  } else {
+    payload.video_dir  = document.getElementById('batch-vid-dir').value.trim();
+    payload.audio_dir  = document.getElementById('batch-aud-dir').value.trim();
+    payload.output_dir = document.getElementById('batch-out-dir').value.trim();
+    if (!payload.video_dir || !payload.audio_dir) {
+      showToast('Enter both video and audio folder paths', 'warn'); return;
+    }
+  }
+
+  document.getElementById('progress-card').style.display = 'block';
+  document.getElementById('results-card').style.display  = 'none';
+  document.getElementById('merge-log').textContent       = '';
+  document.getElementById('merge-bar').style.width       = '5%';
+  document.getElementById('merge-btn').disabled          = true;
+  document.getElementById('merge-btn').textContent       = 'Merging…';
+
+  const resp = await postJSON('/api/audio/merge', payload);
+  if (!resp.job_id) {
+    showToast(resp.error || 'Failed to start', 'error');
+    document.getElementById('merge-btn').disabled = false;
+    document.getElementById('merge-btn').textContent = '🔀 Start Merge';
+    return;
+  }
+
+  startSSEProgress({
+    url: '/api/audio/progress/' + resp.job_id,
+    logId: 'merge-log',
+    barId: 'merge-bar',
+    statusId: 'merge-status',
+    onComplete: function(d) {
+      document.getElementById('merge-btn').disabled = false;
+      document.getElementById('merge-btn').textContent = '🔀 Start Merge';
+      document.getElementById('merge-status').className = 'badge badge-green';
+      document.getElementById('merge-status').textContent = 'Done';
+      showResults(d.results || [d]);
+    }
+  });
+}
+
+function showResults(results) {
+  const ok = results.filter(r => r.status === 'ok').length;
+  document.getElementById('results-summary').textContent = `${ok} / ${results.length} merged`;
+  document.getElementById('results-card').style.display  = 'block';
+  document.getElementById('results-list').innerHTML = results.map(r => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);">
+      <span>${r.status==='ok' ? '🎬' : '❌'}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.output ? r.output.split(/[\\/]/).pop() : (r.name||'?')}</div>
+        ${r.error ? `<div style="font-size:11px;color:var(--accent-red);">${r.error}</div>` : ''}
+      </div>
+      <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
+    </div>
+  `).join('');
+}
+</script>
+{% endblock %}
