@@ -64,6 +64,23 @@
               {% endif %}
             </div>
           </div>
+          
+          <div class="section-heading" style="margin-top:24px; margin-bottom:12px;">Automated Processing Options</div>
+          <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; background:var(--bg-card-2); padding:14px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+             <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="dl-opt-watermark" name="opt_watermark">
+                Apply master <strong>Watermark</strong>
+             </label>
+             <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="dl-opt-split" name="opt_split">
+                Split videos into <strong>Equal Parts</strong>
+             </label>
+             <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="dl-opt-parts" name="opt_parts">
+                Overlay sequence numbers (e.g., <strong>PART - 1</strong>)
+             </label>
+          </div>
+          
           <button type="submit" class="btn btn-primary btn-full btn-lg" id="dl-btn">↓ Start Download</button>
         </form>
       </div>
@@ -211,6 +228,22 @@
         <div style="padding:12px;background:rgba(255,170,0,0.06);border:1px solid rgba(255,170,0,0.2);border-radius:var(--radius-sm);margin-bottom:16px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
           <strong style="color:var(--accent-gold);">Rate Limit:</strong> Max 10 reels per 2-hour window. Same safety rules as Auto-Follow.
         </div>
+        
+        <div class="section-heading" style="margin-top:24px; margin-bottom:12px;">Automated Processing Options</div>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; background:var(--bg-card-2); padding:14px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+           <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" id="uid-opt-watermark">
+              Apply master <strong>Watermark</strong>
+           </label>
+           <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" id="uid-opt-split">
+              Split videos into <strong>Equal Parts</strong>
+           </label>
+           <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" id="uid-opt-parts">
+              Overlay sequence numbers (e.g., <strong>PART - 1</strong>)
+           </label>
+        </div>
 
         <button class="btn btn-primary btn-full btn-lg" id="uid-dl-btn" onclick="startUserIDDownload()">
           ↓ Download 10 Reels
@@ -272,6 +305,10 @@ document.getElementById('download-form').addEventListener('submit', async functi
   const quality = document.getElementById('quality').value;
   const outDir  = document.getElementById('links-out-dir').value.trim();
 
+  const optWatermark = document.getElementById('dl-opt-watermark').checked;
+  const optSplit     = document.getElementById('dl-opt-split').checked;
+  const optParts     = document.getElementById('dl-opt-parts').checked;
+
   document.getElementById('progress-card').style.display = 'block';
   document.getElementById('results-card').style.display = 'none';
   document.getElementById('dl-log').textContent          = '';
@@ -279,7 +316,10 @@ document.getElementById('download-form').addEventListener('submit', async functi
   document.getElementById('dl-btn').disabled             = true;
   document.getElementById('dl-btn').textContent          = 'Downloading…';
 
-  const resp = await postJSON('/api/download', { urls: urls, quality: quality, output_dir: outDir });
+  const resp = await postJSON('/api/download', { 
+      urls: urls, quality: quality, output_dir: outDir,
+      opt_watermark: optWatermark, opt_split: optSplit, opt_parts: optParts
+  });
 
   if (!resp.job_id) {
     showToast(resp.error || 'Failed to start download', 'error');
@@ -405,6 +445,10 @@ async function startUserIDDownload() {
   const quality = document.getElementById('uid-quality').value;
   const outDir  = document.getElementById('uid-out-dir').value.trim();
 
+  const optWatermark = document.getElementById('uid-opt-watermark').checked;
+  const optSplit     = document.getElementById('uid-opt-split').checked;
+  const optParts     = document.getElementById('uid-opt-parts').checked;
+
   document.getElementById('uid-progress-card').style.display = 'block';
   document.getElementById('uid-results-card').style.display  = 'none';
   document.getElementById('uid-log').textContent             = '';
@@ -412,7 +456,10 @@ async function startUserIDDownload() {
   document.getElementById('uid-dl-btn').disabled             = true;
   document.getElementById('uid-dl-btn').textContent          = 'Downloading…';
 
-  const resp = await postJSON('/api/download/userid', { username, quality, output_dir: outDir });
+  const resp = await postJSON('/api/download/userid', { 
+      username, quality, output_dir: outDir,
+      opt_watermark: optWatermark, opt_split: optSplit, opt_parts: optParts
+  });
 
   if (!resp.job_id) {
     if (resp.in_cooldown) {

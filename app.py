@@ -253,6 +253,11 @@ def instagram_page():
     ).fetchall()]
     return render_template('instagram.html', cookie_ok=cookie_ok, saved_lists=saved_lists)
 
+@app.route('/post')
+def post_page():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    return render_template('post.html', settings=_get_settings_dict())
+
 # ── Thumbnail / watermark preview ─────────────────────────────
 @app.route('/thumb/<reel_id>')
 def serve_thumbnail(reel_id):
@@ -296,6 +301,9 @@ def api_download():
     urls    = data.get('urls', [])
     quality = data.get('quality', 'best')
     out_dir = data.get('output_dir', '').strip()
+    opt_watermark = data.get('opt_watermark', False)
+    opt_split     = data.get('opt_split', False)
+    opt_parts     = data.get('opt_parts', False)
     if not urls:
         return jsonify({'error': 'No URLs provided'}), 400
 
@@ -317,10 +325,33 @@ def api_download():
             progress_cb=lambda line, pct=None: _emit(job, line, pct),
             db_cb=_save_reel_to_db,
         )
+
+        # ── Pipeline: watermark / split / part-stamp ──────────
+        if any([opt_watermark, opt_split, opt_parts]):
+            from modules.pipeline import run_pipeline
+            settings = _get_settings_dict()
+            pipeline_results = []
+            for r in results:
+                fp = r.get('file_path') or r.get('path', '')
+                if fp and os.path.isfile(fp):
+                    _emit(job, f'▶ Post-processing: {os.path.basename(fp)}')
+                    final_files = run_pipeline(
+                        file_path=fp,
+                        settings=settings,
+                        opt_watermark=opt_watermark,
+                        opt_split=opt_split,
+                        opt_parts=opt_parts,
+                        progress_cb=lambda line, pct=None: _emit(job, line, pct)
+                    )
+                    for ff in final_files:
+                        pipeline_results.append({'status': 'ok', 'path': ff, 'file_path': ff})
+            results = pipeline_results if pipeline_results else results
+
         _finish(job, f'Downloaded {len(results)} reel(s)', results=results)
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({'job_id': job_id})
+
 
 def _save_reel_to_db(info: dict):
     """Thread-safe DB insert — uses a direct connection, not Flask g."""
@@ -1041,6 +1072,9 @@ def api_download_userid():
     data     = request.get_json()
     username = data.get('username', '').strip().replace('@', '')
     quality  = data.get('quality', 'best')
+    opt_watermark = data.get('opt_watermark', False)
+    opt_split     = data.get('opt_split', False)
+    opt_parts     = data.get('opt_parts', False)
     if not username: return jsonify({'error': 'No username'}), 400
 
     status = _get_uid_dl_status()
@@ -1166,6 +1200,29 @@ def api_download_userid():
                 _save_reel_to_db(meta)
 
         final = _get_uid_dl_status()
+
+        # ── Post-download pipeline ────────────────────────────
+        if any([opt_watermark, opt_split, opt_parts]):
+            from modules.pipeline import run_pipeline
+            settings = _get_settings_dict()
+            pipeline_results = []
+            for r in results:
+                fp = r.get('file_path') or r.get('path', '')
+                if fp and os.path.isfile(fp):
+                    _emit(job, f'▶ Post-processing: {os.path.basename(fp)}')
+                    final_files = run_pipeline(
+                        file_path=fp,
+                        settings=settings,
+                        opt_watermark=opt_watermark,
+                        opt_split=opt_split,
+                        opt_parts=opt_parts,
+                        progress_cb=lambda line, pct=None: _emit(job, line, pct)
+                    )
+                    for ff in final_files:
+                        pipeline_results.append({'status': 'ok', 'path': ff, 'file_path': ff})
+            if pipeline_results:
+                results = pipeline_results
+
         _finish(job, f'Downloaded {downloaded} reels from @{username}',
                 downloaded=downloaded, results=results,
                 in_cooldown=final['in_cooldown'],
@@ -1174,10 +1231,60 @@ def api_download_userid():
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({'job_id': job_id})
+# ══════════════════════════════════════════════════════════════
+#  API — Auto Poster
+# ══════════════════════════════════════════════════════════════
+@app.route('/api/settings/poster/save', methods=['POST'])
+def api_save_poster_settings():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    db = get_db()
+    
+    for k in ['poster_enabled', 'poster_interval', 'poster_desc', 'poster_tags']:
+        if k in data:
+            db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (k, str(data[k])))
+    
+    db.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/settings/poster/auth', methods=['POST'])
+def api_save_poster_auth():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    db = get_db()
+    
+    user = data.get('publisher_user', '').strip()
+    if user:
+        db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', ('publisher_user', user))
+        
+    pwd = data.get('publisher_pass')
+    if pwd:
+        db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', ('publisher_pass', pwd))
+        
+    db.commit()
+    return jsonify({'ok': True})
+
 
 # ── Boot ──────────────────────────────────────────────────────
 if __name__ == '__main__':
+    from modules.db import init_db
     init_db()
+    
+    # Pre-populate P1-P5 in DB
+    from modules.account_manager import ensure_default_profiles_exist
+    with app.app_context():
+        ensure_default_profiles_exist()
+        
+    # Boot Poster Daemon
+    def get_context_for_poster():
+        with app.app_context():
+            db = get_db()
+            settings = _get_settings_dict()
+            return db, settings
+
+    from modules.poster import run_poster_daemon
+    threading.Thread(target=run_poster_daemon, args=(get_context_for_poster,), daemon=True).start()
+
     cuda_str = 'CUDA ACTIVE' if CUDA_INFO['available'] else 'CPU Mode'
     print(f'\n  Nikethan Reels Toolkit')
     print(f'  GPU: {cuda_str}')

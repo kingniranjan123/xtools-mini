@@ -64,6 +64,9 @@
         <span class="nav-icon">◉</span> Social Tools
         <span class="nav-badge" style="background:rgba(255,107,53,.15);color:#ff6b35;border-color:rgba(255,107,53,.3);">NEW</span>
       </a>
+      <a class="nav-item {% if request.endpoint == 'post_page' %}active{% endif %}" href="{{ url_for('post_page') }}">
+        <span class="nav-icon">🤖</span> Auto-Post
+      </a>
 
       <div class="nav-label" style="margin-top:12px;">System</div>
       <a class="nav-item {% if request.endpoint == 'settings_page' %}active{% endif %}" href="{{ url_for('settings_page') }}">

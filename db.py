@@ -21,7 +21,9 @@ CREATE TABLE IF NOT EXISTS reels (
   thumbnail     TEXT,
   downloaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   watermarked   INTEGER DEFAULT 0,
-  watermark_folder TEXT
+  watermark_folder TEXT,
+  status        TEXT DEFAULT 'pending',
+  is_posted     INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS settings (

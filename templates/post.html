@@ -1,0 +1,122 @@
+{% extends "layout.html" %}
+
+{% block title %}Instagram Publisher — Nikethan{% endblock %}
+{% block breadcrumb %}Instagram Publisher{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">Instagram Auto-Poster</span></h1>
+  <p class="page-subtitle">Schedule and automatically publish downloaded reels back to Instagram.</p>
+</div>
+
+<div class="two-col">
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🤖 Auto-Poster Engine</div>
+        <span class="badge badge-{% if settings.get('poster_enabled') == '1' %}green{% else %}gray{% endif %}">
+            {% if settings.get('poster_enabled') == '1' %}ACTIVE{% else %}DISABLED{% endif %}
+        </span>
+      </div>
+      <div class="card-body">
+        <form id="poster-form">
+          <div class="form-group" style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-card-2); padding:16px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+             <div>
+                <div style="font-weight:600; font-size:14px;">Enable Auto-Pubhlishing</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Automatically post fully processed reels to Instagram.</div>
+             </div>
+             <label class="toggle-switch">
+                <input type="checkbox" id="poster_enabled" {% if settings.get('poster_enabled') == '1' %}checked{% endif %}>
+                <span class="toggle-slider"></span>
+             </label>
+          </div>
+          
+          <div class="form-group" style="margin-top:20px;">
+            <label class="form-label">Posting Interval (Minutes)</label>
+            <input type="number" class="form-input" id="poster_interval" value="{{ settings.get('poster_interval', '10') }}" min="5" max="1440">
+            <div class="form-hint">How often the daemon wakes up to post a reel (Default: 10).</div>
+          </div>
+          
+          <div class="section-heading" style="margin-top:30px; margin-bottom:12px;">Default Captions</div>
+          <div class="form-group">
+            <label class="form-label">Constant Description</label>
+            <textarea class="form-textarea" id="poster_desc" rows="4" placeholder="Follow for more amazing content!">{{ settings.get('poster_desc', '') }}</textarea>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Constant Tags</label>
+            <textarea class="form-textarea mono" id="poster_tags" rows="3" placeholder="#viral #trending #reels">{{ settings.get('poster_tags', '') }}</textarea>
+          </div>
+          
+          <button type="button" class="btn btn-primary btn-full" onclick="savePosterSettings()">💾 Save Auto-Poster Settings</button>
+        </form>
+      </div>
+    </div>
+    
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="card">
+        <div class="card-header"><div class="card-title">🔐 Publisher Authentication</div></div>
+        <div class="card-body">
+            <div class="form-hint" style="margin-bottom:16px;">
+               Instagrapi requires an explicit Username and Password to upload videos securely. This is independent of the Cookies used for downloading.
+            </div>
+            <div class="form-group">
+                <label class="form-label">Instagram Username</label>
+                <input type="text" class="form-input mono" id="publisher_user" value="{{ settings.get('publisher_user', '') }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Instagram Password</label>
+                <input type="password" class="form-input" id="publisher_pass" value="{% if settings.get('publisher_pass') %}********{% endif %}">
+            </div>
+            <button type="button" class="btn btn-secondary btn-full" onclick="savePublisherAuth()">Secure Save Credentials</button>
+        </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function savePosterSettings() {
+    const enabled = document.getElementById('poster_enabled').checked ? '1' : '0';
+    const interval = document.getElementById('poster_interval').value || '10';
+    const desc = document.getElementById('poster_desc').value.trim();
+    const tags = document.getElementById('poster_tags').value.trim();
+    
+    const resp = await postJSON('/api/settings/poster/save', {
+        poster_enabled: enabled,
+        poster_interval: interval,
+        poster_desc: desc,
+        poster_tags: tags
+    });
+    
+    if (resp.ok) {
+        showToast('Auto-Poster settings saved!', 'success');
+        setTimeout(() => location.reload(), 1000);
+    } else {
+        showToast(resp.error || 'Failed to save', 'error');
+    }
+}
+
+async function savePublisherAuth() {
+    const user = document.getElementById('publisher_user').value.trim();
+    const pass = document.getElementById('publisher_pass').value;
+    
+    // Only send pass if it's changed from the placeholder
+    const payload = { publisher_user: user };
+    if (pass && pass !== '********') {
+        payload['publisher_pass'] = pass;
+    }
+    
+    const resp = await postJSON('/api/settings/poster/auth', payload);
+    if (resp.ok) {
+        showToast('Publisher credentials securely saved.', 'success');
+    } else {
+        showToast(resp.error || 'Failed to save', 'error');
+    }
+}
+</script>
+{% endblock %}
