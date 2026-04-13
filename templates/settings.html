@@ -1,0 +1,389 @@
+{% extends "layout.html" %}
+
+{% block title %}Settings — Nikethan{% endblock %}
+{% block breadcrumb %}Settings{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" onclick="saveAllSettings()">
+  ✓ Save All Settings
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">Settings</span></h1>
+  <p class="page-subtitle">Configure cookies, watermark defaults, and application preferences.</p>
+</div>
+
+<!-- ── 1. Cookies ───────────────────────────────────────────── -->
+<div class="section-heading">Authentication</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">
+    <div class="card-title">🍪 Instagram Cookies</div>
+    {% if cookie_status.ok %}
+      <span class="badge badge-green">Active · {{ cookie_status.size_kb }} KB · Updated {{ cookie_status.modified }}</span>
+    {% else %}
+      <span class="badge badge-red">Not Found</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+
+    <!-- Tab switcher -->
+    <div style="display:flex; gap:4px; background:var(--bg-card-2); padding:4px; border-radius:var(--radius-sm); width:fit-content; margin-bottom:16px;">
+      <button class="btn btn-sm" id="tab-paste-btn" onclick="switchCookieTab('paste')" style="background:var(--bg-card); border:1px solid var(--border);">
+        ✎ Paste Content
+      </button>
+      <button class="btn btn-sm btn-ghost" id="tab-upload-btn" onclick="switchCookieTab('upload')">
+        ↑ Upload File
+      </button>
+    </div>
+
+    <!-- Paste tab -->
+    <div id="tab-paste">
+      <div class="form-group">
+        <label class="form-label" for="cookie-text">Paste cookies.txt content</label>
+        <textarea class="form-textarea mono" id="cookie-text" rows="10"
+          placeholder="# Netscape HTTP Cookie File&#10;# https://curl.haxx.se/rfc/cookie_spec.html&#10;# This is a generated file! Do not edit.&#10;&#10;.instagram.com	TRUE	/	TRUE	..."></textarea>
+        <div class="form-hint">Export from your browser using the <strong>"Get cookies.txt LOCALLY"</strong> extension while logged into instagram.com</div>
+      </div>
+      <button class="btn btn-primary" onclick="saveCookiePaste()">
+        💾 Save Cookies
+      </button>
+    </div>
+
+    <!-- Upload tab -->
+    <div id="tab-upload" style="display:none;">
+      <div class="drop-zone" id="cookie-drop" onclick="document.getElementById('cookie-file-input').click()">
+        <input type="file" id="cookie-file-input" accept=".txt" style="display:none;" onchange="uploadCookieFile(this)" />
+        <div class="drop-icon">📄</div>
+        <div class="drop-label" id="cookie-drop-label">Click or drag cookies.txt file</div>
+        <div class="drop-hint">Netscape format .txt file exported from browser extension</div>
+      </div>
+    </div>
+
+    <!-- Current status detail -->
+    {% if cookie_status.ok %}
+    <div style="margin-top:16px; padding:12px 14px; background:var(--bg-card-2); border:1px solid var(--border); border-radius:var(--radius-sm);">
+      <div class="section-heading" style="margin-bottom:8px;">Current Cookie File</div>
+      <div style="display:grid; grid-template-columns:120px 1fr; gap:4px 12px; font-size:12px;">
+        <span style="color:var(--text-muted);">Path</span>
+        <span style="font-family:var(--font-mono); color:var(--text-secondary);">{{ cookie_status.path }}</span>
+        <span style="color:var(--text-muted);">Size</span>
+        <span>{{ cookie_status.size_kb }} KB</span>
+        <span style="color:var(--text-muted);">Modified</span>
+        <span>{{ cookie_status.modified }}</span>
+        <span style="color:var(--text-muted);">Lines</span>
+        <span>{{ cookie_status.lines }}</span>
+      </div>
+      <div style="margin-top:10px; display:flex; gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="previewCookies()">👁 Preview</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCookies()">🗑 Delete</button>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
+<!-- ── 2. Watermark Defaults ──────────────────────────────── -->
+<div class="section-heading">Watermark Defaults</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">
+    <div class="card-title">◎ Default Watermark Settings</div>
+    <span class="badge badge-blue">Applied to all new watermark jobs</span>
+  </div>
+  <div class="card-body">
+    <div class="two-col">
+      <div>
+        <div class="form-group">
+          <label class="form-label">Watermark Text</label>
+          <input class="form-input" id="wm-text" type="text"
+            placeholder="@nikethan"
+            value="{{ settings.wm_text or '' }}" />
+          <div class="form-hint">Text overlaid on videos. Leave blank to use image watermark only.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Font</label>
+          <select class="form-select" id="wm-font">
+            <option value="Calibri" {% if settings.wm_font == 'Calibri' or not settings.wm_font %}selected{% endif %}>Calibri (Default)</option>
+            <option value="Arial" {% if settings.wm_font == 'Arial' %}selected{% endif %}>Arial</option>
+            <option value="Times New Roman" {% if settings.wm_font == 'Times New Roman' %}selected{% endif %}>Times New Roman</option>
+            <option value="Verdana" {% if settings.wm_font == 'Verdana' %}selected{% endif %}>Verdana</option>
+            <option value="Impact" {% if settings.wm_font == 'Impact' %}selected{% endif %}>Impact</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Font Size</label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="range" id="wm-fontsize" min="10" max="72" value="{{ settings.wm_fontsize or 24 }}"
+              style="flex:1; accent-color:var(--accent);"
+              oninput="document.getElementById('wm-fontsize-val').textContent = this.value + 'pt'" />
+            <span id="wm-fontsize-val" style="font-family:var(--font-mono); font-size:13px; min-width:36px;">{{ settings.wm_fontsize or 24 }}pt</span>
+          </div>
+          <div class="form-hint">Default: 24pt Calibri as specified</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Text Color</label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="color" id="wm-color" value="{{ settings.wm_color or '#ffffff' }}"
+              style="width:40px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); cursor:pointer; background:none; padding:2px;" />
+            <input class="form-input mono" id="wm-color-hex" type="text"
+              value="{{ settings.wm_color or '#ffffff' }}" placeholder="#ffffff"
+              style="flex:1;"
+              oninput="document.getElementById('wm-color').value = this.value" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Text Opacity (%)</label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="range" id="wm-opacity" min="10" max="100" value="{{ settings.wm_opacity or 85 }}"
+              style="flex:1; accent-color:var(--accent);"
+              oninput="document.getElementById('wm-opacity-val').textContent = this.value + '%'" />
+            <span id="wm-opacity-val" style="font-family:var(--font-mono); font-size:13px; min-width:36px;">{{ settings.wm_opacity or 85 }}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="form-group">
+          <label class="form-label">Default Position</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; max-width:200px; margin-bottom:8px;" id="pos-grid-settings">
+            {% set cur_pos = settings.wm_position or 'BR' %}
+            {% for pos, label in [('TL','↖'),('TC','↑'),('TR','↗'),('ML','←'),('C','⊙'),('MR','→'),('BL','↙'),('BC','↓'),('BR','↘')] %}
+            <button type="button" class="pos-btn {% if cur_pos == pos %}selected{% endif %}"
+              onclick="selectSettingsPos(this,'{{ pos }}')" title="{{ pos }}">{{ label }}</button>
+            {% endfor %}
+          </div>
+          <input type="hidden" id="wm-position-setting" value="{{ settings.wm_position or 'BR' }}" />
+          <div class="form-hint">Default: Bottom-Right (BR) — fixed watermark position</div>
+        </div>
+
+        <!-- Preview box -->
+        <div style="border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-card-2); overflow:hidden; aspect-ratio:9/16; max-height:220px; position:relative; display:flex; align-items:center; justify-content:center;">
+          <span style="font-size:28px; color:var(--text-dim);">🎬</span>
+          <div id="wm-preview-text" style="
+            position:absolute;
+            bottom:10px; right:10px;
+            font-family:Calibri, Arial, sans-serif;
+            font-size:16px;
+            color:rgba(255,255,255,0.9);
+            text-shadow:1px 1px 3px rgba(0,0,0,0.8);
+            pointer-events:none;
+            white-space:nowrap;
+          ">@nikethan</div>
+        </div>
+        <div class="form-hint" style="margin-top:6px;">Live preview (approximate)</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+    <button class="btn btn-primary" onclick="saveWatermarkSettings()">
+      💾 Save Watermark Settings
+    </button>
+  </div>
+</div>
+
+<!-- ── 3. Rate Limits ─────────────────────────────────────── -->
+<div class="section-heading">Rate Limits</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">
+    <div class="card-title">⏱ Auto-Follow Rate Limits</div>
+    <span class="badge badge-orange">Safety Guard</span>
+  </div>
+  <div class="card-body">
+    <div class="two-col">
+      <div>
+        <div class="form-group">
+          <label class="form-label">Max Follows Per Click</label>
+          <input class="form-input mono" id="rl-per-click" type="number"
+            min="1" max="10" value="{{ settings.follow_per_click or 10 }}" />
+          <div class="form-hint">Maximum 10 — Instagram enforces limits. Never exceed this.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Follows Per Hour</label>
+          <input class="form-input mono" id="rl-per-hour" type="number"
+            min="1" max="10" value="{{ settings.follow_per_hour or 10 }}" />
+          <div class="form-hint">Hard cap: 10 per hour to avoid account restrictions.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Delay Between Follows (seconds)</label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="range" id="rl-delay" min="5" max="120" value="{{ settings.follow_delay or 30 }}"
+              style="flex:1; accent-color:var(--accent);"
+              oninput="document.getElementById('rl-delay-val').textContent = this.value + 's'" />
+            <span id="rl-delay-val" style="font-family:var(--font-mono); font-size:13px; min-width:36px;">{{ settings.follow_delay or 30 }}s</span>
+          </div>
+          <div class="form-hint">Recommended: 30+ seconds to mimic human behaviour.</div>
+        </div>
+      </div>
+      <div>
+        <div style="padding:16px; background:rgba(255,170,0,0.06); border:1px solid rgba(255,170,0,0.2); border-radius:var(--radius);">
+          <div style="font-size:13px; font-weight:700; color:var(--accent-gold); margin-bottom:8px;">⚠ Instagram Rate Limits</div>
+          <ul style="font-size:12px; color:var(--text-secondary); line-height:1.9; list-style:none; padding:0;">
+            <li>• Max ~200 follows/day on new accounts</li>
+            <li>• Max ~7,500 total following count</li>
+            <li>• Rapid actions trigger temporary blocks</li>
+            <li>• This tool caps at 10/hour for safety</li>
+            <li>• Always use with a warmed-up account</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary" style="margin-top:8px;" onclick="saveRateLimits()">
+      💾 Save Rate Limits
+    </button>
+  </div>
+</div>
+
+<!-- Cookie preview modal -->
+<div id="cookie-modal" style="display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+  <div class="card" style="width:100%; max-width:680px; margin:20px;">
+    <div class="card-header">
+      <div class="card-title">🍪 cookies.txt Preview</div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cookie-modal').style.display='none'">✕</button>
+    </div>
+    <div class="card-body">
+      <div class="code-block" id="cookie-preview-content" style="max-height:400px; overflow-y:auto; font-size:11px;"></div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Cookie tab switch ────────────────────────────────────
+function switchCookieTab(tab) {
+  document.getElementById('tab-paste').style.display    = tab === 'paste'  ? 'block' : 'none';
+  document.getElementById('tab-upload').style.display   = tab === 'upload' ? 'block' : 'none';
+  document.getElementById('tab-paste-btn').style.background  = tab === 'paste'  ? 'var(--bg-card)' : 'transparent';
+  document.getElementById('tab-paste-btn').style.border      = tab === 'paste'  ? '1px solid var(--border)' : 'none';
+  document.getElementById('tab-upload-btn').style.background = tab === 'upload' ? 'var(--bg-card)' : 'transparent';
+  document.getElementById('tab-upload-btn').style.border     = tab === 'upload' ? '1px solid var(--border)' : 'none';
+}
+
+async function saveCookiePaste() {
+  const text = document.getElementById('cookie-text').value.trim();
+  if (!text) { showToast('Paste your cookies.txt content first', 'warn'); return; }
+  if (!text.includes('instagram.com')) { showToast('This does not look like Instagram cookies', 'warn'); return; }
+  const resp = await postJSON('/api/settings/cookies/save', { content: text });
+  if (resp.ok) { showToast('Cookies saved! ' + resp.lines + ' cookie lines.', 'success'); setTimeout(() => location.reload(), 1200); }
+  else showToast(resp.error || 'Failed to save', 'error');
+}
+
+async function uploadCookieFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('cookie-drop-label').textContent = file.name;
+  const text = await file.text();
+  if (!text.includes('instagram.com')) { showToast('This does not look like Instagram cookies', 'warn'); return; }
+  const resp = await postJSON('/api/settings/cookies/save', { content: text });
+  if (resp.ok) { showToast('Cookies uploaded! ' + resp.lines + ' lines.', 'success'); setTimeout(() => location.reload(), 1200); }
+  else showToast(resp.error || 'Failed', 'error');
+}
+
+async function previewCookies() {
+  const resp = await fetch('/api/settings/cookies/preview');
+  const data = await resp.json();
+  document.getElementById('cookie-preview-content').textContent = data.content || '(empty)';
+  document.getElementById('cookie-modal').style.display = 'flex';
+}
+
+async function deleteCookies() {
+  if (!confirm('Delete cookies.txt? You will need to re-upload to download Reels.')) return;
+  const resp = await postJSON('/api/settings/cookies/delete', {});
+  if (resp.ok) { showToast('Cookies deleted.', 'success'); setTimeout(() => location.reload(), 800); }
+}
+
+// ── Watermark position ───────────────────────────────────
+function selectSettingsPos(btn, value) {
+  document.querySelectorAll('#pos-grid-settings .pos-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('wm-position-setting').value = value;
+  updateWMPreview();
+}
+
+// ── Live watermark preview ───────────────────────────────
+function updateWMPreview() {
+  const text     = document.getElementById('wm-text')?.value || '@nikethan';
+  const font     = document.getElementById('wm-font')?.value || 'Calibri';
+  const size     = document.getElementById('wm-fontsize')?.value || 24;
+  const color    = document.getElementById('wm-color')?.value || '#ffffff';
+  const opacity  = (document.getElementById('wm-opacity')?.value || 85) / 100;
+  const pos      = document.getElementById('wm-position-setting')?.value || 'BR';
+  const el       = document.getElementById('wm-preview-text');
+  if (!el) return;
+
+  el.textContent        = text || '@watermark';
+  el.style.fontFamily   = `${font}, Arial, sans-serif`;
+  el.style.fontSize     = Math.round(size * 0.6) + 'px';
+  el.style.color        = color;
+  el.style.opacity      = opacity;
+
+  const posMap = {
+    TL: {top:'10px',left:'10px',  right:'auto', bottom:'auto'},
+    TC: {top:'10px',left:'50%',   right:'auto', bottom:'auto', transform:'translateX(-50%)'},
+    TR: {top:'10px',right:'10px', left:'auto',  bottom:'auto'},
+    ML: {top:'50%', left:'10px',  right:'auto', bottom:'auto', transform:'translateY(-50%)'},
+    C:  {top:'50%', left:'50%',   right:'auto', bottom:'auto', transform:'translate(-50%,-50%)'},
+    MR: {top:'50%', right:'10px', left:'auto',  bottom:'auto', transform:'translateY(-50%)'},
+    BL: {bottom:'10px',left:'10px',  right:'auto',top:'auto'},
+    BC: {bottom:'10px',left:'50%',   right:'auto',top:'auto', transform:'translateX(-50%)'},
+    BR: {bottom:'10px',right:'10px', left:'auto', top:'auto'},
+  };
+  const p = posMap[pos] || posMap.BR;
+  Object.assign(el.style, {top:'auto',left:'auto',right:'auto',bottom:'auto',transform:''});
+  Object.assign(el.style, p);
+}
+
+// Live update preview as user types
+['wm-text','wm-font','wm-fontsize','wm-color','wm-opacity'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', updateWMPreview);
+});
+
+// Sync color picker → hex input
+document.getElementById('wm-color')?.addEventListener('input', function() {
+  document.getElementById('wm-color-hex').value = this.value;
+  updateWMPreview();
+});
+
+async function saveWatermarkSettings() {
+  const resp = await postJSON('/api/settings/watermark/save', {
+    wm_text:     document.getElementById('wm-text').value,
+    wm_font:     document.getElementById('wm-font').value,
+    wm_fontsize: parseInt(document.getElementById('wm-fontsize').value),
+    wm_color:    document.getElementById('wm-color-hex').value,
+    wm_opacity:  parseInt(document.getElementById('wm-opacity').value),
+    wm_position: document.getElementById('wm-position-setting').value,
+  });
+  if (resp.ok) showToast('Watermark settings saved!', 'success');
+  else showToast(resp.error || 'Failed', 'error');
+}
+
+async function saveRateLimits() {
+  const resp = await postJSON('/api/settings/ratelimits/save', {
+    follow_per_click: parseInt(document.getElementById('rl-per-click').value),
+    follow_per_hour:  parseInt(document.getElementById('rl-per-hour').value),
+    follow_delay:     parseInt(document.getElementById('rl-delay').value),
+  });
+  if (resp.ok) showToast('Rate limits saved!', 'success');
+  else showToast(resp.error || 'Failed', 'error');
+}
+
+async function saveAllSettings() {
+  await saveWatermarkSettings();
+  await saveRateLimits();
+}
+
+// Init preview
+updateWMPreview();
+</script>
+{% endblock %}

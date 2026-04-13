@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+
+{% block login_content %}
+<div class="login-page">
+  <div class="login-box">
+
+    <!-- Brand -->
+    <div class="login-logo">
+      <div class="login-logo-mark">🎬</div>
+      <div>
+        <div class="login-title">Nikethan</div>
+        <div class="login-sub">Reels Toolkit</div>
+      </div>
+    </div>
+
+    <!-- Heading -->
+    <div class="login-head">
+      <h2>Welcome back</h2>
+      <p>Enter your password to access the toolkit.</p>
+    </div>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ 'error' if cat == 'danger' else cat }}" style="margin-bottom:16px;">
+          {{ msg }}
+        </div>
+      {% endfor %}
+    {% endwith %}
+
+    <!-- Form -->
+    <form method="POST" action="{{ url_for('login') }}" id="login-form">
+      <div class="form-group">
+        <label class="form-label" for="password">Password</label>
+        <div class="login-input-wrap">
+          <span class="lock-icon">🔒</span>
+          <input
+            class="form-input"
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Enter password"
+            autocomplete="current-password"
+            autofocus
+          />
+        </div>
+        <div class="capslock-warn" id="caps-warn">⚠️ Caps Lock is on</div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full btn-lg" id="login-btn">
+        <span id="login-btn-text">Sign in →</span>
+      </button>
+    </form>
+
+    <div class="login-footer">
+      <div style="display:flex; align-items:center; gap:8px; justify-content:center; margin-bottom:16px;">
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+        <span>Nikethan Reels Toolkit v1.0</span>
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+      </div>
+      <p>This tool is for personal use only. Respect Instagram's Terms of Service.</p>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Caps Lock detection
+  document.getElementById('password').addEventListener('keyup', function(e) {
+    const warn = document.getElementById('caps-warn');
+    warn.style.display = e.getModifierState('CapsLock') ? 'block' : 'none';
+  });
+
+  // Loading state on submit
+  document.getElementById('login-form').addEventListener('submit', function() {
+    const btn = document.getElementById('login-btn');
+    const txt = document.getElementById('login-btn-text');
+    btn.disabled = true;
+    txt.textContent = 'Signing in…';
+  });
+</script>
+{% endblock %}

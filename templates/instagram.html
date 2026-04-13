@@ -1,0 +1,885 @@
+{% extends "layout.html" %}
+
+{% block title %}Instagram Social Tools — Nikethan{% endblock %}
+{% block breadcrumb %}Instagram Social{% endblock %}
+
+{% block head %}
+<style>
+/* ── Cooling-period countdown ──────────────────────────────── */
+.cooldown-shield {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:32px 20px; text-align:center;
+  border:1px solid rgba(255,170,0,0.25);
+  background:rgba(255,170,0,0.06);
+  border-radius:var(--radius);
+  gap:12px;
+}
+.cooldown-icon { font-size:40px; line-height:1; }
+.cooldown-title { font-size:15px; font-weight:700; color:var(--accent-gold); }
+.cooldown-sub   { font-size:12px; color:var(--text-muted); max-width:300px; line-height:1.6; }
+.countdown-display {
+  font-family:var(--font-mono);
+  font-size:32px;
+  font-weight:800;
+  color:#fff;
+  letter-spacing:0.05em;
+  background:rgba(255,255,255,0.05);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:10px 28px;
+  min-width:180px;
+  text-align:center;
+}
+.batch-gauge {
+  width:100%;
+  height:8px;
+  background:var(--bg-card-2);
+  border:1px solid var(--border);
+  border-radius:99px;
+  overflow:hidden;
+}
+.batch-gauge-fill {
+  height:100%;
+  border-radius:99px;
+  transition:width 0.5s ease;
+}
+
+/* ── Batch action cards ──────────────────────────────────── */
+.action-tabs {
+  display:flex; gap:4px;
+  background:var(--bg-card-2);
+  padding:4px;
+  border-radius:var(--radius-sm);
+  margin-bottom:24px;
+}
+.action-tab {
+  flex:1; padding:10px 16px; font-size:13px; font-weight:600;
+  border:none; border-radius:6px; cursor:pointer;
+  background:transparent; color:var(--text-muted);
+  transition:all .15s;
+}
+.action-tab.active {
+  background:var(--bg-card);
+  color:var(--text);
+  border:1px solid var(--border);
+  box-shadow:0 1px 6px rgba(0,0,0,0.3);
+}
+
+/* ── User pill list ─────────────────────────────────────── */
+.user-pill-list {
+  display:flex; flex-direction:column; gap:4px;
+  max-height:320px; overflow-y:auto;
+}
+.user-pill-item {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 12px;
+  background:var(--bg-card-2);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  transition:border-color .12s;
+}
+.user-pill-item:hover { border-color:var(--border-strong); }
+.user-pill-item input[type="checkbox"] { accent-color:var(--accent); flex-shrink:0; }
+.user-pill-item .uname { font-size:12px; font-weight:600; flex:1; }
+.user-pill-item .ustatus { font-size:10px; color:var(--text-muted); }
+.user-pill-item .ustatus.done { color:var(--accent-green); }
+.user-pill-item .ustatus.fail { color:var(--accent-red); }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+{% if not cookie_ok %}
+  <a href="{{ url_for('settings_page') }}" class="btn btn-ghost btn-sm">Setup Cookies &rarr;</a>
+{% else %}
+  <span class="badge badge-green" style="padding:6px 12px;">Cookies Active</span>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">Instagram Social Tools</span></h1>
+  <p class="page-subtitle">Extract followers/following lists and run batch follow/unfollow with a built-in 2-hour safety window.</p>
+</div>
+
+{% if not cookie_ok %}
+<div class="alert alert-warn" style="margin-bottom:24px;">
+  <strong>cookies.txt not found.</strong>&nbsp;&nbsp;
+  <a href="{{ url_for('settings_page') }}" style="color:var(--accent-gold); text-decoration:underline;">Settings &rarr; Cookies</a> to activate social features.
+</div>
+{% endif %}
+
+<!-- ── Top tabs ──────────────────────────────────────────── -->
+<div class="action-tabs" id="main-tabs">
+  <button class="action-tab active" id="tab-extract-btn"  onclick="switchTab('extract')">📥 Extract Lists</button>
+  <button class="action-tab"        id="tab-follow-btn"   onclick="switchTab('follow')">➕ Batch Follow</button>
+  <button class="action-tab"        id="tab-unfollow-btn" onclick="switchTab('unfollow')">➖ Batch Unfollow</button>
+  <button class="action-tab"        id="tab-saved-btn"    onclick="switchTab('saved')">💾 Saved Lists</button>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     TAB 1 — Extract
+     ════════════════════════════════════════════════════════ -->
+<div id="tab-extract">
+  <div class="two-col">
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="card">
+        <div class="card-header"><div class="card-title">📥 Extract User Lists</div></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Instagram Username</label>
+            <div style="display:flex;gap:8px;">
+              <div style="position:relative;flex:1;">
+                <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);">@</span>
+                <input class="form-input" id="ex-username" type="text" placeholder="username" style="padding-left:26px;" />
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="lookupUser()" id="lookup-btn">🔍 Lookup</button>
+            </div>
+          </div>
+
+          <!-- User preview -->
+          <div id="user-preview" style="display:none;padding:14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--grad-from),var(--grad-to));display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">👤</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:14px;font-weight:700;" id="user-display-name">—</div>
+                <div style="font-size:12px;color:var(--text-muted);" id="user-tag">—</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:10px;color:var(--text-muted);">Followers</div>
+                <div style="font-size:16px;font-weight:700;font-family:var(--font-mono);" id="user-followers-count">—</div>
+              </div>
+              <div style="text-align:right;margin-left:12px;">
+                <div style="font-size:10px;color:var(--text-muted);">Following</div>
+                <div style="font-size:16px;font-weight:700;font-family:var(--font-mono);" id="user-following-count">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Extract</label>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary btn-full" onclick="startExtract('followers')">👥 Followers</button>
+              <button class="btn btn-secondary btn-full" onclick="startExtract('following')">📌 Following</button>
+              <button class="btn btn-primary" onclick="startExtract('both')">⬇ Both</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Max Users</label>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <input type="range" id="ex-max" min="10" max="5000" step="10" value="500" style="flex:1;accent-color:var(--accent);" oninput="document.getElementById('ex-max-val').textContent=this.value+' users'" />
+              <span id="ex-max-val" style="font-family:var(--font-mono);font-size:12px;min-width:70px;">500 users</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <!-- Progress -->
+      <div class="card" id="extract-progress-card" style="display:none;">
+        <div class="card-header">
+          <div class="card-title">Extracting…</div>
+          <span class="badge badge-orange" id="extract-status">Running</span>
+        </div>
+        <div class="card-body">
+          <div class="progress-wrap"><div class="progress-bar animated" id="extract-bar" style="width:20%"></div></div>
+          <div class="sse-log" id="extract-log" style="margin-top:12px;"></div>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div class="card" id="extract-results-card" style="display:none;">
+        <div class="card-header">
+          <div class="card-title">Extracted Users</div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="exportExtracted('csv')">↓ CSV</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportExtracted('json')">↓ JSON</button>
+            <button class="btn btn-primary btn-sm" onclick="sendToFollow()">➕ Follow →</button>
+          </div>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+            <input class="form-input" type="search" placeholder="Search…" style="flex:1;padding:7px 12px;font-size:12px;" oninput="filterTable(this.value)" />
+            <span class="badge badge-gray" id="result-count">0 users</span>
+          </div>
+          <div class="table-wrap" style="max-height:360px;overflow-y:auto;">
+            <table id="users-table">
+              <thead>
+                <tr>
+                  <th style="width:28px;"><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)" style="accent-color:var(--accent);" /></th>
+                  <th>Username</th>
+                  <th>Full Name</th>
+                  <th>Followers</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody id="users-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     TAB 2 — Batch Follow
+     ════════════════════════════════════════════════════════ -->
+<div id="tab-follow" style="display:none;">
+  <div class="two-col">
+    <!-- Left: Config + cooldown -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+      <!-- Cooldown block (shown when in cooldown) -->
+      <div id="follow-cooldown-block" style="display:none;">
+        <div class="cooldown-shield">
+          <div class="cooldown-icon">🧊</div>
+          <div class="cooldown-title">Cooling Period Active</div>
+          <div class="cooldown-sub">You've used all 10 follows in this 2-hour window.<br/>The next batch unlocks in:</div>
+          <div class="countdown-display" id="follow-countdown">2:00:00</div>
+          <div style="font-size:11px;color:var(--text-muted);">Window resets automatically — no action needed.</div>
+        </div>
+      </div>
+
+      <!-- Ready block -->
+      <div id="follow-ready-block">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">➕ Batch Follow</div>
+            <!-- Mini rate badge -->
+            <div id="follow-rate-badge" style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:20px;">
+              <div style="width:7px;height:7px;border-radius:50%;background:var(--accent-green);box-shadow:0 0 5px var(--accent-green);" id="follow-dot"></div>
+              <span style="font-size:11px;font-family:var(--font-mono);" id="follow-rate-text">0 / 10 used</span>
+            </div>
+          </div>
+          <div class="card-body">
+
+            <!-- Batch usage gauge -->
+            <div style="margin-bottom:16px;">
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:6px;">
+                <span>Batch Usage (10 follows / 2 hours)</span>
+                <span id="follow-window-label">Window: ready</span>
+              </div>
+              <div class="batch-gauge">
+                <div class="batch-gauge-fill" id="follow-gauge-fill" style="width:0%;background:linear-gradient(90deg,var(--accent-green),var(--accent-gold));"></div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;" id="follow-gauge-sub">0 of 10 slots used &nbsp;·&nbsp; 10 remaining</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Target Usernames <span style="color:var(--text-muted);font-weight:400;">(one per line)</span></label>
+              <textarea class="form-textarea" id="follow-targets" rows="7" placeholder="username1&#10;username2&#10;username3&#10;…"></textarea>
+              <div class="form-hint" id="follow-target-count">0 usernames entered &nbsp;·&nbsp; max 10 per batch</div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;">
+                <div>
+                  <div style="font-size:13px;font-weight:600;">Skip already‑following</div>
+                  <div style="font-size:11px;color:var(--text-muted);">Avoids duplicates</div>
+                </div>
+                <input type="checkbox" id="skip-existing" checked style="accent-color:var(--accent);width:15px;height:15px;" />
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;">
+                <div>
+                  <div style="font-size:13px;font-weight:600;">Skip private accounts</div>
+                  <div style="font-size:11px;color:var(--text-muted);">Only follow public profiles</div>
+                </div>
+                <input type="checkbox" id="skip-private" style="accent-color:var(--accent);width:15px;height:15px;" />
+              </label>
+            </div>
+
+            <button class="btn btn-primary btn-full btn-lg" id="follow-btn" onclick="startBatchFollow()">
+              ➕ Start Batch Follow
+            </button>
+            <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:6px;">
+              After 10 follows a 2-hour cooling period begins automatically.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Log + stats -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📋 Activity Log</div>
+          <button class="btn btn-ghost btn-sm" onclick="clearLog('follow-log')">Clear</button>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div id="follow-log" style="font-family:var(--font-mono);font-size:11.5px;color:var(--text-secondary);line-height:1.9;padding:14px 16px;min-height:180px;max-height:340px;overflow-y:auto;white-space:pre-wrap;">Ready. Enter usernames and click Start Batch Follow.
+</div>
+        </div>
+      </div>
+
+      <!-- Session stats -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">📊 Session Stats</div></div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+            <div style="text-align:center;padding:12px;background:var(--bg-card-2);border-radius:var(--radius-sm);">
+              <div style="font-size:26px;font-weight:800;font-family:var(--font-mono);color:var(--accent-green);" id="stat-followed">0</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Followed</div>
+            </div>
+            <div style="text-align:center;padding:12px;background:var(--bg-card-2);border-radius:var(--radius-sm);">
+              <div style="font-size:26px;font-weight:800;font-family:var(--font-mono);color:var(--accent-gold);" id="stat-skipped">0</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Skipped</div>
+            </div>
+            <div style="text-align:center;padding:12px;background:var(--bg-card-2);border-radius:var(--radius-sm);">
+              <div style="font-size:26px;font-weight:800;font-family:var(--font-mono);color:var(--accent-red);" id="stat-errors">0</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Errors</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rate limit info box -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">ℹ Rate Policy</div></div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--text-secondary);line-height:1.9;">
+            <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;"><span style="color:var(--accent-green);">✓</span><span>Max <strong>10 follows per 2-hour window</strong></span></div>
+            <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;"><span style="color:var(--accent-green);">✓</span><span>If limit reached, a <strong>cooling period</strong> blocks further actions</span></div>
+            <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;"><span style="color:var(--accent-green);">✓</span><span>Counter resets after the 2-hour window expires</span></div>
+            <div style="display:flex;gap:8px;align-items:flex-start;"><span style="color:var(--accent-gold);">⚠</span><span>Instagram enforces separate limits — use on warmed accounts</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     TAB 3 — Batch Unfollow
+     ════════════════════════════════════════════════════════ -->
+<div id="tab-unfollow" style="display:none;">
+  <div class="two-col">
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+      <!-- Cooldown block -->
+      <div id="unfollow-cooldown-block" style="display:none;">
+        <div class="cooldown-shield" style="border-color:rgba(255,65,65,0.25);background:rgba(255,65,65,0.05);">
+          <div class="cooldown-icon">🛑</div>
+          <div class="cooldown-title" style="color:var(--accent-red);">Unfollow Cooling Period</div>
+          <div class="cooldown-sub">10 unfollows used in this 2-hour window.<br/>Next batch unlocks in:</div>
+          <div class="countdown-display" id="unfollow-countdown">2:00:00</div>
+          <div style="font-size:11px;color:var(--text-muted);">Window resets automatically.</div>
+        </div>
+      </div>
+
+      <!-- Ready block -->
+      <div id="unfollow-ready-block">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">➖ Batch Unfollow</div>
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:20px;">
+              <div style="width:7px;height:7px;border-radius:50%;background:var(--accent-red);" id="unfollow-dot"></div>
+              <span style="font-size:11px;font-family:var(--font-mono);" id="unfollow-rate-text">0 / 10 used</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="margin-bottom:16px;">
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:6px;">
+                <span>Batch Usage (10 unfollows / 2 hours)</span>
+                <span id="unfollow-window-label">Window: ready</span>
+              </div>
+              <div class="batch-gauge">
+                <div class="batch-gauge-fill" id="unfollow-gauge-fill" style="width:0%;background:linear-gradient(90deg,var(--accent-red),#ff8c42);"></div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;" id="unfollow-gauge-sub">0 of 10 slots used</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Usernames to Unfollow <span style="color:var(--text-muted);font-weight:400;">(one per line)</span></label>
+              <textarea class="form-textarea" id="unfollow-targets" rows="7" placeholder="username1&#10;username2&#10;username3&#10;…"></textarea>
+              <div class="form-hint" id="unfollow-target-count">0 usernames entered &nbsp;·&nbsp; max 10 per batch</div>
+            </div>
+
+            <div style="margin-bottom:16px;padding:12px 14px;background:rgba(255,65,65,0.06);border:1px solid rgba(255,65,65,0.2);border-radius:var(--radius-sm);">
+              <div style="font-size:12px;color:#ff9090;line-height:1.7;">
+                <strong style="color:var(--accent-red);">Caution:</strong> Unfollowing cannot be undone automatically. Make sure you've verified the usernames before starting.
+              </div>
+            </div>
+
+            <button class="btn btn-full btn-lg" id="unfollow-btn" onclick="startBatchUnfollow()"
+              style="background:rgba(255,65,65,0.12);color:#ff6b6b;border:1px solid rgba(255,65,65,0.3);font-size:14px;padding:12px;">
+              ➖ Start Batch Unfollow
+            </button>
+            <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:6px;">
+              After 10 unfollows a 2-hour cooling period begins.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: log + stats -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📋 Unfollow Log</div>
+          <button class="btn btn-ghost btn-sm" onclick="clearLog('unfollow-log')">Clear</button>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div id="unfollow-log" style="font-family:var(--font-mono);font-size:11.5px;color:var(--text-secondary);line-height:1.9;padding:14px 16px;min-height:180px;max-height:340px;overflow-y:auto;white-space:pre-wrap;">Ready. Enter usernames and click Start Batch Unfollow.
+</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">📊 Unfollow Stats</div></div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+            <div style="text-align:center;padding:12px;background:var(--bg-card-2);border-radius:var(--radius-sm);">
+              <div style="font-size:26px;font-weight:800;font-family:var(--font-mono);color:var(--accent-red);" id="stat-unfollowed">0</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Unfollowed</div>
+            </div>
+            <div style="text-align:center;padding:12px;background:var(--bg-card-2);border-radius:var(--radius-sm);">
+              <div style="font-size:26px;font-weight:800;font-family:var(--font-mono);color:var(--accent-gold);" id="stat-uf-skipped">0</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Skipped</div>
+            </div>
+            <div style="text-align:center;padding:12px;background:var(--bg-card-2);border-radius:var(--radius-sm);">
+              <div style="font-size:26px;font-weight:800;font-family:var(--font-mono);color:var(--text-muted);" id="stat-uf-errors">0</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Errors</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     TAB 4 — Saved Lists
+     ════════════════════════════════════════════════════════ -->
+<div id="tab-saved" style="display:none;">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">💾 Saved Extraction Lists</div>
+      <button class="btn btn-ghost btn-sm" onclick="location.reload()">↻ Refresh</button>
+    </div>
+    <div class="card-body">
+      {% if saved_lists %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Username</th><th>Type</th><th>Count</th><th>Extracted</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sl in saved_lists %}
+            <tr>
+              <td><span style="color:var(--accent-green);font-weight:600;">@{{ sl.username }}</span></td>
+              <td><span class="badge {{ 'badge-blue' if sl.list_type == 'followers' else 'badge-orange' }}">{{ sl.list_type }}</span></td>
+              <td><span style="font-family:var(--font-mono);">{{ sl.count }}</span></td>
+              <td style="color:var(--text-muted);font-size:12px;">{{ sl.extracted_at[:16] }}</td>
+              <td>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn btn-ghost btn-sm" onclick="loadListToFollow('{{ sl.id }}','{{ sl.username }}')">Follow →</button>
+                  <a href="/api/instagram/export/{{ sl.id }}/csv" class="btn btn-ghost btn-sm">CSV</a>
+                  <button class="btn btn-danger btn-sm" onclick="deleteList('{{ sl.id }}')">✕</button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:40px;color:var(--text-muted);">
+        <div style="font-size:32px;margin-bottom:12px;">📭</div>
+        <p>No saved lists yet. Extract followers/following from the Extract Lists tab.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ═══════════════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════════════
+let extractedUsers = [];
+let followCountdownInterval  = null;
+let unfollowCountdownInterval = null;
+
+// ── Tab switcher ────────────────────────────────────────────
+function switchTab(tab) {
+  ['extract','follow','unfollow','saved'].forEach(t => {
+    const pane = document.getElementById('tab-' + t);
+    const btn  = document.getElementById('tab-' + t + '-btn');
+    if (pane) pane.style.display = t === tab ? 'block' : 'none';
+    if (btn)  btn.classList.toggle('active', t === tab);
+  });
+  if (tab === 'follow')   refreshFollowStatus();
+  if (tab === 'unfollow') refreshUnfollowStatus();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Rate status helpers
+// ═══════════════════════════════════════════════════════════
+async function refreshFollowStatus() {
+  const resp = await fetch('/api/instagram/follow/status');
+  const s    = await resp.json();
+  applyFollowStatus(s);
+}
+
+async function refreshUnfollowStatus() {
+  const resp = await fetch('/api/instagram/unfollow/status');
+  const s    = await resp.json();
+  applyUnfollowStatus(s);
+}
+
+function applyFollowStatus(s) {
+  const pct = (s.used / 10) * 100;
+  document.getElementById('follow-gauge-fill').style.width = pct + '%';
+  document.getElementById('follow-gauge-sub').textContent  =
+    `${s.used} of 10 slots used  ·  ${s.remaining} remaining`;
+  document.getElementById('follow-rate-text').textContent  = `${s.used} / 10 used`;
+  document.getElementById('follow-rate-badge').style.borderColor =
+    s.in_cooldown ? 'rgba(255,65,65,0.4)' : 'var(--border)';
+
+  if (s.in_cooldown) {
+    document.getElementById('follow-cooldown-block').style.display = 'block';
+    document.getElementById('follow-ready-block').style.display    = 'none';
+    startCountdown('follow-countdown', s.seconds_left, followCountdownInterval, (id) => {
+      followCountdownInterval = id;
+    }, () => refreshFollowStatus());
+    document.getElementById('follow-dot').style.background = 'var(--accent-red)';
+    document.getElementById('follow-window-label').textContent = 'Cooling: ' + fmtDur(s.seconds_left);
+  } else {
+    document.getElementById('follow-cooldown-block').style.display = 'none';
+    document.getElementById('follow-ready-block').style.display    = 'block';
+    document.getElementById('follow-dot').style.background = 'var(--accent-green)';
+    const winMs = s.window_start * 1000;
+    document.getElementById('follow-window-label').textContent =
+      s.used === 0 ? 'Window: fresh' :
+      'Resets: ' + fmtDur(s.seconds_left);
+    clearInterval(followCountdownInterval);
+  }
+}
+
+function applyUnfollowStatus(s) {
+  const pct = (s.used / 10) * 100;
+  document.getElementById('unfollow-gauge-fill').style.width = pct + '%';
+  document.getElementById('unfollow-gauge-sub').textContent  = `${s.used} of 10 slots used`;
+  document.getElementById('unfollow-rate-text').textContent  = `${s.used} / 10 used`;
+
+  if (s.in_cooldown) {
+    document.getElementById('unfollow-cooldown-block').style.display = 'block';
+    document.getElementById('unfollow-ready-block').style.display    = 'none';
+    startCountdown('unfollow-countdown', s.seconds_left, unfollowCountdownInterval, (id) => {
+      unfollowCountdownInterval = id;
+    }, () => refreshUnfollowStatus());
+    document.getElementById('unfollow-dot').style.boxShadow = '0 0 6px var(--accent-red)';
+    document.getElementById('unfollow-window-label').textContent = 'Cooling: ' + fmtDur(s.seconds_left);
+  } else {
+    document.getElementById('unfollow-cooldown-block').style.display = 'none';
+    document.getElementById('unfollow-ready-block').style.display    = 'block';
+    document.getElementById('unfollow-window-label').textContent =
+      s.used === 0 ? 'Window: fresh' : 'Resets: ' + fmtDur(s.seconds_left);
+    clearInterval(unfollowCountdownInterval);
+  }
+}
+
+// ── Countdown timer ─────────────────────────────────────────
+function startCountdown(elemId, initialSeconds, existingId, setId, onDone) {
+  clearInterval(existingId);
+  let remaining = initialSeconds;
+  const el = document.getElementById(elemId);
+  const update = () => {
+    if (remaining <= 0) {
+      clearInterval(id);
+      if (el) el.textContent = '0:00:00';
+      if (onDone) onDone();
+      return;
+    }
+    if (el) el.textContent = fmtCountdown(remaining);
+    remaining--;
+  };
+  update();
+  const id = setInterval(update, 1000);
+  setId(id);
+}
+
+function fmtCountdown(s) {
+  const h  = Math.floor(s / 3600);
+  const m  = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  return `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+}
+
+function fmtDur(s) {
+  if (!s || s <= 0) return 'now';
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${s % 60}s`;
+}
+
+// ── Username counter ─────────────────────────────────────── 
+document.getElementById('follow-targets')?.addEventListener('input', function() {
+  const n = this.value.split('\n').filter(l => l.trim()).length;
+  const capped = Math.min(n, 10);
+  document.getElementById('follow-target-count').textContent =
+    `${n} username${n === 1 ? '' : 's'} entered  ·  ${capped} will be processed (max 10)`;
+});
+document.getElementById('unfollow-targets')?.addEventListener('input', function() {
+  const n = this.value.split('\n').filter(l => l.trim()).length;
+  const capped = Math.min(n, 10);
+  document.getElementById('unfollow-target-count').textContent =
+    `${n} username${n === 1 ? '' : 's'} entered  ·  ${capped} will be processed (max 10)`;
+});
+
+// ═══════════════════════════════════════════════════════════
+//  Batch Follow
+// ═══════════════════════════════════════════════════════════
+async function startBatchFollow() {
+  const raw = document.getElementById('follow-targets').value.trim();
+  if (!raw) { showToast('Enter usernames to follow', 'warn'); return; }
+  const targets = raw.split('\n').map(l => l.trim().replace('@','')).filter(Boolean).slice(0, 10);
+  if (!targets.length) { showToast('No valid usernames', 'warn'); return; }
+
+  document.getElementById('follow-btn').disabled = true;
+  document.getElementById('follow-btn').textContent = 'Processing…';
+  appendLog('follow-log', `Starting batch follow: ${targets.length} users...`);
+
+  const resp = await postJSON('/api/instagram/follow', {
+    usernames:     targets,
+    skip_existing: document.getElementById('skip-existing').checked,
+    skip_private:  document.getElementById('skip-private').checked,
+  });
+
+  if (!resp.job_id) {
+    if (resp.in_cooldown) {
+      showToast(`Cooling period active! Try again in ${fmtDur(resp.seconds_left)}.`, 'warn');
+      appendLog('follow-log', `BLOCKED: Cooling period — ${fmtDur(resp.seconds_left)} remaining.`);
+      refreshFollowStatus();
+    } else {
+      showToast(resp.error || 'Failed to start', 'error');
+    }
+    document.getElementById('follow-btn').disabled = false;
+    document.getElementById('follow-btn').textContent = '➕ Start Batch Follow';
+    return;
+  }
+
+  startSSEProgress({
+    url: '/api/instagram/progress/' + resp.job_id,
+    logId: 'follow-log',
+    barId: '__dummy__',
+    statusId: '__dummy__',
+    onComplete: function(d) {
+      document.getElementById('follow-btn').disabled = false;
+      document.getElementById('follow-btn').textContent = '➕ Start Batch Follow';
+
+      // Update stats
+      document.getElementById('stat-followed').textContent =
+        parseInt(document.getElementById('stat-followed').textContent) + (d.followed || 0);
+      document.getElementById('stat-skipped').textContent  =
+        parseInt(document.getElementById('stat-skipped').textContent)  + (d.skipped  || 0);
+      document.getElementById('stat-errors').textContent   =
+        parseInt(document.getElementById('stat-errors').textContent)   + (d.errors   || 0);
+
+      if (d.in_cooldown) {
+        showToast(`Batch complete. Cooling period started — ${fmtDur(d.seconds_left)} until next batch.`, 'warn');
+      } else {
+        showToast(`Followed ${d.followed} users. ${d.remaining} slots remaining this window.`, 'success');
+      }
+      refreshFollowStatus();
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Batch Unfollow
+// ═══════════════════════════════════════════════════════════
+async function startBatchUnfollow() {
+  const raw = document.getElementById('unfollow-targets').value.trim();
+  if (!raw) { showToast('Enter usernames to unfollow', 'warn'); return; }
+  const targets = raw.split('\n').map(l => l.trim().replace('@','')).filter(Boolean).slice(0, 10);
+  if (!targets.length) { showToast('No valid usernames', 'warn'); return; }
+
+  if (!confirm(`Unfollow ${targets.length} users? This cannot be undone automatically.`)) return;
+
+  document.getElementById('unfollow-btn').disabled = true;
+  document.getElementById('unfollow-btn').textContent = 'Processing…';
+  appendLog('unfollow-log', `Starting batch unfollow: ${targets.length} users...`);
+
+  const resp = await postJSON('/api/instagram/unfollow', { usernames: targets });
+
+  if (!resp.job_id) {
+    if (resp.in_cooldown) {
+      showToast(`Cooling period active! Try again in ${fmtDur(resp.seconds_left)}.`, 'warn');
+      appendLog('unfollow-log', `BLOCKED: Cooling period — ${fmtDur(resp.seconds_left)} remaining.`);
+      refreshUnfollowStatus();
+    } else {
+      showToast(resp.error || 'Failed to start', 'error');
+    }
+    document.getElementById('unfollow-btn').disabled = false;
+    document.getElementById('unfollow-btn').textContent = '➖ Start Batch Unfollow';
+    return;
+  }
+
+  startSSEProgress({
+    url: '/api/instagram/progress/' + resp.job_id,
+    logId: 'unfollow-log',
+    barId: '__dummy__',
+    statusId: '__dummy__',
+    onComplete: function(d) {
+      document.getElementById('unfollow-btn').disabled = false;
+      document.getElementById('unfollow-btn').textContent = '➖ Start Batch Unfollow';
+
+      document.getElementById('stat-unfollowed').textContent =
+        parseInt(document.getElementById('stat-unfollowed').textContent) + (d.unfollowed || 0);
+      document.getElementById('stat-uf-skipped').textContent  =
+        parseInt(document.getElementById('stat-uf-skipped').textContent)  + (d.skipped  || 0);
+      document.getElementById('stat-uf-errors').textContent   =
+        parseInt(document.getElementById('stat-uf-errors').textContent)   + (d.errors   || 0);
+
+      if (d.in_cooldown) {
+        showToast(`Unfollow batch done. Cooling period: ${fmtDur(d.seconds_left)}.`, 'warn');
+      } else {
+        showToast(`Unfollowed ${d.unfollowed} users. ${d.remaining} slots remaining.`, 'success');
+      }
+      refreshUnfollowStatus();
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  User Lookup
+// ═══════════════════════════════════════════════════════════
+async function lookupUser() {
+  const username = document.getElementById('ex-username').value.trim().replace('@','');
+  if (!username) { showToast('Enter a username', 'warn'); return; }
+  document.getElementById('lookup-btn').textContent = '…';
+  const resp = await postJSON('/api/instagram/lookup', { username });
+  document.getElementById('lookup-btn').textContent = '🔍 Lookup';
+  if (resp.error) { showToast(resp.error, 'error'); return; }
+  document.getElementById('user-preview').style.display        = 'block';
+  document.getElementById('user-display-name').textContent     = resp.full_name || username;
+  document.getElementById('user-tag').textContent              = '@' + username + (resp.is_private ? ' 🔒' : '');
+  document.getElementById('user-followers-count').textContent  = fmtNum(resp.followers_count);
+  document.getElementById('user-following-count').textContent  = fmtNum(resp.following_count);
+}
+
+function fmtNum(n) {
+  if (!n && n !== 0) return '—';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n;
+}
+
+// ── Extract ─────────────────────────────────────────────────
+async function startExtract(listType) {
+  const username = document.getElementById('ex-username').value.trim().replace('@','');
+  if (!username) { showToast('Enter a username first', 'warn'); return; }
+  const maxUsers = parseInt(document.getElementById('ex-max').value);
+
+  document.getElementById('extract-progress-card').style.display = 'block';
+  document.getElementById('extract-results-card').style.display  = 'none';
+  document.getElementById('extract-log').textContent = '';
+  document.getElementById('extract-bar').style.width = '5%';
+  document.getElementById('extract-status').textContent = 'Running';
+  document.getElementById('extract-status').className  = 'badge badge-orange';
+
+  const resp = await postJSON('/api/instagram/extract', { username, list_type: listType, max_users: maxUsers });
+  if (!resp.job_id) { showToast(resp.error || 'Failed to start', 'error'); return; }
+
+  startSSEProgress({
+    url: '/api/instagram/progress/' + resp.job_id,
+    logId: 'extract-log',
+    barId: 'extract-bar',
+    statusId: 'extract-status',
+    onComplete: function(d) {
+      document.getElementById('extract-status').className = 'badge badge-green';
+      extractedUsers = d.users || [];
+      renderUserTable(extractedUsers);
+      document.getElementById('extract-results-card').style.display = 'block';
+      showToast('Extracted ' + extractedUsers.length + ' users!', 'success');
+    }
+  });
+}
+
+function renderUserTable(users) {
+  document.getElementById('result-count').textContent = users.length + ' users';
+  document.getElementById('users-tbody').innerHTML = users.map(u => `
+    <tr data-username="${u.username}" data-name="${(u.full_name||'').toLowerCase()}">
+      <td><input type="checkbox" class="user-check" value="${u.username}" style="accent-color:var(--accent);" /></td>
+      <td><a href="https://instagram.com/${u.username}" target="_blank" style="color:var(--accent-blue);">@${u.username}</a></td>
+      <td style="font-size:12px;color:var(--text-secondary);">${u.full_name||'—'}</td>
+      <td style="font-family:var(--font-mono);font-size:12px;">${fmtNum(u.followers_count)}</td>
+      <td><span class="badge ${u.list_type==='followers'?'badge-blue':'badge-orange'}">${u.list_type||'—'}</span></td>
+    </tr>
+  `).join('');
+}
+
+function filterTable(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#users-tbody tr').forEach(r => {
+    r.style.display = (r.dataset.username.includes(q)||r.dataset.name.includes(q)) ? '' : 'none';
+  });
+}
+
+function toggleSelectAll(cb) {
+  document.querySelectorAll('.user-check').forEach(c => c.checked = cb.checked);
+}
+
+function exportExtracted(fmt) {
+  if (!extractedUsers.length) { showToast('No data to export', 'warn'); return; }
+  const content = fmt === 'csv'
+    ? ['username,full_name,followers_count,list_type'].concat(
+        extractedUsers.map(u => `${u.username},${u.full_name||''},${u.followers_count||''},${u.list_type||''}`)
+      ).join('\n')
+    : JSON.stringify(extractedUsers, null, 2);
+  const blob = new Blob([content], {type: fmt==='csv'?'text/csv':'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'extracted_users.' + fmt;
+  a.click();
+}
+
+function sendToFollow() {
+  const names = extractedUsers.map(u => u.username).join('\n');
+  document.getElementById('follow-targets').value = names;
+  switchTab('follow');
+  showToast('Pasted ' + extractedUsers.length + ' usernames into Batch Follow', 'info');
+}
+
+async function loadListToFollow(id, username) {
+  const resp = await fetch('/api/instagram/export/' + id + '/csv');
+  const text = await resp.text();
+  const names = text.split('\n').slice(1).map(l => l.split(',')[0]).filter(Boolean);
+  document.getElementById('follow-targets').value = names.join('\n');
+  switchTab('follow');
+  showToast('Loaded ' + names.length + ' users from @' + username + ' list', 'info');
+}
+
+async function deleteList(id) {
+  if (!confirm('Delete this saved list?')) return;
+  const resp = await postJSON('/api/instagram/lists/delete', { id });
+  if (resp.ok) { showToast('Deleted', 'success'); location.reload(); }
+}
+
+// ── Misc ────────────────────────────────────────────────────
+function appendLog(id, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent += '[' + new Date().toLocaleTimeString() + '] ' + msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog(id) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = '';
+}
+
+// ── Init
+refreshFollowStatus();
+refreshUnfollowStatus();
+</script>
+{% endblock %}

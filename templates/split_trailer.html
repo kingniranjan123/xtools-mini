@@ -1,0 +1,287 @@
+{% extends "layout.html" %}
+
+{% block title %}Trailer Clip — Nikethan{% endblock %}
+{% block breadcrumb %}Trailer Clip{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">Trailer Clip</span></h1>
+  <p class="page-subtitle">Extract multiple from/to time ranges from a video. Optionally concatenate all clips into one trailer.</p>
+</div>
+
+<div class="two-col">
+
+  <!-- Left: Config -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+
+    <!-- File picker -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📹 Input Video</div>
+      </div>
+      <div class="card-body">
+        <div class="drop-zone" id="tr-drop">
+          <input type="file" id="tr-file" accept="video/*" style="display:none;" />
+          <div class="drop-icon" id="tr-drop-icon">🎬</div>
+          <div class="drop-label" id="tr-drop-label">Click or drag a video file</div>
+          <div class="drop-hint">MP4, MOV, AVI supported</div>
+        </div>
+        <div id="tr-file-info" style="display:none; margin-top:12px; padding:12px; background:var(--bg-card-2); border:1px solid var(--border); border-radius:var(--radius-sm);">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:13px; font-weight:600;" id="tr-filename">—</span>
+            <span class="badge badge-gray" id="tr-duration-badge">?s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Time ranges table -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">⏱️ Time Ranges</div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="addClipRow()">+ Add Clip</button>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div class="table-wrap">
+          <table id="clip-table">
+            <thead>
+              <tr>
+                <th style="width:32px;"></th>
+                <th>From</th>
+                <th>To</th>
+                <th>Label</th>
+                <th style="width:40px;"></th>
+              </tr>
+            </thead>
+            <tbody id="clip-tbody">
+              <tr class="clip-tr" data-id="1">
+                <td style="color:var(--text-dim); text-align:center; cursor:grab;">⣿</td>
+                <td><input class="form-input mono" type="text" placeholder="00:00:00" name="from_1" id="from_1" oninput="updatePreview()" /></td>
+                <td><input class="form-input mono" type="text" placeholder="00:00:30" name="to_1" id="to_1" oninput="updatePreview()" /></td>
+                <td><input class="form-input" type="text" placeholder="Hook" name="label_1" /></td>
+                <td style="text-align:center;">
+                  <button type="button" class="btn btn-ghost btn-sm" onclick="removeClipRow(this)" title="Remove">✕</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="padding:12px 16px; border-top:1px solid var(--border);">
+          <button type="button" class="btn btn-ghost btn-sm btn-full" onclick="addClipRow()">
+            + Add Another Clip Range
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Options + Run -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+
+    <!-- Options -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">⚙️ Options</div>
+      </div>
+      <div class="card-body">
+
+        <!-- Concat toggle -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-card-2); margin-bottom:12px;">
+          <div>
+            <div style="font-size:13px; font-weight:600;">Concatenate into Trailer</div>
+            <div style="font-size:11px; color:var(--text-muted);">Merge all clips into one output file.</div>
+          </div>
+          <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="tr-concat" style="accent-color:var(--accent); width:16px; height:16px;" onchange="updatePreview()" />
+            <span style="font-size:13px; font-weight:600;">On</span>
+          </label>
+        </div>
+
+        <!-- CUDA toggle -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-card-2); margin-bottom:16px;">
+          <div>
+            <div style="font-size:13px; font-weight:600;">CUDA Acceleration</div>
+            <div style="font-size:11px; color:var(--text-muted);" id="tr-cuda-hint">
+              {% if g.get('cuda_available') %}
+                🚀 CUDA (h264_nvenc) will be used.
+              {% else %}
+                🖥️ CPU mode (libx264) — CUDA not detected.
+              {% endif %}
+            </div>
+          </div>
+          <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="tr-cuda" {% if g.get('cuda_available') %}checked{% endif %}
+              style="accent-color:var(--accent); width:16px; height:16px;"
+              onchange="document.getElementById('cuda-hint') && toggleCudaHint(this.checked)" />
+            <span style="font-size:13px; font-weight:600;">Use CUDA</span>
+          </label>
+        </div>
+
+        <!-- Summary -->
+        <div id="tr-summary" style="padding:14px; background:rgba(78,158,255,0.06); border:1px solid rgba(78,158,255,0.2); border-radius:var(--radius-sm); margin-bottom:16px; display:none;">
+          <div style="font-size:12px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:8px;">Extraction Plan</div>
+          <div id="tr-summary-text" style="font-size:13px; line-height:1.8;"></div>
+        </div>
+
+        <button class="btn btn-primary btn-full btn-lg" id="tr-run-btn" onclick="startTrailer()" disabled>
+          ▷ Extract Clips
+        </button>
+        <div class="form-hint" style="text-align:center; margin-top:6px;" id="tr-run-hint">Select a video file to begin.</div>
+      </div>
+    </div>
+
+    <!-- FFmpeg preview -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">💻 FFmpeg Preview</div>
+      </div>
+      <div class="card-body">
+        <div class="code-block" id="tr-ffmpeg-preview">
+# Configure your clips to see the FFmpeg commands
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="card" id="tr-progress-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">⏳ Extracting</div>
+        <span class="badge badge-orange" id="tr-status">Running</span>
+      </div>
+      <div class="card-body">
+        <div class="progress-wrap">
+          <div class="progress-bar animated" id="tr-bar" style="width:0%"></div>
+        </div>
+        <div class="sse-log" id="tr-log" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="card" id="tr-results-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">✅ Output Files</div>
+      </div>
+      <div class="card-body">
+        <div id="tr-results-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+    </div>
+
+  </div><!-- /right -->
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let trFile = null;
+let trDuration = 0;
+
+initDropZone('tr-drop', 'tr-file', 'tr-drop-label', function(file) {
+  trFile = file;
+  document.getElementById('tr-drop-icon').textContent = '✅';
+  document.getElementById('tr-drop-label').textContent = file.name;
+  document.getElementById('tr-file-info').style.display = 'block';
+  document.getElementById('tr-filename').textContent = file.name;
+
+  const vid = document.createElement('video');
+  vid.preload = 'metadata';
+  vid.src = URL.createObjectURL(file);
+  vid.onloadedmetadata = function() {
+    trDuration = Math.round(vid.duration);
+    document.getElementById('tr-duration-badge').textContent = trDuration + 's';
+    URL.revokeObjectURL(vid.src);
+    document.getElementById('tr-run-btn').disabled = false;
+    document.getElementById('tr-run-hint').textContent = 'Ready — add your time ranges and click Extract.';
+    updatePreview();
+  };
+});
+
+function getClips() {
+  const rows = document.querySelectorAll('.clip-tr');
+  return Array.from(rows).map((row, i) => ({
+    id:    row.dataset.id,
+    from:  row.querySelector(`input[name^="from_"]`)?.value || '',
+    to:    row.querySelector(`input[name^="to_"]`)?.value || '',
+    label: row.querySelector(`input[name^="label_"]`)?.value || ('clip_' + (i+1))
+  }));
+}
+
+function updatePreview() {
+  const clips   = getClips().filter(c => c.from && c.to);
+  const concat  = document.getElementById('tr-concat').checked;
+  const useCuda = document.getElementById('tr-cuda').checked;
+  const hw      = useCuda ? '-hwaccel cuda ' : '';
+  const codec   = useCuda ? 'h264_nvenc' : 'libx264';
+
+  if (!clips.length) return;
+
+  // Summary
+  const sumEl = document.getElementById('tr-summary');
+  const sumTxt = document.getElementById('tr-summary-text');
+  sumEl.style.display = 'block';
+  sumTxt.innerHTML = clips.map((c, i) =>
+    `<div><strong style="color:var(--accent-blue);">Clip ${i+1}</strong> · ${c.from} → ${c.to}${c.label && c.label !== 'clip_' + (i+1) ? ' <em style="color:var(--text-muted);">(' + c.label + ')</em>' : ''}</div>`
+  ).join('') + (concat ? '<div style="margin-top:6px; color:var(--accent-green);">→ Concatenating all clips into <strong>trailer.mp4</strong></div>' : '');
+
+  // FFmpeg preview
+  const cmds = clips.map((c, i) =>
+    `# Clip ${i + 1}: ${c.label}\nffmpeg ${hw}-ss ${c.from} -to ${c.to} -i "input.mp4" \\\n  -c:v ${codec} -c:a aac "clip_${String(i+1).padStart(3,'0')}.mp4"`
+  ).join('\n\n');
+  const concatCmd = concat ? `\n\n# Concatenate\nffmpeg -f concat -safe 0 -i filelist.txt -c copy "trailer.mp4"` : '';
+  document.getElementById('tr-ffmpeg-preview').textContent = cmds + concatCmd;
+}
+
+// Re-render preview when new clip rows get their times entered
+document.getElementById('clip-tbody').addEventListener('input', updatePreview);
+
+async function startTrailer() {
+  if (!trFile) { showToast('Select a video file first', 'warn'); return; }
+  const clips = getClips().filter(c => c.from && c.to);
+  if (!clips.length) { showToast('Add at least one time range', 'warn'); return; }
+
+  const fd = new FormData();
+  fd.append('video', trFile);
+  fd.append('clips', JSON.stringify(clips));
+  fd.append('concat', document.getElementById('tr-concat').checked ? '1' : '0');
+  fd.append('use_cuda', document.getElementById('tr-cuda').checked ? '1' : '0');
+
+  document.getElementById('tr-run-btn').disabled = true;
+  document.getElementById('tr-run-btn').textContent = 'Extracting…';
+  document.getElementById('tr-progress-card').style.display = 'block';
+  document.getElementById('tr-log').textContent = '';
+  document.getElementById('tr-bar').style.width = '0%';
+  document.getElementById('tr-results-card').style.display = 'none';
+
+  const resp = await fetch('/api/split/trailer', { method: 'POST', body: fd });
+  const data = await resp.json();
+
+  if (!data.job_id) {
+    showToast(data.error || 'Failed to start', 'error');
+    document.getElementById('tr-run-btn').disabled = false;
+    document.getElementById('tr-run-btn').textContent = '▷ Extract Clips';
+    return;
+  }
+
+  startSSEProgress({
+    url: '/api/split/progress/' + data.job_id,
+    logId: 'tr-log',
+    barId: 'tr-bar',
+    statusId: 'tr-status',
+    onComplete: function(d) {
+      document.getElementById('tr-run-btn').disabled = false;
+      document.getElementById('tr-run-btn').textContent = '▷ Extract Clips';
+      document.getElementById('tr-status').className = 'badge badge-green';
+      const resultsCard = document.getElementById('tr-results-card');
+      resultsCard.style.display = 'block';
+      document.getElementById('tr-results-list').innerHTML = (d.files || []).map((f, i) => `
+        <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--bg-card-2); border:1px solid var(--border); border-radius:var(--radius-sm);">
+          <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); min-width:48px;">${f.label || 'Clip ' + (i+1)}</span>
+          <span style="flex:1; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
+          <span class="badge badge-green">✓</span>
+        </div>
+      `).join('');
+    }
+  });
+}
+</script>
+{% endblock %}

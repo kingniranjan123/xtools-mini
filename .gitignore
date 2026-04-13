@@ -1,0 +1,9 @@
+cookies.txt
+reels_db.sqlite
+downloads/
+tmp_uploads/
+__pycache__/
+*.pyc
+.env
+_rate_state.json
+.vscode/

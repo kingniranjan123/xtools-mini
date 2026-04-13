@@ -1,0 +1,240 @@
+{% extends "layout.html" %}
+
+{% block title %}Equal Split — Nikethan{% endblock %}
+{% block breadcrumb %}Equal Split{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">Equal Split</span></h1>
+  <p class="page-subtitle">Divide any video into equal-duration segments by specifying the segment length in seconds.</p>
+</div>
+
+<div class="two-col">
+
+  <!-- Left: Config -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📹 Input Video</div>
+      </div>
+      <div class="card-body">
+        <div class="drop-zone" id="eq-drop">
+          <input type="file" id="eq-file" accept="video/*" style="display:none;" />
+          <div class="drop-icon" id="eq-drop-icon">🎬</div>
+          <div class="drop-label" id="eq-drop-label">Click or drag a video file</div>
+          <div class="drop-hint">MP4, MOV, AVI supported</div>
+        </div>
+        <div id="eq-file-info" style="display:none; margin-top:12px; padding:12px; background:var(--bg-card-2); border:1px solid var(--border); border-radius:var(--radius-sm);">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:13px; font-weight:600;" id="eq-filename">—</span>
+            <span class="badge badge-gray" id="eq-duration-badge">?s</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;" id="eq-filesize">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">⊟ Split Settings</div>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label" for="eq-n">Segment Duration (seconds)</label>
+          <input class="form-input mono" type="number" id="eq-n" name="n" value="30" min="1" max="3600"
+            oninput="previewSplit()" />
+          <div class="form-hint">Each segment will be approximately <strong id="eq-preview-text">—</strong></div>
+        </div>
+
+        <!-- CUDA toggle -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-card-2); margin-bottom:16px;">
+          <div>
+            <div style="font-size:13px; font-weight:600;">CUDA Acceleration</div>
+            <div style="font-size:11px; color:var(--text-muted);" id="cuda-hint">
+              {% if g.get('cuda_available') %}
+                🚀 CUDA (h264_nvenc) will be used for hardware-accelerated encoding.
+              {% else %}
+                🖥️ CPU mode (libx264) — CUDA not detected on this machine.
+              {% endif %}
+            </div>
+          </div>
+          <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="eq-cuda" {% if g.get('cuda_available') %}checked{% endif %}
+              style="accent-color:var(--accent); width:16px; height:16px;"
+              onchange="toggleCudaHint(this.checked)" />
+            <span style="font-size:13px; font-weight:600;">Use CUDA</span>
+          </label>
+        </div>
+
+        <!-- Preview box -->
+        <div id="eq-preview-card" style="display:none; padding:14px; background:rgba(255,60,172,0.06); border:1px solid rgba(255,60,172,0.2); border-radius:var(--radius-sm); margin-bottom:16px;">
+          <div style="font-size:12px; color:var(--text-secondary); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.08em; font-weight:700;">Split Preview</div>
+          <div style="display:flex; gap:16px; flex-wrap:wrap;">
+            <div><div style="font-size:22px; font-weight:800; font-family:var(--font-mono);" id="preview-segments">—</div><div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;">Segments</div></div>
+            <div><div style="font-size:22px; font-weight:800; font-family:var(--font-mono);" id="preview-seg-dur">—</div><div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;">Each Segment</div></div>
+            <div><div style="font-size:22px; font-weight:800; font-family:var(--font-mono);" id="preview-total">—</div><div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;">Total Duration</div></div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-full btn-lg" id="eq-split-btn" onclick="startEqualSplit()" disabled>
+          ⊟ Split Video
+        </button>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Progress + Output -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <!-- FFmpeg command preview -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">💻 FFmpeg Command Preview</div>
+      </div>
+      <div class="card-body">
+        <div class="code-block" id="ffmpeg-preview">
+# Select a file and configure settings to preview the command
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="card" id="eq-progress-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">⏳ Splitting</div>
+        <span class="badge badge-orange" id="eq-status">Running</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">
+          <span id="eq-current">Starting…</span>
+          <span id="eq-pct">0%</span>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-bar animated" id="eq-bar" style="width:0%"></div>
+        </div>
+        <div class="sse-log" id="eq-log" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <!-- Output files -->
+    <div class="card" id="eq-results-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">✅ Output Files</div>
+      </div>
+      <div class="card-body">
+        <div id="eq-results-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let eqFile = null;
+let eqDuration = 0;
+
+initDropZone('eq-drop', 'eq-file', 'eq-drop-label', function(file) {
+  eqFile = file;
+  document.getElementById('eq-drop-icon').textContent = '✅';
+  document.getElementById('eq-drop-label').textContent = file.name;
+  document.getElementById('eq-file-info').style.display = 'block';
+  document.getElementById('eq-filename').textContent = file.name;
+  document.getElementById('eq-filesize').textContent = (file.size / 1024 / 1024).toFixed(1) + ' MB';
+
+  // Get duration via video element
+  const vid = document.createElement('video');
+  vid.preload = 'metadata';
+  vid.src = URL.createObjectURL(file);
+  vid.onloadedmetadata = function() {
+    eqDuration = Math.round(vid.duration);
+    document.getElementById('eq-duration-badge').textContent = formatTime(eqDuration);
+    URL.revokeObjectURL(vid.src);
+    previewSplit();
+    document.getElementById('eq-split-btn').disabled = false;
+  };
+});
+
+function previewSplit() {
+  if (!eqDuration) return;
+  const n = parseInt(document.getElementById('eq-n').value) || 30;
+  const parts = Math.ceil(eqDuration / n);
+  document.getElementById('preview-segments').textContent = parts;
+  document.getElementById('preview-seg-dur').textContent = formatTime(n);
+  document.getElementById('preview-total').textContent = formatTime(eqDuration);
+  document.getElementById('eq-preview-card').style.display = 'block';
+  document.getElementById('eq-preview-text').textContent = formatTime(n);
+
+  // Update FFmpeg preview
+  const useCuda = document.getElementById('eq-cuda').checked;
+  const codec = useCuda ? 'h264_nvenc' : 'libx264';
+  const hw = useCuda ? '-hwaccel cuda ' : '';
+  document.getElementById('ffmpeg-preview').textContent =
+    `ffmpeg ${hw}-i "input.mp4" \\\n  -c:v ${codec} -segment_time ${n} \\\n  -f segment -reset_timestamps 1 \\\n  "part_%03d.mp4"`;
+}
+
+function formatTime(s) {
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return m + 'm ' + (sec ? sec + 's' : '');
+}
+
+async function startEqualSplit() {
+  if (!eqFile) { showToast('Select a video file first', 'warn'); return; }
+  const n = parseInt(document.getElementById('eq-n').value);
+  if (!n || n < 1) { showToast('Enter a valid segment duration', 'warn'); return; }
+
+  const fd = new FormData();
+  fd.append('video', eqFile);
+  fd.append('n', n);
+  fd.append('use_cuda', document.getElementById('eq-cuda').checked ? '1' : '0');
+
+  document.getElementById('eq-split-btn').disabled = true;
+  document.getElementById('eq-split-btn').textContent = 'Splitting…';
+  document.getElementById('eq-progress-card').style.display = 'block';
+  document.getElementById('eq-log').textContent = '';
+  document.getElementById('eq-bar').style.width = '0%';
+
+  const resp = await fetch('/api/split/equal', { method: 'POST', body: fd });
+  const data = await resp.json();
+
+  if (!data.job_id) {
+    showToast(data.error || 'Failed to start', 'error');
+    resetEqBtn();
+    return;
+  }
+
+  startSSEProgress({
+    url: '/api/split/progress/' + data.job_id,
+    logId: 'eq-log',
+    barId: 'eq-bar',
+    statusId: 'eq-status',
+    onComplete: function(d) {
+      resetEqBtn();
+      document.getElementById('eq-status').className = 'badge badge-green';
+      showResults(d.files || []);
+    }
+  });
+}
+
+function resetEqBtn() {
+  const btn = document.getElementById('eq-split-btn');
+  btn.disabled = false;
+  btn.textContent = '⊟ Split Video';
+}
+
+function showResults(files) {
+  document.getElementById('eq-results-card').style.display = 'block';
+  document.getElementById('eq-results-list').innerHTML = files.map((f, i) => `
+    <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--bg-card-2); border:1px solid var(--border); border-radius:var(--radius-sm);">
+      <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); min-width:32px;">Part ${i+1}</span>
+      <span style="flex:1; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
+      <span style="font-family:var(--font-mono); font-size:11px; color:var(--accent-green);">${f.duration || '?'}s</span>
+    </div>
+  `).join('');
+}
+</script>
+{% endblock %}

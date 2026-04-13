@@ -1,0 +1,272 @@
+{% extends "layout.html" %}
+
+{% block title %}Watermark — Nikethan{% endblock %}
+{% block breadcrumb %}Watermark{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">Bulk Watermark</span></h1>
+  <p class="page-subtitle">Select a folder and apply watermarks to all videos. Source watermark from an uploaded image or directly from an Instagram profile.</p>
+</div>
+
+<div class="two-col">
+
+  <!-- Left: Config -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+
+    <!-- Step 1: Choose folder -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📂 Step 1 — Select Folder</div>
+      </div>
+      <div class="card-body">
+        {% if folders %}
+          {% for folder in folders %}
+          <div class="folder-card {% if loop.first %}selected{% endif %}" id="folder-{{ loop.index }}" onclick="selectFolder(this, '{{ folder.path }}', '{{ folder.name }}')">
+            <div class="folder-icon">📁</div>
+            <div class="folder-info">
+              <div class="folder-name">{{ folder.name }}</div>
+              <div class="folder-meta">{{ folder.count }} video{{ 's' if folder.count != 1 }} · {{ folder.size_mb }} MB</div>
+            </div>
+            {% if loop.first %}<span class="badge badge-pink">Selected</span>{% endif %}
+          </div>
+          {% endfor %}
+        {% else %}
+          <div style="text-align:center; padding:30px; color:var(--text-muted);">
+            <div style="font-size:28px; margin-bottom:8px;">📭</div>
+            <p>No download folders yet.</p>
+            <a href="{{ url_for('download_page') }}" class="btn btn-primary btn-sm" style="margin-top:12px;">Download Reels First</a>
+          </div>
+        {% endif %}
+        <input type="hidden" id="selected-folder" value="{{ folders[0].path if folders else '' }}" />
+        <input type="hidden" id="selected-folder-name" value="{{ folders[0].name if folders else '' }}" />
+      </div>
+    </div>
+
+    <!-- Step 2: Watermark source -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">◎ Step 2 — Watermark Image</div>
+      </div>
+      <div class="card-body">
+        <!-- Tabs -->
+        <div style="display:flex; gap:6px; margin-bottom:16px; background:var(--bg-card-2); padding:4px; border-radius:var(--radius-sm);">
+          <button class="btn btn-sm" id="tab-upload-btn" onclick="switchWMTab('upload')" style="flex:1; background:var(--bg-card); border:1px solid var(--border);">
+            ↑ Upload Image
+          </button>
+          <button class="btn btn-sm btn-ghost" id="tab-instagram-btn" onclick="switchWMTab('instagram')" style="flex:1;">
+            📸 From Instagram
+          </button>
+        </div>
+
+        <!-- Upload tab -->
+        <div id="tab-upload">
+          <div class="drop-zone" id="wm-drop" onclick="document.getElementById('wm-file').click()">
+            <input type="file" id="wm-file" accept="image/*" style="display:none;" onchange="onWMFileSelect(this)" />
+            <div class="drop-icon" id="wm-drop-icon">🖼️</div>
+            <div class="drop-label" id="wm-drop-label">Click or drag watermark image</div>
+            <div class="drop-hint">PNG with transparency recommended</div>
+          </div>
+        </div>
+
+        <!-- Instagram tab -->
+        <div id="tab-instagram" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Instagram Profile URL</label>
+            <input class="form-input mono" id="wm-ig-url" type="text" placeholder="https://www.instagram.com/username/" />
+          </div>
+          <button class="btn btn-secondary btn-full" onclick="fetchIGWatermark()">
+            📸 Fetch Profile Picture
+          </button>
+          <div id="wm-ig-preview" style="margin-top:12px; display:none; text-align:center;">
+            <img id="wm-ig-img" style="width:80px; height:80px; border-radius:50%; border:2px solid var(--accent); object-fit:cover;" />
+            <div style="font-size:12px; color:var(--text-secondary); margin-top:6px;" id="wm-ig-name"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right: Options + Apply -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+
+    <!-- Step 3: Position -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">⊹ Step 3 — Options</div>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">Watermark Position</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; max-width:180px;">
+            <button type="button" class="pos-btn selected" onclick="selectPosition(this,'TL')" title="Top Left">↖</button>
+            <button type="button" class="pos-btn" onclick="selectPosition(this,'TC')" title="Top Center">↑</button>
+            <button type="button" class="pos-btn" onclick="selectPosition(this,'TR')" title="Top Right">↗</button>
+            <button type="button" class="pos-btn" onclick="selectPosition(this,'ML')" title="Mid Left">←</button>
+            <button type="button" class="pos-btn" onclick="selectPosition(this,'C')"  title="Center">⊙</button>
+            <button type="button" class="pos-btn" onclick="selectPosition(this,'MR')" title="Mid Right">→</button>
+            <button type="button" class="pos-btn" onclick="selectPosition(this,'BL')" title="Bottom Left">↙</button>
+            <button type="button" class="pos-btn" onclick="selectPosition(this,'BC')" title="Bottom Center">↓</button>
+            <button type="button" class="pos-btn" onclick="selectPosition(this,'BR')" title="Bottom Right">↘</button>
+          </div>
+          <input type="hidden" id="wm-position" value="TL" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Opacity (%)</label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="range" id="wm-opacity" min="10" max="100" value="75" style="flex:1; accent-color:var(--accent);" oninput="document.getElementById('wm-opacity-val').textContent = this.value + '%'" />
+            <span id="wm-opacity-val" style="font-family:var(--font-mono); font-size:13px; min-width:36px;">75%</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Scale (%)</label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="range" id="wm-scale" min="5" max="50" value="15" style="flex:1; accent-color:var(--accent);" oninput="document.getElementById('wm-scale-val').textContent = this.value + '%'" />
+            <span id="wm-scale-val" style="font-family:var(--font-mono); font-size:13px; min-width:36px;">15%</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Output</label>
+          <select class="form-select" id="wm-output-mode">
+            <option value="new_folder">Save to watermarked/ sub-folder (safe)</option>
+            <option value="overwrite">Overwrite originals</option>
+          </select>
+        </div>
+
+        <hr class="divider" />
+        <button class="btn btn-primary btn-full btn-lg" id="wm-apply-btn" onclick="applyWatermark()">
+          ◎ Apply Watermark to Folder
+        </button>
+        <div class="form-hint" style="text-align:center; margin-top:8px;">
+          Will process all .mp4 files in <strong id="folder-display">{{ folders[0].name if folders else 'No folder' }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="card" id="wm-progress-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">⏳ Watermarking</div>
+        <span class="badge badge-orange" id="wm-status">Running</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">
+          <span id="wm-current">Starting…</span>
+          <span id="wm-pct">0%</span>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-bar animated" id="wm-bar" style="width:0%"></div>
+        </div>
+        <div class="sse-log" id="wm-log" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedFolderPath = document.getElementById('selected-folder')?.value;
+let wmImagePath = null;
+let wmMode = 'upload'; // 'upload' | 'instagram'
+
+function selectFolder(card, path, name) {
+  document.querySelectorAll('.folder-card').forEach(c => {
+    c.classList.remove('selected');
+    c.querySelector('.badge')?.remove();
+  });
+  card.classList.add('selected');
+  const b = document.createElement('span');
+  b.className = 'badge badge-pink';
+  b.textContent = 'Selected';
+  card.appendChild(b);
+  selectedFolderPath = path;
+  document.getElementById('folder-display').textContent = name;
+  document.getElementById('selected-folder').value = path;
+}
+
+function switchWMTab(tab) {
+  wmMode = tab;
+  document.getElementById('tab-upload').style.display = tab === 'upload' ? 'block' : 'none';
+  document.getElementById('tab-instagram').style.display = tab === 'instagram' ? 'block' : 'none';
+  document.getElementById('tab-upload-btn').style.background = tab === 'upload' ? 'var(--bg-card)' : 'transparent';
+  document.getElementById('tab-upload-btn').style.border = tab === 'upload' ? '1px solid var(--border)' : 'none';
+  document.getElementById('tab-instagram-btn').style.background = tab === 'instagram' ? 'var(--bg-card)' : 'transparent';
+}
+
+function onWMFileSelect(input) {
+  const file = input.files[0];
+  if (file) {
+    document.getElementById('wm-drop-label').textContent = file.name;
+    document.getElementById('wm-drop-icon').textContent = '✅';
+    wmImagePath = '__upload__';
+  }
+}
+
+async function fetchIGWatermark() {
+  const url = document.getElementById('wm-ig-url').value.trim();
+  if (!url) { showToast('Enter an Instagram URL', 'warn'); return; }
+  showToast('Fetching profile picture…', 'info');
+  const resp = await postJSON('/api/watermark/fetch', { instagram_url: url });
+  if (resp.watermark_path) {
+    wmImagePath = resp.watermark_path;
+    document.getElementById('wm-ig-preview').style.display = 'block';
+    document.getElementById('wm-ig-img').src = '/wm-preview/' + encodeURIComponent(resp.watermark_path);
+    document.getElementById('wm-ig-name').textContent = '@' + (resp.username || '?');
+    showToast('Watermark fetched!', 'success');
+  } else {
+    showToast(resp.error || 'Failed to fetch watermark', 'error');
+  }
+}
+
+async function applyWatermark() {
+  if (!selectedFolderPath) { showToast('Select a folder first', 'warn'); return; }
+  const fileInput = document.getElementById('wm-file');
+  let body = {
+    folder: selectedFolderPath,
+    position: document.getElementById('wm-position').value,
+    opacity: parseInt(document.getElementById('wm-opacity').value) / 100,
+    scale: parseInt(document.getElementById('wm-scale').value) / 100,
+    output_mode: document.getElementById('wm-output-mode').value,
+    watermark_path: wmImagePath,
+    mode: wmMode
+  };
+
+  // If file upload, use FormData
+  if (wmMode === 'upload' && fileInput.files[0]) {
+    const fd = new FormData();
+    Object.keys(body).forEach(k => fd.append(k, body[k]));
+    fd.append('watermark_file', fileInput.files[0]);
+    const resp = await fetch('/api/watermark/apply', { method: 'POST', body: fd });
+    const data = await resp.json();
+    handleWMJob(data);
+    return;
+  }
+
+  if (!wmImagePath) { showToast('Choose a watermark image or fetch from Instagram', 'warn'); return; }
+  const resp = await postJSON('/api/watermark/apply', body);
+  handleWMJob(resp);
+}
+
+function handleWMJob(resp) {
+  if (!resp.job_id) { showToast(resp.error || 'Failed to start job', 'error'); return; }
+  document.getElementById('wm-progress-card').style.display = 'block';
+  document.getElementById('wm-log').textContent = '';
+  startSSEProgress({
+    url: '/api/watermark/progress/' + resp.job_id,
+    logId: 'wm-log',
+    barId: 'wm-bar',
+    statusId: 'wm-status',
+    onComplete: (d) => {
+      document.getElementById('wm-status').className = 'badge badge-green';
+      showToast('Watermarking complete! ' + (d.count || 0) + ' files processed.', 'success');
+    }
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,220 @@
+{% extends "layout.html" %}
+
+{% block title %}Download Reels — Nikethan{% endblock %}
+{% block breadcrumb %}Download Reels{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">Download Reels</span></h1>
+  <p class="page-subtitle">Paste Instagram Reel URLs below. Single or bulk — one URL per line.</p>
+</div>
+
+<div class="two-col">
+
+  <!-- Left: URL input -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">↓ Reel URLs</div>
+        <span id="url-count" class="badge badge-gray">0 URLs detected</span>
+      </div>
+      <div class="card-body">
+        <form id="download-form">
+          <div class="form-group">
+            <label class="form-label" for="urls">Instagram Reel URLs</label>
+            <textarea
+              class="form-textarea mono"
+              id="urls"
+              name="urls"
+              rows="8"
+              placeholder="https://www.instagram.com/reel/ABC123/&#10;https://www.instagram.com/reel/XYZ456/&#10;…"
+              oninput="countURLs(this, 'url-count')"
+            ></textarea>
+            <div class="form-hint">One URL per line. Paste any number of Reel URLs.</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Video Quality</label>
+            <select class="form-select" name="quality" id="quality">
+              <option value="best">Best available</option>
+              <option value="720">720p</option>
+              <option value="480">480p</option>
+              <option value="360">360p</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="setup">
+            <label class="form-label">Cookies File</label>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-card-2);">
+              <span style="font-size:12px; color:var(--text-secondary); font-family:var(--font-mono);">cookies.txt</span>
+              {% if system.cookies_ok %}
+                <span class="badge badge-green">✓ Loaded</span>
+              {% else %}
+                <span class="badge badge-red">✗ Missing</span>
+              {% endif %}
+            </div>
+            {% if not system.cookies_ok %}
+            <div class="form-hint" style="color:var(--accent-gold);">
+              ⚠️ Place <code style="font-family:var(--font-mono); background:var(--bg-card-2); padding:1px 5px; border-radius:3px;">cookies.txt</code>
+              in the project root. Use the browser extension <em>"Get cookies.txt LOCALLY"</em> while logged into Instagram.
+            </div>
+            {% endif %}
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-full" id="dl-btn">
+            ↓ Start Download
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- How it works -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">ℹ️ Setup Guide</div>
+      </div>
+      <div class="card-body" style="display:flex; flex-direction:column; gap:14px;">
+        <div style="display:flex; gap:12px;">
+          <div style="width:24px; height:24px; border-radius:50%; background:rgba(255,60,172,0.15); border:1px solid rgba(255,60,172,0.3); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--accent); flex-shrink:0;">1</div>
+          <div>
+            <div style="font-size:13px; font-weight:600; margin-bottom:2px;">Install cookies extension</div>
+            <div style="font-size:12px; color:var(--text-muted);">Get <em>"Get cookies.txt LOCALLY"</em> for Chrome / Firefox.</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:12px;">
+          <div style="width:24px; height:24px; border-radius:50%; background:rgba(255,60,172,0.15); border:1px solid rgba(255,60,172,0.3); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--accent); flex-shrink:0;">2</div>
+          <div>
+            <div style="font-size:13px; font-weight:600; margin-bottom:2px;">Export cookies while on Instagram</div>
+            <div style="font-size:12px; color:var(--text-muted);">Log in to instagram.com, click the extension, export as <code style="font-family:var(--font-mono);">cookies.txt</code>.</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:12px;">
+          <div style="width:24px; height:24px; border-radius:50%; background:rgba(255,60,172,0.15); border:1px solid rgba(255,60,172,0.3); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--accent); flex-shrink:0;">3</div>
+          <div>
+            <div style="font-size:13px; font-weight:600; margin-bottom:2px;">Place in project root</div>
+            <div style="font-size:12px; color:var(--text-muted);">Save as <code style="font-family:var(--font-mono);">nikethan/cookies.txt</code>.</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:12px;">
+          <div style="width:24px; height:24px; border-radius:50%; background:rgba(255,60,172,0.15); border:1px solid rgba(255,60,172,0.3); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--accent); flex-shrink:0;">4</div>
+          <div>
+            <div style="font-size:13px; font-weight:600; margin-bottom:2px;">Paste Reel URLs &amp; download</div>
+            <div style="font-size:12px; color:var(--text-muted);">The app passes cookies automatically. No credentials stored.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Progress & log -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="card" id="progress-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">⏳ Download Progress</div>
+        <span class="badge badge-orange" id="dl-status">Running</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px; color:var(--text-secondary);">
+          <span id="dl-current-file">Initialising…</span>
+          <span id="dl-pct">0%</span>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-bar animated" id="dl-bar" style="width:0%"></div>
+        </div>
+        <div style="margin-top:14px;">
+          <div class="section-heading">Live Log</div>
+          <div class="sse-log" id="dl-log"></div>
+        </div>
+        <button class="btn btn-ghost btn-sm btn-full" style="margin-top:12px;" onclick="cancelDownload()">
+          ✕ Cancel
+        </button>
+      </div>
+    </div>
+
+    <div class="card" id="results-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">✅ Completed</div>
+        <a href="{{ url_for('metadata_page') }}" class="btn btn-primary btn-sm">View Metadata →</a>
+      </div>
+      <div class="card-body">
+        <div id="results-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentESS = null;
+
+document.getElementById('download-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const urls = document.getElementById('urls').value.trim();
+  if (!urls) { showToast('Please enter at least one URL', 'warn'); return; }
+
+  const lines = urls.split('\n').filter(l => l.trim().startsWith('http'));
+  if (!lines.length) { showToast('No valid Instagram URLs found', 'error'); return; }
+
+  document.getElementById('progress-card').style.display = 'block';
+  document.getElementById('results-card').style.display = 'none';
+  document.getElementById('dl-log').textContent = '';
+  document.getElementById('dl-bar').style.width = '0%';
+  document.getElementById('dl-btn').disabled = true;
+  document.getElementById('dl-btn').textContent = 'Downloading…';
+
+  const resp = await postJSON('/api/download', {
+    urls: lines,
+    quality: document.getElementById('quality').value
+  });
+
+  if (!resp.job_id) {
+    showToast(resp.error || 'Failed to start download', 'error');
+    resetDLBtn();
+    return;
+  }
+
+  currentESS = startSSEProgress({
+    url: '/api/download/progress/' + resp.job_id,
+    logId: 'dl-log',
+    barId: 'dl-bar',
+    statusId: 'dl-status',
+    onComplete: function(d) {
+      document.getElementById('dl-status').textContent = 'Done';
+      document.getElementById('dl-status').className = 'badge badge-green';
+      resetDLBtn();
+      showResults(d.results || []);
+    }
+  });
+});
+
+function resetDLBtn() {
+  const btn = document.getElementById('dl-btn');
+  btn.disabled = false;
+  btn.textContent = '↓ Start Download';
+}
+
+function cancelDownload() {
+  if (currentESS) { currentESS.close(); currentESS = null; }
+  resetDLBtn();
+  document.getElementById('progress-card').style.display = 'none';
+  showToast('Download cancelled', 'warn');
+}
+
+function showResults(results) {
+  document.getElementById('results-card').style.display = 'block';
+  const list = document.getElementById('results-list');
+  list.innerHTML = results.map(r => `
+    <div style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-card-2);">
+      <span style="font-size:20px;">🎬</span>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.title || r.id}</div>
+        <div style="font-size:11px; color:var(--text-muted);">@${r.account || '—'} · ${r.duration || '?'}s</div>
+      </div>
+      <span class="badge ${r.status === 'ok' ? 'badge-green' : 'badge-red'}">${r.status === 'ok' ? 'OK' : 'Error'}</span>
+    </div>
+  `).join('');
+}
+</script>
+{% endblock %}

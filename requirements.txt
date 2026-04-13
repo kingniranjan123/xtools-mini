@@ -1,0 +1,4 @@
+flask>=3.0
+yt-dlp>=2024.11.4
+Pillow>=10.0
+requests>=2.31

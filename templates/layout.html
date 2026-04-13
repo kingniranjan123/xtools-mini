@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Nikethan Reels Toolkit{% endblock %}</title>
+  <meta name="description" content="Instagram Reels downloader, metadata extractor, watermarker & video splitter." />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+{% if session.get('logged_in') %}
+<div class="app-shell">
+
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-logo">🎬</div>
+      <div>
+        <div class="brand-name">Nikethan</div>
+        <div class="brand-sub">Reels Toolkit</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-label">Overview</div>
+      <a class="nav-item {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">
+        <span class="nav-icon">⬡</span> Dashboard
+      </a>
+
+      <div class="nav-label" style="margin-top:12px;">Download</div>
+      <a class="nav-item {% if request.endpoint == 'download_page' %}active{% endif %}" href="{{ url_for('download_page') }}">
+        <span class="nav-icon">↓</span> Download Reels
+      </a>
+      <a class="nav-item {% if request.endpoint == 'metadata_page' %}active{% endif %}" href="{{ url_for('metadata_page') }}">
+        <span class="nav-icon">◈</span> Metadata
+        {% set rcount = g.get('reel_count', 0) %}
+        {% if rcount %}<span class="nav-badge">{{ rcount }}</span>{% endif %}
+      </a>
+
+      <div class="nav-label" style="margin-top:12px;">Process</div>
+      <a class="nav-item {% if request.endpoint == 'watermark_page' %}active{% endif %}" href="{{ url_for('watermark_page') }}">
+        <span class="nav-icon">◎</span> Watermark
+      </a>
+      <a class="nav-item {% if request.endpoint == 'split_equal_page' %}active{% endif %}" href="{{ url_for('split_equal_page') }}">
+        <span class="nav-icon">⊟</span> Equal Split
+      </a>
+      <a class="nav-item {% if request.endpoint == 'split_trailer_page' %}active{% endif %}" href="{{ url_for('split_trailer_page') }}">
+        <span class="nav-icon">▷</span> Trailer Clip
+      </a>
+
+      <div class="nav-label" style="margin-top:12px;">Instagram</div>
+      <a class="nav-item {% if request.endpoint == 'instagram_page' %}active{% endif %}" href="{{ url_for('instagram_page') }}">
+        <span class="nav-icon">◉</span> Social Tools
+        <span class="nav-badge" style="background:rgba(255,107,53,.15);color:#ff6b35;border-color:rgba(255,107,53,.3);">NEW</span>
+      </a>
+
+      <div class="nav-label" style="margin-top:12px;">System</div>
+      <a class="nav-item {% if request.endpoint == 'settings_page' %}active{% endif %}" href="{{ url_for('settings_page') }}">
+        <span class="nav-icon">⚙</span> Settings
+      </a>
+    </nav>
+
+    <!-- CUDA status badge -->
+    <div class="cuda-badge">
+      {% if g.get('cuda_available') %}
+        <span class="cuda-dot active"></span>
+        <span class="cuda-label">CUDA Active</span>
+        <span class="cuda-status">GPU</span>
+      {% else %}
+        <span class="cuda-dot inactive"></span>
+        <span class="cuda-label">CPU Mode</span>
+        <span class="cuda-status">CPU</span>
+      {% endif %}
+    </div>
+
+    <!-- User pill -->
+    <div class="sidebar-user">
+      <div class="user-pill" style="cursor:default;">
+        <div class="user-avatar">N</div>
+        <div style="flex:1; min-width:0;">
+          <div class="user-name">nikethan</div>
+          <div class="user-role">Admin</div>
+        </div>
+        <a href="{{ url_for('logout') }}" title="Logout" style="color:var(--text-muted); text-decoration:none; font-size:14px; padding:4px 6px; border-radius:4px; transition:background .15s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">⏻</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ─────────────────────────────────────────────── -->
+  <div class="main-content">
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="topbar-breadcrumb">
+        <span>Reels Toolkit</span>
+        <span class="crumb-sep">/</span>
+        <span class="crumb-cur">{% block breadcrumb %}Dashboard{% endblock %}</span>
+      </div>
+      <div class="topbar-actions">
+        {% block topbar_actions %}{% endblock %}
+      </div>
+    </header>
+
+    <!-- Page content -->
+    <main class="page-content fade-up">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ 'success' if cat == 'success' else 'error' if cat == 'danger' else 'info' }}">
+            {{ msg }}
+          </div>
+        {% endfor %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+</div><!-- /.app-shell -->
+{% else %}
+  {% block login_content %}{% endblock %}
+{% endif %}
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

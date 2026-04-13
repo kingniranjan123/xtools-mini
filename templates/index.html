@@ -1,0 +1,175 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard — Nikethan Reels Toolkit{% endblock %}
+{% block breadcrumb %}Dashboard{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('download_page') }}" class="btn btn-primary btn-sm">
+  ↓ New Download
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">
+    <span class="grad-text">Dashboard</span>
+  </h1>
+  <p class="page-subtitle">Overview of your Reels library, jobs, and system status.</p>
+</div>
+
+<!-- Stat cards -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-icon">🎬</div>
+    <div class="stat-value">{{ stats.total_reels }}</div>
+    <div class="stat-label">Reels Downloaded</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">🏷️</div>
+    <div class="stat-value">{{ stats.total_tags }}</div>
+    <div class="stat-label">Tags Extracted</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">◎</div>
+    <div class="stat-value">{{ stats.watermarked }}</div>
+    <div class="stat-label">Watermarked Files</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">✂️</div>
+    <div class="stat-value">{{ stats.splits }}</div>
+    <div class="stat-label">Splits Created</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">📂</div>
+    <div class="stat-value">{{ stats.folders }}</div>
+    <div class="stat-label">Account Folders</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">💾</div>
+    <div class="stat-value">{{ stats.total_size_gb }}</div>
+    <div class="stat-label">GB Downloaded</div>
+  </div>
+</div>
+
+<div class="two-col">
+
+  <!-- Recent Downloads -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🎬 Recent Downloads</div>
+      <a href="{{ url_for('metadata_page') }}" class="btn btn-ghost btn-sm">View All →</a>
+    </div>
+    <div class="table-wrap">
+      {% if recent_reels %}
+      <table>
+        <thead>
+          <tr>
+            <th>Reel</th>
+            <th>Account</th>
+            <th>Duration</th>
+            <th>Downloaded</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in recent_reels %}
+          <tr>
+            <td>
+              <a href="{{ url_for('metadata_page') }}?id={{ r.id }}" style="color:var(--accent-blue); font-weight:500;">
+                {{ r.title|truncate(30) if r.title else r.id[:16] + '…' }}
+              </a>
+            </td>
+            <td>
+              <span class="badge badge-green">@{{ r.account or '—' }}</span>
+            </td>
+            <td>
+              <span style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary);">
+                {{ r.duration }}s
+              </span>
+            </td>
+            <td style="color:var(--text-muted); font-size:12px;">{{ r.downloaded_at[:10] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="padding:40px; text-align:center; color:var(--text-muted);">
+        <div style="font-size:32px; margin-bottom:12px;">📭</div>
+        <p>No reels downloaded yet.</p>
+        <a href="{{ url_for('download_page') }}" class="btn btn-primary btn-sm" style="margin-top:12px;">Start Downloading</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">⚡ Quick Actions</div>
+      </div>
+      <div class="card-body" style="display:flex; flex-direction:column; gap:8px;">
+        <a href="{{ url_for('download_page') }}" class="btn btn-secondary btn-full">
+          ↓ Download New Reels
+        </a>
+        <a href="{{ url_for('watermark_page') }}" class="btn btn-secondary btn-full">
+          ◎ Apply Watermarks
+        </a>
+        <a href="{{ url_for('split_equal_page') }}" class="btn btn-secondary btn-full">
+          ⊟ Split Video (Equal)
+        </a>
+        <a href="{{ url_for('split_trailer_page') }}" class="btn btn-secondary btn-full">
+          ▷ Create Trailer Clip
+        </a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🖥️ System Status</div>
+      </div>
+      <div class="card-body" style="display:flex; flex-direction:column; gap:10px;">
+        <!-- CUDA -->
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:12px; color:var(--text-secondary);">GPU Acceleration</span>
+          {% if g.get('cuda_available') %}
+            <span class="badge badge-green">CUDA Active</span>
+          {% else %}
+            <span class="badge badge-gray">CPU Only</span>
+          {% endif %}
+        </div>
+        <!-- FFmpeg -->
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:12px; color:var(--text-secondary);">FFmpeg</span>
+          {% if system.ffmpeg_ok %}
+            <span class="badge badge-green">{{ system.ffmpeg_version }}</span>
+          {% else %}
+            <span class="badge badge-red">Not Found</span>
+          {% endif %}
+        </div>
+        <!-- yt-dlp -->
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:12px; color:var(--text-secondary);">yt-dlp</span>
+          {% if system.ytdlp_ok %}
+            <span class="badge badge-green">{{ system.ytdlp_version }}</span>
+          {% else %}
+            <span class="badge badge-red">Not Found</span>
+          {% endif %}
+        </div>
+        <!-- Cookies -->
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:12px; color:var(--text-secondary);">cookies.txt</span>
+          {% if system.cookies_ok %}
+            <span class="badge badge-green">Present</span>
+          {% else %}
+            <span class="badge badge-orange">Missing</span>
+          {% endif %}
+        </div>
+        <hr class="divider" style="margin:4px 0;" />
+        <a href="{{ url_for('download_page') }}#setup" class="btn btn-ghost btn-sm btn-full">Setup Guide →</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
