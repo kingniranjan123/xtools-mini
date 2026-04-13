@@ -1,0 +1,556 @@
+{% extends "layout.html" %}
+{% block title %}AI Content Studio — Nikethan{% endblock %}
+{% block breadcrumb %}AI Content{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">✨ AI Content Studio</span></h1>
+  <p class="page-subtitle">One line in → full content package out. Powered by <strong>Gemini 2.5 Pro</strong> via OpenRouter.</p>
+</div>
+
+{% if not ai_configured %}
+<div style="background:rgba(130,80,255,.08);border:1px solid rgba(130,80,255,.25);border-radius:var(--radius);padding:20px 24px;margin-bottom:24px;display:flex;gap:16px;align-items:center;">
+  <span style="font-size:32px;">🤖</span>
+  <div>
+    <div style="font-weight:700;margin-bottom:4px;">OpenRouter API Key Required</div>
+    <div style="font-size:13px;color:var(--text-muted);">Go to <a href="{{ url_for('settings_page') }}" style="color:#8250ff;">Settings → 🔑 API Keys</a> and add your free OpenRouter key to unlock AI Content Studio.</div>
+  </div>
+  <a href="{{ url_for('settings_page') }}" class="btn btn-primary" style="margin-left:auto;background:linear-gradient(135deg,#8250ff,#5e3adb);flex-shrink:0;">⚙ Open Settings</a>
+</div>
+{% endif %}
+
+<!-- ════════ Platform Tabs ════════ -->
+<div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:24px;">
+  <button class="btn btn-sm active" id="ai-tab-yt-btn" onclick="switchAITab('yt')" style="background:var(--bg-card);border:1px solid var(--border);">🎬 YouTube</button>
+  <button class="btn btn-sm btn-ghost" id="ai-tab-ig-btn" onclick="switchAITab('ig')">📸 Instagram</button>
+  <button class="btn btn-sm btn-ghost" id="ai-tab-tags-btn" onclick="switchAITab('tags')">🏷 Tag Expander</button>
+</div>
+
+<!-- ══════════════════════════════
+     YOUTUBE AI TAB
+══════════════════════════════ -->
+<div id="ai-tab-yt">
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+      <div class="card-title">🎬 YouTube Content Generator</div>
+      <span class="badge" style="background:rgba(130,80,255,.15);color:#8250ff;border-color:rgba(130,80,255,.3);">Gemini 2.5 Pro</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">What is your video about? (one line)</label>
+        <input class="form-input" id="yt-topic" type="text"
+          placeholder="e.g.  top 10 AI tools for freelancers in 2025  or  how to make pasta carbonara in 15 minutes">
+        <div class="form-hint">Be specific. The more context, the better the output.</div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" id="yt-is-short" style="accent-color:#8250ff;">
+          📱 This is a YouTube Short (≤60 sec)
+        </label>
+        {% if settings.content_niche %}
+        <span class="badge badge-gray">Niche: {{ settings.content_niche }}</span>
+        {% endif %}
+        <button class="btn btn-primary" id="yt-ai-btn" style="background:linear-gradient(135deg,#8250ff,#5e3adb);margin-left:auto;"
+          onclick="generateYoutube()" {% if not ai_configured %}disabled{% endif %}>
+          ✨ Generate Full Package
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="yt-ai-results" style="display:none;">
+
+    <!-- Title options -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <div class="card-title">📌 Title Options <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(click to copy)</span></div>
+        <span class="badge badge-gray" id="yt-category-badge"></span>
+      </div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:10px;" id="yt-titles"></div>
+    </div>
+
+    <!-- Description -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <div class="card-title">📝 Full Description</div>
+        <button class="btn btn-ghost btn-sm" onclick="copyText('yt-description')">📋 Copy</button>
+      </div>
+      <div class="card-body">
+        <textarea id="yt-description" class="form-textarea mono" rows="14" style="font-size:12px;"></textarea>
+      </div>
+    </div>
+
+    <!-- Chapters + SEO row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">⏱ Chapter Timestamps</div>
+          <button class="btn btn-ghost btn-sm" onclick="copyText('yt-chapters')">📋 Copy</button>
+        </div>
+        <div class="card-body">
+          <textarea id="yt-chapters" class="form-textarea mono" rows="7" style="font-size:12px;"></textarea>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">🔍 SEO Keywords</div></div>
+        <div class="card-body" id="yt-seo-keywords" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+    </div>
+
+    <!-- Tags -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <div class="card-title">🏷 Tags (20)</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="copyTagsYT()">📋 Copy All</button>
+          <button class="btn btn-ghost btn-sm" onclick="expandTagsYT()">🔮 AI Expand</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="yt-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
+        <div id="yt-tag-input-row" style="display:flex;gap:6px;margin-top:8px;">
+          <input class="form-input" id="yt-tag-add" type="text" placeholder="Add tag..." style="flex:1;" onkeydown="if(event.key==='Enter') addTagYT()">
+          <button class="btn btn-ghost btn-sm" onclick="addTagYT()">+ Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hooks + Thumbnails row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div class="card">
+        <div class="card-header"><div class="card-title">⚡ Hook Lines (First 15s)</div></div>
+        <div class="card-body" id="yt-hooks" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">🖼 Thumbnail Headlines</div></div>
+        <div class="card-body" id="yt-thumbnails" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+
+    <!-- Best time + CTA -->
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;">
+      <div class="card">
+        <div class="card-header"><div class="card-title">🕐 Best Posting Time</div></div>
+        <div class="card-body">
+          <div id="yt-best-time" style="font-size:14px;font-weight:600;color:var(--text);"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">📢 End Screen CTA</div></div>
+        <div class="card-body">
+          <div id="yt-cta" style="font-size:13px;color:var(--text);font-style:italic;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Tips -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header"><div class="card-title">💡 AI Content Tips</div></div>
+      <div class="card-body" id="yt-tips" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+
+  </div><!-- /yt-ai-results -->
+</div><!-- /ai-tab-yt -->
+
+<!-- ══════════════════════════════
+     INSTAGRAM AI TAB
+══════════════════════════════ -->
+<div id="ai-tab-ig" style="display:none;">
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+      <div class="card-title">📸 Instagram Content Generator</div>
+      <span class="badge" style="background:rgba(130,80,255,.15);color:#8250ff;border-color:rgba(130,80,255,.3);">Gemini 2.5 Pro</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">What is your post about? (one line)</label>
+        <input class="form-input" id="ig-topic" type="text"
+          placeholder="e.g.  morning workout routine for beginners  or  street food in Tokyo">
+        <div class="form-hint">One sentence description of the video or photo content.</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);">
+          <button class="btn btn-sm active" id="ig-type-reel" onclick="setIGType('reel')" style="background:var(--bg-card);border:1px solid var(--border);">📹 Reel</button>
+          <button class="btn btn-sm btn-ghost" id="ig-type-post" onclick="setIGType('post')">🖼 Post</button>
+          <button class="btn btn-sm btn-ghost" id="ig-type-story" onclick="setIGType('story')">⭕ Story</button>
+        </div>
+        <button class="btn btn-primary" id="ig-ai-btn" style="background:linear-gradient(135deg,#ff3cac,#ff6b35);margin-left:auto;"
+          onclick="generateInstagram()" {% if not ai_configured %}disabled{% endif %}>
+          ✨ Generate Full Package
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="ig-ai-results" style="display:none;">
+
+    <!-- Captions -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><div class="card-title">✍ Caption Options (3 tones)</div></div>
+      <div class="card-body" id="ig-captions" style="display:flex;flex-direction:column;gap:14px;"></div>
+    </div>
+
+    <!-- Reel Hook + Script -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">⚡ Reel Hook (First 3s)</div>
+          <button class="btn btn-ghost btn-sm" onclick="copyEl('ig-reel-hook')">📋</button>
+        </div>
+        <div class="card-body">
+          <div id="ig-reel-hook" style="font-size:16px;font-weight:700;color:var(--text);line-height:1.4;padding:8px;background:rgba(255,60,172,.06);border-radius:var(--radius-sm);border:1px solid rgba(255,60,172,.2);"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">🕐 Best Posting Time</div></div>
+        <div class="card-body">
+          <div id="ig-best-time" style="font-size:14px;font-weight:600;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reel Script Outline -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><div class="card-title">🎬 Reel Script Outline</div></div>
+      <div class="card-body" id="ig-script" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+
+    <!-- Story Sequence -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><div class="card-title">⭕ Story Sequence (4 slides)</div></div>
+      <div class="card-body" id="ig-stories" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+
+    <!-- Hashtags -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <div class="card-title">🏷 Hashtags (30 — tiered strategy)</div>
+        <button class="btn btn-ghost btn-sm" onclick="copyEl('ig-hashtags-full')">📋 Copy All 30</button>
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
+          <div style="background:var(--bg-card-2);padding:10px;border-radius:var(--radius-sm);border:1px solid rgba(255,60,172,.2);">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">🔥 MEGA (1M+ posts) — 5</div>
+            <div id="ig-hash-mega" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          </div>
+          <div style="background:var(--bg-card-2);padding:10px;border-radius:var(--radius-sm);border:1px solid rgba(255,107,53,.2);">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">📈 LARGE (100K-1M) — 10</div>
+            <div id="ig-hash-large" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          </div>
+          <div style="background:var(--bg-card-2);padding:10px;border-radius:var(--radius-sm);border:1px solid rgba(78,158,255,.2);">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">🎯 MEDIUM (10K-100K) — 10</div>
+            <div id="ig-hash-medium" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          </div>
+          <div style="background:var(--bg-card-2);padding:10px;border-radius:var(--radius-sm);border:1px solid rgba(0,212,168,.2);">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">💎 NICHE (&lt;10K) — 5</div>
+            <div id="ig-hash-niche" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          </div>
+        </div>
+        <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">▶ All 30 — Ready to paste</div>
+          <div id="ig-hashtags-full" style="font-size:12px;color:var(--text);line-height:1.7;word-break:break-word;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CTAs -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header"><div class="card-title">📢 CTA Options</div></div>
+      <div class="card-body" id="ig-ctas" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
+  </div><!-- /ig-ai-results -->
+</div><!-- /ai-tab-ig -->
+
+<!-- ══════════════════════════════
+     TAG EXPANDER TAB
+══════════════════════════════ -->
+<div id="ai-tab-tags" style="display:none;">
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+      <div class="card-title">🏷 VidIQ-Style Tag Expander</div>
+      <span class="badge" style="background:rgba(130,80,255,.15);color:#8250ff;border-color:rgba(130,80,255,.3);">AI-Powered</span>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label">Seed Tags (comma-separated or one per line)</label>
+        <textarea class="form-textarea mono" id="seed-tags-input" rows="4"
+          placeholder="AI tutorial, machine learning beginner, python AI&#10;&#10;Or just one:  cooking channel"></textarea>
+        <div class="form-hint">Give 1–5 seed concepts. The AI will expand to a full 20-tag SEO set, grouped by search volume.</div>
+      </div>
+      <button class="btn btn-primary" id="expand-tags-btn" style="background:linear-gradient(135deg,#8250ff,#5e3adb);"
+        onclick="expandSeeds()" {% if not ai_configured %}disabled{% endif %}>
+        🔮 Expand Tags with AI
+      </button>
+    </div>
+  </div>
+
+  <div id="tag-expand-results" style="display:none;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🏷 Expanded Tag Set (20)</div>
+        <button class="btn btn-ghost btn-sm" onclick="copyEl('all-expanded-tags')">📋 Copy All</button>
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">🥇 Primary (high volume)</div>
+            <div id="tags-primary" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">🥈 Secondary (medium volume)</div>
+            <div id="tags-secondary" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">🔎 Long-tail phrases</div>
+            <div id="tags-longtail" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">🔥 Trending related</div>
+            <div id="tags-trending" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          </div>
+        </div>
+        <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);margin-top:4px;">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">▶ All 20 — Ready to paste</div>
+          <div id="all-expanded-tags" style="font-size:12px;color:var(--text);line-height:1.8;"></div>
+        </div>
+        <div id="tag-explanation" style="font-size:12px;color:var(--text-muted);margin-top:10px;font-style:italic;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _ytTagList = [];
+let _igType = 'reel';
+
+// ── Tab + type switch ─────────────────────────────────────────
+function switchAITab(t) {
+  ['yt','ig','tags'].forEach(id => {
+    const el=document.getElementById('ai-tab-'+id); if(el) el.style.display=id===t?'block':'none';
+    const b=document.getElementById('ai-tab-'+id+'-btn');
+    if(b){ b.classList.toggle('active',id===t); b.style.background=id===t?'var(--bg-card)':'transparent'; b.style.border=id===t?'1px solid var(--border)':'none'; }
+  });
+}
+function setIGType(t) {
+  _igType=t;
+  ['reel','post','story'].forEach(id=>{
+    const b=document.getElementById('ig-type-'+id);
+    b.classList.toggle('active',id===t); b.style.background=id===t?'var(--bg-card)':'transparent'; b.style.border=id===t?'1px solid var(--border)':'none';
+  });
+}
+
+// ── Copy helpers ──────────────────────────────────────────────
+function copyText(id) {
+  const el=document.getElementById(id);
+  navigator.clipboard.writeText(el.value||el.textContent).then(()=>showToast('Copied!','success'));
+}
+function copyEl(id) {
+  const el=document.getElementById(id);
+  navigator.clipboard.writeText(el.innerText||el.textContent).then(()=>showToast('Copied!','success'));
+}
+function tagPill(tag, color='rgba(130,80,255,.12)', border='rgba(130,80,255,.25)') {
+  return `<span onclick="navigator.clipboard.writeText('${tag.replace(/'/g,"\\'")}').then(()=>showToast('Copied!','success'))" style="background:${color};border:1px solid ${border};padding:3px 9px;border-radius:3px;font-size:11px;cursor:pointer;transition:opacity .15s;" title="Click to copy">${tag}</span>`;
+}
+
+// ── YouTube Generator ─────────────────────────────────────────
+async function generateYoutube() {
+  const topic = document.getElementById('yt-topic').value.trim();
+  const isShort = document.getElementById('yt-is-short').checked;
+  if(!topic){ showToast('Enter a topic','warn'); return; }
+  const btn = document.getElementById('yt-ai-btn');
+  btn.disabled=true; btn.textContent='⏳ Generating…';
+  document.getElementById('yt-ai-results').style.display='none';
+  try {
+    const d = await postJSON('/api/ai/youtube', {topic, is_short: isShort});
+    if(d.error){ showToast(d.error,'error'); return; }
+    renderYTResults(d);
+    showToast('YouTube package generated!','success');
+  } catch(e){showToast(e.message,'error');}
+  finally{btn.disabled=false; btn.textContent='✨ Generate Full Package';}
+}
+
+function renderYTResults(d) {
+  // Titles
+  const titlesEl = document.getElementById('yt-titles');
+  titlesEl.innerHTML = (d.titles||[]).map((t,i) => `
+    <div onclick="navigator.clipboard.writeText(${JSON.stringify(t.text)}).then(()=>showToast('Title copied!','success'))"
+         style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .15s;"
+         onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='var(--border)'">
+      <span style="font-size:10px;color:var(--text-muted);min-width:22px;">#${i+1}</span>
+      <span style="flex:1;font-size:13px;font-weight:600;">${t.text}</span>
+      <span style="font-size:10px;background:rgba(130,80,255,.12);color:#8250ff;padding:2px 7px;border-radius:3px;white-space:nowrap;">${t.type||''}</span>
+      ${t.score?`<span style="font-size:11px;font-weight:700;color:#8250ff;">${t.score}</span>`:''}
+      <span style="font-size:10px;color:var(--text-muted);">📋</span>
+    </div>
+  `).join('');
+
+  // Category badge
+  document.getElementById('yt-category-badge').textContent = d.category || '';
+
+  // Description
+  document.getElementById('yt-description').value = d.description || '';
+
+  // Chapters
+  const chapters = (d.chapters||[]).map(c=>`${c.time}  ${c.title}`).join('\n');
+  document.getElementById('yt-chapters').value = chapters;
+
+  // SEO Keywords
+  document.getElementById('yt-seo-keywords').innerHTML = (d.seo_keywords||[]).map(k=>
+    tagPill(k, 'rgba(78,158,255,.1)', 'rgba(78,158,255,.3)')
+  ).join('');
+
+  // Tags
+  _ytTagList = [...(d.tags||[])];
+  renderYTTags();
+
+  // Hooks
+  document.getElementById('yt-hooks').innerHTML = (d.hook_lines||[]).map(h=>
+    `<div onclick="navigator.clipboard.writeText(${JSON.stringify(h)}).then(()=>showToast('Copied!','success'))"
+          style="padding:10px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;line-height:1.5;"
+          onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='var(--border)'">⚡ ${h}</div>`
+  ).join('');
+
+  // Thumbnail headlines
+  document.getElementById('yt-thumbnails').innerHTML = (d.thumbnail_headlines||[]).map(h=>
+    `<div onclick="navigator.clipboard.writeText(${JSON.stringify(h)}).then(()=>showToast('Copied!','success'))"
+          style="padding:10px 14px;background:linear-gradient(135deg,rgba(130,80,255,.1),rgba(94,58,219,.05));border:1px solid rgba(130,80,255,.2);border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;"
+          onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='rgba(130,80,255,.2)'">${h}</div>`
+  ).join('');
+
+  // Best time + CTA + Tips
+  document.getElementById('yt-best-time').textContent = d.best_posting_time || '—';
+  document.getElementById('yt-cta').textContent = d.end_screen_cta || '—';
+  document.getElementById('yt-tips').innerHTML = (d.content_tips||[]).map(t=>
+    `<div style="padding:8px 12px;background:var(--bg-card-2);border-left:3px solid #8250ff;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;">💡 ${t}</div>`
+  ).join('');
+
+  document.getElementById('yt-ai-results').style.display = 'block';
+}
+
+function renderYTTags() {
+  document.getElementById('yt-tags').innerHTML = _ytTagList.map((tag,i) =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(130,80,255,.1);border:1px solid rgba(130,80,255,.25);padding:3px 9px;border-radius:3px;font-size:11px;">
+      ${tag}
+      <span onclick="_ytTagList.splice(${i},1);renderYTTags();" style="cursor:pointer;color:var(--text-muted);margin-left:2px;" title="Remove">×</span>
+    </span>`
+  ).join('');
+}
+function addTagYT() {
+  const inp = document.getElementById('yt-tag-add');
+  const val = inp.value.trim(); if(!val) return;
+  if(!_ytTagList.includes(val)) _ytTagList.push(val);
+  inp.value = ''; renderYTTags();
+}
+function copyTagsYT() {
+  navigator.clipboard.writeText(_ytTagList.join(', ')).then(()=>showToast('Tags copied!','success'));
+}
+async function expandTagsYT() {
+  if(!_ytTagList.length){ showToast('No tags to expand','warn'); return; }
+  showToast('Expanding tags with AI…','info');
+  const d = await postJSON('/api/ai/expand-tags', {tags: _ytTagList});
+  if(d.error){ showToast(d.error,'error'); return; }
+  if(d.all_tags) { _ytTagList = d.all_tags; renderYTTags(); showToast('Tags expanded!','success'); }
+}
+
+// ── Instagram Generator ───────────────────────────────────────
+async function generateInstagram() {
+  const topic = document.getElementById('ig-topic').value.trim();
+  if(!topic){ showToast('Enter a topic','warn'); return; }
+  const btn = document.getElementById('ig-ai-btn');
+  btn.disabled=true; btn.textContent='⏳ Generating…';
+  document.getElementById('ig-ai-results').style.display='none';
+  try {
+    const d = await postJSON('/api/ai/instagram', {topic, content_type: _igType});
+    if(d.error){ showToast(d.error,'error'); return; }
+    renderIGResults(d);
+    showToast('Instagram package generated!','success');
+  } catch(e){showToast(e.message,'error');}
+  finally{btn.disabled=false; btn.textContent='✨ Generate Full Package';}
+}
+
+function renderIGResults(d) {
+  // Captions
+  const toneColors = {energetic:'rgba(255,60,172,.08)', informative:'rgba(78,158,255,.08)', casual:'rgba(0,212,168,.08)'};
+  const toneBorders = {energetic:'rgba(255,60,172,.2)', informative:'rgba(78,158,255,.2)', casual:'rgba(0,212,168,.2)'};
+  document.getElementById('ig-captions').innerHTML = (d.captions||[]).map((c,i)=>`
+    <div style="border:1px solid ${toneBorders[c.tone]||'var(--border)'};border-radius:var(--radius-sm);overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:${toneColors[c.tone]||'var(--bg-card-2)'};">
+        <div>
+          <span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);">Option ${i+1} · ${c.tone||''}  </span>
+          <span style="font-size:11px;font-style:italic;color:var(--text-muted);">"${c.hook||''}"</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="copyEl('ig-caption-${i}')">📋 Copy</button>
+      </div>
+      <div style="padding:14px;">
+        <div id="ig-caption-${i}" style="font-size:12px;white-space:pre-wrap;line-height:1.7;">${c.text||''}</div>
+      </div>
+    </div>
+  `).join('');
+
+  // Reel hook + best time
+  document.getElementById('ig-reel-hook').textContent = d.reel_hook || '—';
+  document.getElementById('ig-best-time').textContent = d.best_posting_time || '—';
+
+  // Script outline
+  document.getElementById('ig-script').innerHTML=(d.reel_script_outline||[]).map(s=>
+    `<div style="padding:8px 12px;background:var(--bg-card-2);border-left:3px solid rgba(255,60,172,.4);border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;">${s}</div>`
+  ).join('');
+
+  // Story sequence
+  document.getElementById('ig-stories').innerHTML=(d.story_sequence||[]).map((s,i)=>
+    `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 12px;background:var(--bg-card-2);border-radius:var(--radius-sm);border:1px solid var(--border);font-size:12px;">
+      <span style="width:22px;height:22px;border-radius:50%;background:rgba(255,60,172,.15);color:#ff3cac;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</span>
+      ${s}
+    </div>`
+  ).join('');
+
+  // Hashtags
+  const h = d.hashtags||{};
+  const hColour = {mega:'rgba(255,60,172,.1)',large:'rgba(255,107,53,.1)',medium:'rgba(78,158,255,.1)',niche:'rgba(0,212,168,.1)'};
+  const hBorder = {mega:'rgba(255,60,172,.25)',large:'rgba(255,107,53,.25)',medium:'rgba(78,158,255,.25)',niche:'rgba(0,212,168,.25)'};
+  ['mega','large','medium','niche'].forEach(k=>{
+    document.getElementById('ig-hash-'+k).innerHTML=(Array.isArray(h[k])?h[k]:[]).map(t=>tagPill(t,hColour[k],hBorder[k])).join('');
+  });
+  document.getElementById('ig-hashtags-full').textContent = h.full_set || (h.all_tags||[]).join(' ');
+
+  // CTAs
+  document.getElementById('ig-ctas').innerHTML=(d.cta_options||[]).map(c=>
+    `<div onclick="navigator.clipboard.writeText(${JSON.stringify(c)}).then(()=>showToast('CTA copied!','success'))"
+          style="padding:10px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;"
+          onmouseover="this.style.borderColor='rgba(255,60,172,.4)'" onmouseout="this.style.borderColor='var(--border)'">${c}</div>`
+  ).join('');
+
+  document.getElementById('ig-ai-results').style.display='block';
+}
+
+// ── Seed Tag Expander ─────────────────────────────────────────
+async function expandSeeds() {
+  const raw = document.getElementById('seed-tags-input').value.trim();
+  if(!raw){ showToast('Enter seed tags','warn'); return; }
+  const tags = raw.includes(',') ? raw.split(',').map(t=>t.trim()).filter(Boolean)
+                                  : raw.split('\n').map(t=>t.trim()).filter(Boolean);
+  const btn = document.getElementById('expand-tags-btn');
+  btn.disabled=true; btn.textContent='⏳ Expanding…';
+  document.getElementById('tag-expand-results').style.display='none';
+  try {
+    const d = await postJSON('/api/ai/expand-tags', {tags});
+    if(d.error){ showToast(d.error,'error'); return; }
+    document.getElementById('tags-primary').innerHTML=(d.primary||[]).map(t=>tagPill(t)).join('');
+    document.getElementById('tags-secondary').innerHTML=(d.secondary||[]).map(t=>tagPill(t,'rgba(78,158,255,.1)','rgba(78,158,255,.25)')).join('');
+    document.getElementById('tags-longtail').innerHTML=(d.long_tail||[]).map(t=>tagPill(t,'rgba(0,212,168,.1)','rgba(0,212,168,.25)')).join('');
+    document.getElementById('tags-trending').innerHTML=(d.trending_related||[]).map(t=>tagPill(t,'rgba(255,107,53,.1)','rgba(255,107,53,.25)')).join('');
+    document.getElementById('all-expanded-tags').textContent=(d.all_tags||[]).join(', ');
+    document.getElementById('tag-explanation').textContent=d.explanation||'';
+    document.getElementById('tag-expand-results').style.display='block';
+    showToast('Tags expanded!','success');
+  } catch(e){showToast(e.message,'error');}
+  finally{btn.disabled=false; btn.textContent='🔮 Expand Tags with AI';}
+}
+</script>
+{% endblock %}

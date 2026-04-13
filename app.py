@@ -414,12 +414,83 @@ def api_save_keys():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     data = request.get_json() or {}
     db = get_db()
-    for k in ['yt_api_key', 'home_channel']:
+    for k in ['yt_api_key', 'home_channel', 'openrouter_api_key', 'content_niche']:
         if k in data:
             db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (k, data[k]))
     db.commit()
     return jsonify({'ok': True})
 
+
+# ── AI Content Studio ──────────────────────────────────────────
+
+@app.route('/ai-content')
+def ai_content_page():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    settings = _get_settings_dict()
+    ai_configured = bool(settings.get('openrouter_api_key', '').strip())
+    return render_template('ai_content.html', settings=settings, ai_configured=ai_configured)
+
+
+@app.route('/api/ai/youtube', methods=['POST'])
+def api_ai_youtube():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data      = request.get_json() or {}
+    topic     = data.get('topic', '').strip()
+    is_short  = bool(data.get('is_short', False))
+    if not topic: return jsonify({'error': 'No topic provided'}), 400
+    cfg     = _get_settings_dict()
+    api_key = cfg.get('openrouter_api_key', '').strip()
+    if not api_key: return jsonify({'error': 'OpenRouter API key not configured. Go to Settings → API Keys.'}), 400
+    niche = cfg.get('content_niche', '')
+    try:
+        from modules.ai_generator import generate_youtube_content
+        result = generate_youtube_content(topic, api_key, niche, is_short)
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        app.logger.error(f'AI YouTube error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/instagram', methods=['POST'])
+def api_ai_instagram():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data         = request.get_json() or {}
+    topic        = data.get('topic', '').strip()
+    content_type = data.get('content_type', 'reel')
+    if not topic: return jsonify({'error': 'No topic provided'}), 400
+    cfg     = _get_settings_dict()
+    api_key = cfg.get('openrouter_api_key', '').strip()
+    if not api_key: return jsonify({'error': 'OpenRouter API key not configured. Go to Settings → API Keys.'}), 400
+    niche = cfg.get('content_niche', '')
+    try:
+        from modules.ai_generator import generate_instagram_content
+        result = generate_instagram_content(topic, api_key, niche, content_type)
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        app.logger.error(f'AI Instagram error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/expand-tags', methods=['POST'])
+def api_ai_expand_tags():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data      = request.get_json() or {}
+    seed_tags = data.get('tags', [])
+    if not seed_tags: return jsonify({'error': 'No seed tags provided'}), 400
+    cfg     = _get_settings_dict()
+    api_key = cfg.get('openrouter_api_key', '').strip()
+    if not api_key: return jsonify({'error': 'OpenRouter API key not configured.'}), 400
+    niche = cfg.get('content_niche', '')
+    try:
+        from modules.ai_generator import expand_tags
+        result = expand_tags(seed_tags, api_key, niche)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ── Thumbnail / watermark preview ─────────────────────────────

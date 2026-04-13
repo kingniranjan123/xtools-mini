@@ -72,6 +72,10 @@
       <a class="nav-item {% if request.endpoint == 'analytics_page' %}active{% endif %}" href="{{ url_for('analytics_page') }}">
         <span class="nav-icon">📊</span> Analytics
       </a>
+      <a class="nav-item {% if request.endpoint == 'ai_content_page' %}active{% endif %}" href="{{ url_for('ai_content_page') }}">
+        <span class="nav-icon">🤖</span> AI Content
+        <span class="nav-badge" style="background:rgba(130,80,255,.15);color:#8250ff;border-color:rgba(130,80,255,.3);">AI</span>
+      </a>
 
       <div class="nav-label" style="margin-top:12px;">System</div>
       <a class="nav-item {% if request.endpoint == 'settings_page' %}active{% endif %}" href="{{ url_for('settings_page') }}">

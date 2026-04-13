@@ -96,6 +96,48 @@
   </div>
 </div>
 
+<!-- OpenRouter / AI -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">
+    <div class="card-title">🤖 OpenRouter (Gemini 2.5 Pro — AI Content)</div>
+    {% if settings.openrouter_api_key %}
+      <span class="badge badge-green">✓ Configured</span>
+    {% else %}
+      <span class="badge badge-orange">Not Set</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <div class="form-hint" style="margin-bottom:16px; padding:12px; background:rgba(130,80,255,0.06); border:1px solid rgba(130,80,255,0.2); border-radius:var(--radius-sm);">
+      <strong style="color:#8250ff;">✨ Powers AI Content Studio</strong> — generates YouTube titles, descriptions, tags, hooks, and Instagram captions + hashtags from a single line of text using <strong>Gemini 2.5 Pro</strong>.
+      <br><br>
+      Get a free key:
+      <ol style="margin: 8px 0 0 16px; font-size:12px; line-height:1.8;">
+        <li>Go to <a href="https://openrouter.ai/keys" target="_blank" style="color:#8250ff;">openrouter.ai/keys</a> → Sign up (free)</li>
+        <li>Create a new API key</li>
+        <li>Paste it below — Gemini 2.5 Pro is free tier eligible</li>
+      </ol>
+    </div>
+    <div class="form-group">
+      <label class="form-label">OpenRouter API Key</label>
+      <div style="display:flex; gap:8px;">
+        <input class="form-input mono" id="openrouter-api-key" type="password"
+          placeholder="sk-or-v1-..."
+          value="{{ settings.openrouter_api_key or '' }}" style="flex:1;">
+        <button class="btn btn-ghost btn-sm" onclick="toggleKeyVisibility('openrouter-api-key', this)">👁 Show</button>
+      </div>
+      <div class="form-hint">Stored locally. Never sent to any server except openrouter.ai.</div>
+    </div>
+    <div class="form-group" style="margin-top:16px;">
+      <label class="form-label">📺 Channel / Account Niche (optional, improves AI output)</label>
+      <input class="form-input" id="content-niche" type="text"
+        placeholder="e.g. tech tutorials, fitness, cooking, travel vlogs"
+        value="{{ settings.content_niche or '' }}">
+      <div class="form-hint">Tells the AI what your channel is about for more targeted suggestions.</div>
+    </div>
+    <button class="btn btn-primary" style="background:linear-gradient(135deg,#8250ff,#5e3adb);" onclick="saveOpenRouterKey()">✨ Save AI Settings</button>
+  </div>
+</div>
+
 </div>
 
 <!-- ── 1. General Paths ─────────────────────────────────────────── -->
@@ -473,6 +515,14 @@ async function saveApiKeys() {
   const home = document.getElementById('home-channel').value.trim();
   const resp = await postJSON('/api/settings/keys/save', { yt_api_key: key, home_channel: home });
   if (resp.ok) { showToast('API key & Home Channel saved!', 'success'); setTimeout(() => location.reload(), 900); }
+  else showToast(resp.error || 'Failed', 'error');
+}
+
+async function saveOpenRouterKey() {
+  const key   = document.getElementById('openrouter-api-key').value.trim();
+  const niche = document.getElementById('content-niche').value.trim();
+  const resp  = await postJSON('/api/settings/keys/save', { openrouter_api_key: key, content_niche: niche });
+  if (resp.ok) { showToast('AI settings saved!', 'success'); setTimeout(() => location.reload(), 900); }
   else showToast(resp.error || 'Failed', 'error');
 }
 
