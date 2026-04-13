@@ -122,7 +122,7 @@ def index():
 
     # Total size
     total_bytes = sum(
-        f.stat().st_size
+        f.st_size
         for dirpath, _, files in os.walk(DOWNLOADS_DIR)
         for f in [os.stat(os.path.join(dirpath, fname)) for fname in files
                   if fname.endswith('.mp4')]
