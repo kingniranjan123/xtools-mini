@@ -35,29 +35,33 @@ def get_account_status(profile_id):
     now = time.time()
     win_start = acc_state.get('window_start', 0.0)
     count = acc_state.get('count', 0)
-    
+
     elapsed = now - win_start
     if elapsed >= WINDOW_SECONDS:
+        # Window has expired — treat as fresh slate.
+        # DO NOT write back here; record_account_usage handles the reset on next use.
         return {'in_cooldown': False, 'used': 0, 'remaining': BATCH_LIMIT,
-                'window_start': now, 'cooldown_ends': now + WINDOW_SECONDS, 'seconds_left': 0}
-                
+                'window_start': 0, 'cooldown_ends': 0, 'seconds_left': 0}
+
     remaining = max(0, BATCH_LIMIT - count)
+    cooldown_ends = win_start + WINDOW_SECONDS
     return {'in_cooldown': count >= BATCH_LIMIT, 'used': count, 'remaining': remaining,
-            'window_start': win_start, 'cooldown_ends': win_start + WINDOW_SECONDS, 
-            'seconds_left': max(0, int((win_start + WINDOW_SECONDS) - now))}
+            'window_start': win_start, 'cooldown_ends': cooldown_ends,
+            'seconds_left': max(0, int(cooldown_ends - now))}
 
 def record_account_usage(profile_id, count=1):
     state = _load_rate_state()
     acc_state = state.get(profile_id, {})
     now = time.time()
-    
+
     if now - acc_state.get('window_start', 0.0) >= WINDOW_SECONDS:
+        # Window expired — start a fresh window right now and persist it
         acc_state['window_start'] = now
         acc_state['count'] = 0
-        
+
     acc_state['count'] = acc_state.get('count', 0) + count
     state[profile_id] = acc_state
-    _save_rate_state(state)
+    _save_rate_state(state)   # always persist after every usage
 
 def get_active_profile(purpose='download'):
     """
