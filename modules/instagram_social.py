@@ -178,6 +178,10 @@ def lookup_user(username: str, cookies_file: str) -> dict:
             'is_private':      user.get('is_private', False),
             'profile_pic_url': user.get('profile_pic_url', ''),
         }
+    except requests.exceptions.HTTPError as exc:
+        if resp.status_code == 429:
+            return {'error': 'Instagram is currently rate-limiting profile previews (Error 429). The preview cannot be loaded, but you can still try clicking Download 10 Reels to proceed with the extraction backend.'}
+        return {'error': str(exc)}
     except Exception as exc:
         return {'error': str(exc)}
 

@@ -59,7 +59,7 @@
         <div class="form-group">
           <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
           <div style="display:flex;gap:8px;">
-            <input class="form-input mono" id="yt-out-dir" type="text" placeholder="Leave blank for default" />
+            <input class="form-input mono" id="yt-out-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_yt', '') }}" />
             <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
           </div>
           <div class="form-hint">Defaults to the location in Settings.</div>

@@ -142,10 +142,14 @@ def index():
         recent_reels=[dict(r) for r in reels_recent]
     )
 
+def _get_settings_dict():
+    rows = get_db().execute('SELECT key, value FROM settings').fetchall()
+    return {r['key']: r['value'] for r in rows}
+
 @app.route('/download')
 def download_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
-    return render_template('download.html', system=system_status())
+    return render_template('download.html', system=system_status(), settings=_get_settings_dict())
 
 @app.route('/metadata')
 def metadata_page():
@@ -191,17 +195,17 @@ def split_trailer_page():
 @app.route('/extract-audio')
 def extract_audio_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
-    return render_template('extract_audio.html')
+    return render_template('extract_audio.html', settings=_get_settings_dict())
 
 @app.route('/merge-audio')
 def merge_audio_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
-    return render_template('merge_audio.html')
+    return render_template('merge_audio.html', settings=_get_settings_dict())
 
 @app.route('/youtube')
 def youtube_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
-    return render_template('youtube.html')
+    return render_template('youtube.html', settings=_get_settings_dict())
 
 @app.route('/settings')
 def settings_page():
@@ -295,7 +299,8 @@ def api_download():
         custom_dir = True
         _out = out_dir
         if not _out:
-            _out = DOWNLOADS_DIR
+            rows = get_db().execute('SELECT value FROM settings WHERE key=?', ('dir_ig',)).fetchone()
+            _out = (rows['value'].strip() if rows and rows['value'] else '') or DOWNLOADS_DIR
             custom_dir = False
         results = download_reels(
             urls=urls,
@@ -824,8 +829,9 @@ def api_youtube_download():
     def run():
         yt_dir = data.get('output_dir', '').strip()
         custom_dir = True
-        if not yt_dir: 
-            yt_dir = os.path.join(DOWNLOADS_DIR, '_youtube')
+        if not yt_dir:
+            rows = get_db().execute('SELECT value FROM settings WHERE key=?', ('dir_yt',)).fetchone()
+            yt_dir = (rows['value'].strip() if rows and rows['value'] else '') or os.path.join(DOWNLOADS_DIR, '_youtube')
             custom_dir = False
         results = download_youtube(
             urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only, custom_dir=custom_dir,
@@ -1008,7 +1014,8 @@ def api_download_userid():
         import re as _re
         base_dir    = data.get('output_dir', '').strip()
         if not base_dir: 
-            base_dir = DOWNLOADS_DIR
+            rows = get_db().execute('SELECT value FROM settings WHERE key=?', ('dir_ig',)).fetchone()
+            base_dir = (rows['value'].strip() if rows and rows['value'] else '') or DOWNLOADS_DIR
             out_dir  = os.path.join(base_dir, username)
         else:
             out_dir  = base_dir
@@ -1045,6 +1052,22 @@ def api_download_userid():
                 else:
                     _emit(job, line)
         proc.wait()
+
+        # Parse downloaded metadata directly into DB
+        for fname in os.listdir(out_dir):
+            if fname.endswith('.info.json'):
+                json_path = os.path.join(out_dir, fname)
+                base = fname[:-10]  # remove .info.json
+                meta = extract_metadata_from_json(json_path)
+                mp4_path = os.path.join(out_dir, base + '.mp4')
+                jpg_path = os.path.join(out_dir, base + '.jpg')
+                if os.path.isfile(mp4_path):
+                    meta['file_path'] = mp4_path
+                if os.path.isfile(jpg_path):
+                    meta['thumbnail'] = jpg_path
+                meta['account'] = username
+                meta['status'] = 'ok'
+                _save_reel_to_db(meta)
 
         final = _get_uid_dl_status()
         _finish(job, f'Downloaded {downloaded} reels from @{username}',
