@@ -1267,14 +1267,13 @@ def api_save_poster_auth():
 
 # ── Boot ──────────────────────────────────────────────────────
 if __name__ == '__main__':
-    from modules.db import init_db
     init_db()
-    
+
     # Pre-populate P1-P5 in DB
     from modules.account_manager import ensure_default_profiles_exist
     with app.app_context():
         ensure_default_profiles_exist()
-        
+
     # Boot Poster Daemon
     def get_context_for_poster():
         with app.app_context():
@@ -1286,7 +1285,7 @@ if __name__ == '__main__':
     threading.Thread(target=run_poster_daemon, args=(get_context_for_poster,), daemon=True).start()
 
     cuda_str = 'CUDA ACTIVE' if CUDA_INFO['available'] else 'CPU Mode'
-    print(f'\n  Nikethan Reels Toolkit')
+    print(f'\n  *** Nikethan Reels Toolkit ***')
     print(f'  GPU: {cuda_str}')
-    print(f'  http://localhost:5055\n')
+    print(f'  Starting on http://localhost:5055\n')
     app.run(host='0.0.0.0', port=5055, debug=False)
