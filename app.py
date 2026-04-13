@@ -371,6 +371,14 @@ def api_pick_folder():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/utils/test-gpu')
+def api_test_gpu():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    import modules.cuda_check
+    modules.cuda_check._cache = None
+    res = modules.cuda_check.detect_cuda()
+    return jsonify(res)
+
 # ══════════════════════════════════════════════════════════════
 #  API — Metadata
 # ══════════════════════════════════════════════════════════════

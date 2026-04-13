@@ -15,7 +15,40 @@
   <p class="page-subtitle">Configure cookies, watermark defaults, and application preferences.</p>
 </div>
 
+<style>
+  .settings-tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 12px 20px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    white-space: nowrap;
+    transition: 0.2s;
+  }
+  .settings-tab-btn:hover { color: var(--text); }
+  .settings-tab-btn.active {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+  }
+  .settings-tab-content { display: none; }
+  .settings-tab-content.active { display: block; animation: fadein 0.3s forwards; }
+  @keyframes fadein { from {opacity:0;} to {opacity:1;} }
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+</style>
+
+<!-- ── TABS NAV ──────────────────────────────────────────────── -->
+<div style="display:flex; border-bottom:1px solid var(--border); margin-bottom:20px; overflow-x:auto;" class="hide-scrollbar">
+  <button class="settings-tab-btn active" id="tabbtn-dirs" onclick="showSettingsTab('dirs')">📁 Directories</button>
+  <button class="settings-tab-btn" id="tabbtn-auth" onclick="showSettingsTab('auth')">🍪 Authentication</button>
+  <button class="settings-tab-btn" id="tabbtn-wm" onclick="showSettingsTab('wm')">◎ Watermarks</button>
+  <button class="settings-tab-btn" id="tabbtn-rates" onclick="showSettingsTab('rates')">⏱ Rate Limits</button>
+  <button class="settings-tab-btn" id="tabbtn-sys" onclick="showSettingsTab('sys')">⚙️ System & GPU</button>
+</div>
+
 <!-- ── 1. General Paths ─────────────────────────────────────────── -->
+<div id="settings-tab-dirs" class="settings-tab-content active">
 <div class="section-heading">Download Directories</div>
 
 <div class="card" style="margin-bottom:20px;">
@@ -43,7 +76,10 @@
   </div>
 </div>
 
+</div>
+
 <!-- ── 2. Cookies ───────────────────────────────────────────── -->
+<div id="settings-tab-auth" class="settings-tab-content">
 <div class="section-heading">Authentication</div>
 
 <div class="card" style="margin-bottom:20px;">
@@ -114,7 +150,10 @@
   </div>
 </div>
 
+</div>
+
 <!-- ── 3. Watermark Defaults ──────────────────────────────── -->
+<div id="settings-tab-wm" class="settings-tab-content">
 <div class="section-heading">Watermark Defaults</div>
 
 <div class="card" style="margin-bottom:20px;">
@@ -217,7 +256,10 @@
   </div>
 </div>
 
+</div>
+
 <!-- ── 4. Rate Limits ─────────────────────────────────────── -->
+<div id="settings-tab-rates" class="settings-tab-content">
 <div class="section-heading">Rate Limits</div>
 
 <div class="card" style="margin-bottom:20px;">
@@ -270,6 +312,44 @@
   </div>
 </div>
 
+<!-- ── 5. System & GPU (NEW TAB) ──────────────────────────── -->
+<div id="settings-tab-sys" class="settings-tab-content">
+  <div class="section-heading">System & GPU</div>
+
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+      <div class="card-title">🖥 GPU Hardware Acceleration</div>
+      <div id="gpu-badge-container"></div>
+    </div>
+    <div class="card-body">
+      <div style="margin-bottom:16px;">
+        <button class="btn btn-primary" onclick="testGPUsystem()" id="btn-gpu-test">
+          🔍 Run GPU Test
+        </button>
+      </div>
+
+      <div id="gpu-test-result" style="display:none; padding:16px; background:var(--bg-card-2); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:16px;">
+        <div style="font-family:var(--font-mono); font-size:13px;" id="gpu-test-output"></div>
+      </div>
+
+      <div style="padding:16px; background:rgba(0,212,168,0.06); border:1px solid rgba(0,212,168,0.2); border-radius:var(--radius);">
+        <div style="font-size:13px; font-weight:700; color:var(--accent-green); margin-bottom:8px;">💡 Setting Up GPU Encoding (NVENC)</div>
+        <div style="font-size:12px; color:var(--text-secondary); line-height:1.6;">
+          Hardware acceleration offloads video rendering to your NVIDIA GPU, cutting merge/watermark times by ~85%.
+          <br><br>
+          <ol style="margin-left: 16px; margin-top: 4px;">
+            <li>Install latest <strong>NVIDIA Graphic Drivers</strong> on your machine.</li>
+            <li>Download an FFmpeg build with NVENC support (e.g. from <em>Gyan.dev</em> or <em>BtbN</em>).</li>
+            <li>Extract the FFmpeg `.exe` files into a folder (like `C:\ffmpeg\bin`).</li>
+            <li>Add that folder to your Windows <strong>System PATH</strong> Environment Variable.</li>
+            <li>Restart Nikethan toolkit using `start server.bat`.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Cookie preview modal -->
 <div id="cookie-modal" style="display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
   <div class="card" style="width:100%; max-width:680px; margin:20px;">
@@ -287,6 +367,52 @@
 
 {% block scripts %}
 <script>
+// ── Settings Tabs ────────────────────────────────────────
+function showSettingsTab(tabId) {
+  document.querySelectorAll('.settings-tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.settings-tab-btn').forEach(el => el.classList.remove('active'));
+  
+  document.getElementById('settings-tab-' + tabId).classList.add('active');
+  document.getElementById('tabbtn-' + tabId).classList.add('active');
+}
+
+// ── GPU Tester ────────────────────────────────────────
+async function testGPUsystem() {
+  const btn = document.getElementById('btn-gpu-test');
+  const outBox = document.getElementById('gpu-test-result');
+  const outText = document.getElementById('gpu-test-output');
+  const badge = document.getElementById('gpu-badge-container');
+
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner" style="width:14px;height:14px;border:2px solid #fff;border-bottom-color:transparent;border-radius:50%;display:inline-block;animation:spin 1s linear infinite;"></span> Probing Hardware...`;
+  
+  try {
+    const resp = await fetch('/api/utils/test-gpu');
+    const data = await resp.json();
+    
+    outBox.style.display = 'block';
+    if(data.error) throw new Error(data.error);
+
+    let html = `<strong>Hardware:</strong> ${data.device || 'None/Unrecognized'}<br>`;
+    html += `<strong>CUDA Ready:</strong> ${data.available ? '<span style="color:var(--accent-green)">YES</span>' : '<span style="color:#ff4444">NO</span>'}<br>`;
+    html += `<strong>FFmpeg Encoder:</strong> ${data.encoder}`;
+    outText.innerHTML = html;
+
+    if (data.available) {
+      badge.innerHTML = '<span class="badge badge-green">CUDA ACTIVE</span>';
+    } else {
+      badge.innerHTML = '<span class="badge badge-red">CPU ONLY (No CUDA)</span>';
+    }
+
+  } catch(e) {
+    outBox.style.display = 'block';
+    outText.innerHTML = `<span style="color:#ff4444">Error detecting GPU: ${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `🔍 Run GPU Test`;
+  }
+}
+
 // ── Cookie tab switch ────────────────────────────────────
 function switchCookieTab(tab) {
   document.getElementById('tab-paste').style.display    = tab === 'paste'  ? 'block' : 'none';
