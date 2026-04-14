@@ -506,7 +506,7 @@ def api_ai_test_key():
     """Ultra-cheap connection test: sends Hi with max_tokens=10. Costs ~0 credits."""
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     data    = request.get_json() or {}
-    api_key = data.get('api_key', '').strip() or _read_setting('openrouter_api_key', '').strip()
+    api_key = (data.get('api_key') or '').strip() or (_read_setting('openrouter_api_key') or '').strip()
     if not api_key:
         return jsonify({'ok': False, 'error': 'No API key provided'})
     try:
@@ -545,7 +545,7 @@ def api_ai_test_key():
 def api_ai_credits():
     """Check OpenRouter credit balance via two methods with graceful fallback."""
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
-    api_key = _read_setting('openrouter_api_key', '').strip()
+    api_key = (_read_setting('openrouter_api_key') or '').strip()
     if not api_key:
         return jsonify({'ok': False, 'error': 'No API key configured'})
     try:
@@ -606,7 +606,7 @@ def api_analytics_youtube():
         from modules.analytics_db import save_snapshot
         result = get_youtube_channel_stats(channel, api_key)
         # Determine if this is the user's "home" channel
-        home_ch = _read_setting('home_channel', '').strip().lstrip('@').lower()
+        home_ch = (_read_setting('home_channel') or '').strip().lstrip('@').lower()
         ch_handle = result['channel'].get('title', '').lower()
         is_own = bool(home_ch and (home_ch in ch_handle or ch_handle in home_ch or
                                     home_ch == result['channel']['id'].lower()))
@@ -640,7 +640,7 @@ def api_analytics_multi():
         from modules.analytics import get_multi_channel_comparison
         from modules.analytics_db import save_snapshot
         results = get_multi_channel_comparison(channels, api_key)
-        home_ch = _read_setting('home_channel', '').strip().lstrip('@').lower()
+        home_ch = (_read_setting('home_channel') or '').strip().lstrip('@').lower()
         for r in results:
             if r.get('error') or not r.get('full_data'):
                 continue
