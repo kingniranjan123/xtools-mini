@@ -782,6 +782,91 @@ def api_system_update_ytdlp():
     return jsonify({'ok': True, 'job_id': job_id})
 
 
+@app.route('/api/system/test-infra')
+def api_test_infra():
+    """Deep live test: ffmpeg encode, GPU, yt-dlp version, Python encoding."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    import shutil, sys, tempfile as _tf
+    results = []
+
+    # ── 1. ffmpeg present ──────────────────────────────────────
+    ffmpeg_path = shutil.which('ffmpeg')
+    if ffmpeg_path:
+        try:
+            ver_out = subprocess.check_output(
+                ['ffmpeg', '-version'], stderr=subprocess.STDOUT,
+                text=True, encoding='utf-8', errors='replace'
+            )
+            ver_line = ver_out.splitlines()[0]
+            results.append({'name': 'FFmpeg Binary', 'ok': True,
+                            'detail': ver_line, 'path': ffmpeg_path})
+        except Exception as e:
+            results.append({'name': 'FFmpeg Binary', 'ok': False, 'detail': str(e)})
+    else:
+        results.append({'name': 'FFmpeg Binary', 'ok': False,
+                        'detail': 'ffmpeg not found in PATH'})
+
+    # ── 2. GPU / NVENC ─────────────────────────────────────────
+    try:
+        enc_out = subprocess.check_output(
+            ['ffmpeg', '-encoders'], stderr=subprocess.STDOUT,
+            text=True, encoding='utf-8', errors='replace'
+        )
+        if 'h264_nvenc' in enc_out:
+            from modules.cuda_check import detect_cuda
+            cuda = detect_cuda()
+            results.append({'name': 'GPU / NVENC', 'ok': True,
+                            'detail': f'h264_nvenc available — device: {cuda.get("device", "unknown")}'})
+        else:
+            results.append({'name': 'GPU / NVENC', 'ok': False,
+                            'detail': 'h264_nvenc encoder NOT listed — GPU encoding unavailable; will fallback to CPU'})
+    except Exception as e:
+        results.append({'name': 'GPU / NVENC', 'ok': False, 'detail': str(e)})
+
+    # ── 3. FFmpeg encode smoke-test (1s black clip) ────────────
+    try:
+        with _tf.TemporaryDirectory() as tmpdir:
+            out = os.path.join(tmpdir, 'test.mp4')
+            cmd = ['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=black:s=160x90:r=1',
+                   '-t', '1', '-c:v', 'libx264', '-preset', 'ultrafast', out]
+            r = subprocess.run(cmd, capture_output=True, text=True,
+                               encoding='utf-8', errors='replace', timeout=30)
+            if r.returncode == 0 and os.path.isfile(out):
+                results.append({'name': 'FFmpeg Encode Test (CPU)', 'ok': True,
+                                'detail': 'Encoded a 1-second test clip successfully'})
+            else:
+                results.append({'name': 'FFmpeg Encode Test (CPU)', 'ok': False,
+                                'detail': r.stderr[-300:] if r.stderr else 'No output file created'})
+    except Exception as e:
+        results.append({'name': 'FFmpeg Encode Test (CPU)', 'ok': False, 'detail': str(e)})
+
+    # ── 4. yt-dlp present ─────────────────────────────────────
+    try:
+        ver = subprocess.check_output(
+            ['yt-dlp', '--version'], stderr=subprocess.DEVNULL,
+            text=True, encoding='utf-8', errors='replace', timeout=10
+        ).strip()
+        results.append({'name': 'yt-dlp Binary', 'ok': True, 'detail': f'Version {ver}'})
+    except Exception as e:
+        results.append({'name': 'yt-dlp Binary', 'ok': False, 'detail': str(e)})
+
+    # ── 5. Python locale / encoding ───────────────────────────
+    import locale
+    fs_enc   = sys.getfilesystemencoding()
+    std_enc  = sys.stdout.encoding or 'unknown'
+    loc_info = locale.getpreferredencoding(False)
+    safe = (fs_enc.lower() == 'utf-8' and 'utf' in std_enc.lower())
+    results.append({
+        'name': 'Python Locale (UTF-8)',
+        'ok': safe,
+        'detail': (f'filesystem={fs_enc}  stdout={std_enc}  locale={loc_info}'
+                   + ('' if safe else ' — ⚠️ Non-UTF8 locale can cause UnicodeDecodeError with special filenames'))
+    })
+
+    all_ok = all(r['ok'] for r in results)
+    return jsonify({'ok': all_ok, 'results': results})
+
+
 # ── AI Content Studio ──────────────────────────────────────────
 
 @app.route('/ai-content')
@@ -925,7 +1010,8 @@ def api_download():
         # ── Pipeline: watermark / split / part-stamp ──────────
         if any([opt_watermark, opt_split, opt_parts]):
             from modules.pipeline import run_pipeline
-            settings = _get_settings_dict()
+            with app.app_context():
+                settings = _get_settings_dict()
             pipeline_results = []
             for r in results:
                 fp = r.get('file_path') or r.get('path', '')
@@ -967,7 +1053,7 @@ def _save_reel_to_db(info: dict):
             json.dumps(info.get('mentions', [])),
             info.get('duration'), info.get('file_path'),
             info.get('thumbnail'),
-            datetime.utcnow().isoformat(),
+            datetime.now(_dt_module.UTC).isoformat(),
         ))
         con.commit()
     finally:
@@ -1447,12 +1533,13 @@ def api_ig_extract():
         data_path  = os.path.join(ig_dir, f'{username}_{list_type}_{extract_id[:8]}.json')
         with open(data_path, 'w', encoding='utf-8') as fp:
             json.dump(users, fp, ensure_ascii=False, indent=2)
-        db = get_db()
-        db.execute(
-            'INSERT INTO ig_extractions (id,username,list_type,count,data_path,extracted_at) VALUES (?,?,?,?,?,?)',
-            (extract_id, username, list_type, len(users), data_path, datetime.utcnow().isoformat())
-        )
-        db.commit()
+        with app.app_context():
+            db = get_db()
+            db.execute(
+                'INSERT INTO ig_extractions (id,username,list_type,count,data_path,extracted_at) VALUES (?,?,?,?,?,?)',
+                (extract_id, username, list_type, len(users), data_path, datetime.now(_dt_module.UTC).isoformat())
+            )
+            db.commit()
         _finish(job, f'Extracted {len(users)} users', users=users, extract_id=extract_id)
 
     threading.Thread(target=run, daemon=True).start()
@@ -2058,14 +2145,15 @@ def api_download_userid():
             return
 
         # Duplicate checking
-        db = get_db()
-        fresh_shortcodes = []
-        for sc in shortcodes:
-            # yt-dlp 'id' equals shortcode usually
-            if not db.execute("SELECT 1 FROM reels WHERE id=?", (sc,)).fetchone():
-                fresh_shortcodes.append(sc)
-            if len(fresh_shortcodes) >= limit:
-                break
+        with app.app_context():
+            db = get_db()
+            fresh_shortcodes = []
+            for sc in shortcodes:
+                # yt-dlp 'id' equals shortcode usually
+                if not db.execute("SELECT 1 FROM reels WHERE id=?", (sc,)).fetchone():
+                    fresh_shortcodes.append(sc)
+                if len(fresh_shortcodes) >= limit:
+                    break
                 
         if not fresh_shortcodes:
             _emit(job, f'All {len(shortcodes)} recent reels are already downloaded (duplicates skipped).')

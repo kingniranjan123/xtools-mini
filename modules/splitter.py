@@ -16,7 +16,7 @@ def _get_duration(path: str) -> float:
         '-of', 'default=noprint_wrappers=1:nokey=1',
         path
     ]
-    out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True).strip()
+    out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True, encoding='utf-8', errors='replace').strip()
     return float(out) if out else 0.0
 
 
@@ -64,7 +64,7 @@ def split_equal(input_path: str, n: int, out_dir: str,
 
     proc = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1
+        text=True, encoding='utf-8', errors='replace', bufsize=1
     )
     for line in proc.stdout:
         line = line.rstrip()
@@ -122,7 +122,7 @@ def split_trailer(input_path: str, clips: list, out_dir: str,
 
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1
+            text=True, encoding='utf-8', errors='replace', bufsize=1
         )
         for line in proc.stdout:
             if progress_cb and line.strip():

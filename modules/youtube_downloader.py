@@ -45,7 +45,7 @@ def _download_yt_single(url, quality, output_dir, custom_dir, audio_only,
 
     # Get metadata first
     info_cmd = ytdlp + ['--rm-cache-dir', '--print-json', '--no-download', '--no-playlist', url]
-    raw = subprocess.check_output(info_cmd, stderr=subprocess.DEVNULL, text=True, timeout=60)
+    raw = subprocess.check_output(info_cmd, stderr=subprocess.DEVNULL, text=True, encoding='utf-8', errors='replace', timeout=60)
     info = json.loads(raw.splitlines()[0])
 
     title   = info.get('title', 'unknown')
@@ -85,7 +85,7 @@ def _download_yt_single(url, quality, output_dir, custom_dir, audio_only,
 
     proc = subprocess.Popen(
         dl_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1
+        text=True, encoding='utf-8', errors='replace', bufsize=1
     )
     for line in proc.stdout:
         line = line.rstrip()

@@ -51,7 +51,7 @@ def _download_single(url, quality, cookies_file, downloads_dir, custom_dir, prog
         info_cmd += ['--cookies', cookies_file]
 
     raw_info_text = subprocess.check_output(
-        info_cmd, stderr=subprocess.DEVNULL, text=True, timeout=60
+        info_cmd, stderr=subprocess.DEVNULL, text=True, encoding='utf-8', errors='replace', timeout=60
     )
     raw_info = json.loads(raw_info_text)
 
@@ -88,7 +88,7 @@ def _download_single(url, quality, cookies_file, downloads_dir, custom_dir, prog
     proc = subprocess.Popen(
         dl_cmd,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1
+        text=True, encoding='utf-8', errors='replace', bufsize=1
     )
 
     for line in proc.stdout:
