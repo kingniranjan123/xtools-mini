@@ -176,7 +176,7 @@ def watermark_page():
                     'count':   len(mp4s),
                     'size_mb': f'{size / 1024**2:.1f}',
                 })
-    return render_template('watermark.html', folders=folders)
+    return render_template('watermark.html', folders=folders, settings=_get_settings_dict())
 
 @app.route('/split/equal')
 def split_equal_page():
@@ -1255,11 +1255,37 @@ def api_wm_apply():
     scale        = float(request.form.get('scale', 0.15))
     output_mode  = request.form.get('output_mode', 'new_folder')
     watermark_path = request.form.get('watermark_path', '')
-    mode         = request.form.get('mode', 'upload')
+    mode         = request.form.get('mode', 'upload')   # upload | instagram | text
+    wm_type_req  = request.form.get('wm_type', '')      # 'text' forces text watermark
 
     if not folder or not os.path.isdir(folder):
         return jsonify({'error': 'Invalid folder'}), 400
 
+    # ── Text Watermark Mode ────────────────────────────────────────────────
+    if mode == 'text' or wm_type_req == 'text':
+        cfg = _get_settings()
+        wm_text     = request.form.get('wm_text', '').strip() or cfg.get('wm_text', '@nikethan')
+        wm_font     = cfg.get('wm_font', 'Calibri')
+        wm_fontsize = int(cfg.get('wm_fontsize', 24))
+        wm_color    = cfg.get('wm_color', 'white')
+        wm_opacity  = float(cfg.get('wm_opacity', 85)) / 100
+
+        job_id = str(uuid.uuid4())
+        job    = _make_job(job_id)
+        def run_text():
+            count = apply_watermark_to_folder(
+                folder=folder, watermark_path=None,
+                position=position, opacity=wm_opacity, scale=scale,
+                output_mode=output_mode,
+                wm_type='text', wm_text=wm_text,
+                wm_font=wm_font, wm_fontsize=wm_fontsize, wm_color=wm_color,
+                progress_cb=lambda line, pct=None: _emit(job, line, pct),
+            )
+            _finish(job, f'Watermarked {count} files (text)', count=count)
+        threading.Thread(target=run_text, daemon=True).start()
+        return jsonify({'job_id': job_id})
+
+    # ── Image Watermark Mode ───────────────────────────────────────────────
     # Handle file upload
     if mode == 'upload' and 'watermark_file' in request.files:
         wm_file = request.files['watermark_file']
@@ -1270,7 +1296,7 @@ def api_wm_apply():
         watermark_path = wm_dest
 
     if not watermark_path or not os.path.isfile(watermark_path):
-        return jsonify({'error': 'No valid watermark image'}), 400
+        return jsonify({'error': 'No valid watermark image. Choose an image file, Instagram fetch, or switch to Text mode.'}), 400
 
     job_id = str(uuid.uuid4())
     job    = _make_job(job_id)
@@ -1334,7 +1360,10 @@ def api_cookies_save():
     db = get_db()
     db.execute("UPDATE ig_accounts SET cookie_path=? WHERE id=?", (cookie_path, account_id))
     db.commit()
-    return jsonify({'ok': True, 'lines': len(lines)})
+
+    # Warn if sessionid is missing (required for authenticated Instagram downloads)
+    has_sessionid = any('sessionid' in l.lower() for l in lines)
+    return jsonify({'ok': True, 'lines': len(lines), 'sessionid_warning': not has_sessionid})
 
 @app.route('/api/settings/cookies/preview')
 def api_cookies_preview():
@@ -1704,6 +1733,8 @@ def api_youtube_reel_convert():
     clip_start   = float(data.get('clip_start', 0))
     clip_end     = float(data.get('clip_end', 0))
     quality      = data.get('quality', '1080')
+    title_pos_pct = float(data.get('title_pos_pct', 20.0))
+    part_pos_pct  = float(data.get('part_pos_pct', 82.0))
 
     if not url:
         return jsonify({'error': 'No YouTube URL provided'}), 400
@@ -1758,6 +1789,8 @@ def api_youtube_reel_convert():
             show_title      = show_title,
             show_part_label = show_part,
             show_watermark  = show_wm,
+            title_pos_pct   = title_pos_pct,
+            part_pos_pct    = part_pos_pct,
             clip_start_sec  = clip_start,
             clip_end_sec    = clip_end,
             progress_cb     = lambda line: _emit(job, line),
@@ -1795,6 +1828,8 @@ def api_youtube_reel_convert_local():
     show_wm      = bool(data.get('show_watermark', bool(watermark)))
     clip_start   = float(data.get('clip_start', 0))
     clip_end     = float(data.get('clip_end', 0))
+    title_pos_pct = float(data.get('title_pos_pct', 20.0))
+    part_pos_pct  = float(data.get('part_pos_pct', 82.0))
 
     job_id = str(uuid.uuid4())
     job    = _make_job(job_id)
@@ -1808,6 +1843,7 @@ def api_youtube_reel_convert_local():
             title=title, watermark=watermark,
             part_duration_sec=part_secs,
             show_title=show_title, show_part_label=show_part, show_watermark=show_wm,
+            title_pos_pct=title_pos_pct, part_pos_pct=part_pos_pct,
             clip_start_sec=clip_start, clip_end_sec=clip_end,
             progress_cb=lambda line: _emit(job, line),
         )

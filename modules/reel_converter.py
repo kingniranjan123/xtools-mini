@@ -52,9 +52,9 @@ def probe_video(path: str) -> dict:
 
 # ── FFmpeg filter builder ─────────────────────────────────────────
 
-def build_vf(in_w: int, in_h: int, part_num: int, title: str, watermark: str,
-             show_part_label: bool = True, show_title: bool = True,
-             show_watermark: bool = True) -> str:
+def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: str,
+                  show_title: bool, show_part_label: bool, show_watermark: bool,
+                  title_pos_pct: float = 20.0, part_pos_pct: float = 82.0) -> str:
     """
     Build the -vf filter chain for one part.
     """
@@ -75,26 +75,26 @@ def build_vf(in_w: int, in_h: int, part_num: int, title: str, watermark: str,
 
     filters = [scale_pad]
 
-    # Title: top-center
+    # Title: Custom centered placement
     if show_title and title.strip():
         safe_title = title.replace("'", "\\'").replace(":", "\\:")
         text = f"{safe_title} - Part {part_num}"
+        y_pos = f"h*{title_pos_pct/100.0:.2f}"
         filters.append(
             f"drawtext=text='{text}':"
             f"fontcolor=white:fontsize=52:font='Sans':"
-            f"x=(w-text_w)/2:y=55:"
+            f"x=(w-text_w)/2:y={y_pos}:"
             f"shadowcolor=black@0.85:shadowx=2:shadowy=2"
         )
 
-    # Part label: center of bottom padding zone
+    # Part label: Custom centered bottom placement
     if show_part_label:
         part_label = f"Part -{part_num}"
-        # Bottom bar starts at roughly (REEL_H + scaled_h)/2 = variable, so
-        # use a fixed y near the bottom third
+        y_pos = f"h*{part_pos_pct/100.0:.2f}"
         filters.append(
             f"drawtext=text='{part_label}':"
             f"fontcolor=white:fontsize=64:font='Sans':"
-            f"x=(w-text_w)/2:y=(h*0.82):"
+            f"x=(w-text_w)/2:y={y_pos}:"
             f"shadowcolor=black@0.9:shadowx=3:shadowy=3"
         )
 
@@ -161,6 +161,8 @@ def convert_to_reels(
     show_title: bool  = True,
     show_part_label: bool = True,
     show_watermark: bool = True,
+    title_pos_pct: float = 20.0,
+    part_pos_pct: float = 82.0,
     # Optional: clip a specific range before splitting
     clip_start_sec: float = 0.0,
     clip_end_sec:   float = 0.0,   # 0 = full video
@@ -214,8 +216,9 @@ def convert_to_reels(
         out_name = f"{base_name}_part{part_num:02d}.mp4"
         out_path = os.path.join(output_dir, out_name)
 
-        vf = build_vf(in_w, in_h, part_num, title, watermark,
-                      show_part_label, show_title, show_watermark)
+        vf = build_filters(in_w, in_h, part_num, title, watermark,
+                           show_title, show_part_label, show_watermark,
+                           title_pos_pct, part_pos_pct)
 
         if progress_cb:
             progress_cb(f'🎬 Encoding Part {part_num}/{num_parts} → {out_name}')

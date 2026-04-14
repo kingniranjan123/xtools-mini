@@ -57,6 +57,9 @@
           <button class="btn btn-sm btn-ghost" id="tab-instagram-btn" onclick="switchWMTab('instagram')" style="flex:1;">
             📸 From Instagram
           </button>
+          <button class="btn btn-sm btn-ghost" id="tab-text-btn" onclick="switchWMTab('text')" style="flex:1;">
+            ✏ Text Watermark
+          </button>
         </div>
 
         <!-- Upload tab -->
@@ -81,6 +84,22 @@
           <div id="wm-ig-preview" style="margin-top:12px; display:none; text-align:center;">
             <img id="wm-ig-img" style="width:80px; height:80px; border-radius:50%; border:2px solid var(--accent); object-fit:cover;" />
             <div style="font-size:12px; color:var(--text-secondary); margin-top:6px;" id="wm-ig-name"></div>
+          </div>
+        </div>
+
+        <!-- Text Watermark tab -->
+        <div id="tab-text" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Watermark Text</label>
+            <input class="form-input" id="wm-text-override" type="text"
+              placeholder="@nikethan"
+              value="{{ settings.wm_text or '@nikethan' }}" />
+            <div class="form-hint">Leave blank to use the default from Settings → Watermarks.</div>
+          </div>
+          <div style="background:rgba(255,193,7,0.08); border:1px solid rgba(255,193,7,0.3); border-radius:6px; padding:10px; font-size:12px; color:var(--text-secondary);">
+            ✏ Text mode uses the font, size, colour &amp; opacity saved in
+            <a href="/settings" style="color:var(--accent);">Settings → Watermarks</a>.
+            The position grid (Step 3) still applies.
           </div>
         </div>
       </div>
@@ -192,11 +211,16 @@ function selectFolder(card, path, name) {
 
 function switchWMTab(tab) {
   wmMode = tab;
-  document.getElementById('tab-upload').style.display = tab === 'upload' ? 'block' : 'none';
-  document.getElementById('tab-instagram').style.display = tab === 'instagram' ? 'block' : 'none';
-  document.getElementById('tab-upload-btn').style.background = tab === 'upload' ? 'var(--bg-card)' : 'transparent';
-  document.getElementById('tab-upload-btn').style.border = tab === 'upload' ? '1px solid var(--border)' : 'none';
-  document.getElementById('tab-instagram-btn').style.background = tab === 'instagram' ? 'var(--bg-card)' : 'transparent';
+  document.getElementById('tab-upload').style.display    = tab === 'upload'    ? 'block' : 'none';
+  document.getElementById('tab-instagram').style.display = tab === 'instagram'  ? 'block' : 'none';
+  document.getElementById('tab-text').style.display      = tab === 'text'       ? 'block' : 'none';
+  ['upload','instagram','text'].forEach(t => {
+    const btn = document.getElementById('tab-' + t + '-btn');
+    if (btn) {
+      btn.style.background = (t === tab) ? 'var(--bg-card)' : 'transparent';
+      btn.style.border     = (t === tab) ? '1px solid var(--border)' : 'none';
+    }
+  });
 }
 
 function onWMFileSelect(input) {
@@ -227,6 +251,23 @@ async function fetchIGWatermark() {
 async function applyWatermark() {
   if (!selectedFolderPath) { showToast('Select a folder first', 'warn'); return; }
   const fileInput = document.getElementById('wm-file');
+
+  // ── Text Watermark Mode ──
+  if (wmMode === 'text') {
+    const fd = new FormData();
+    fd.append('folder',       selectedFolderPath);
+    fd.append('position',     document.getElementById('wm-position').value);
+    fd.append('opacity',      parseInt(document.getElementById('wm-opacity').value) / 100);
+    fd.append('scale',        parseInt(document.getElementById('wm-scale').value) / 100);
+    fd.append('output_mode',  document.getElementById('wm-output-mode').value);
+    fd.append('mode',         'text');
+    fd.append('wm_text',      document.getElementById('wm-text-override').value.trim());
+    const resp = await fetch('/api/watermark/apply', { method: 'POST', body: fd });
+    const data = await resp.json();
+    handleWMJob(data);
+    return;
+  }
+
   let body = {
     folder: selectedFolderPath,
     position: document.getElementById('wm-position').value,
@@ -248,7 +289,7 @@ async function applyWatermark() {
     return;
   }
 
-  if (!wmImagePath) { showToast('Choose a watermark image or fetch from Instagram', 'warn'); return; }
+  if (!wmImagePath) { showToast('Choose a watermark image, fetch from Instagram, or switch to ✏ Text mode', 'warn'); return; }
   const resp = await postJSON('/api/watermark/apply', body);
   handleWMJob(resp);
 }

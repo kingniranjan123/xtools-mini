@@ -500,12 +500,15 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block modals %}
 <!-- Cookie Modals -->
-<div id="cookie-manager-modal" style="display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+<div id="cookie-manager-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
   <div class="card" style="width:100%; max-width:600px; margin:20px;">
     <div class="card-header">
       <div class="card-title">🍪 Manage Profile: <span id="current-account-label" style="color:var(--accent);">P1</span></div>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cookie-manager-modal').style.display='none'">✕</button>
+      <button class="btn btn-ghost btn-sm" onclick="window.closeCookieModal()">✕</button>
     </div>
     <div class="card-body">
       <input type="hidden" id="current-account-id" value="p1">
@@ -518,7 +521,7 @@
       <div id="tab-paste">
         <label class="form-label">Paste cookies.txt content</label>
         <textarea class="form-textarea mono" id="cookie-text" rows="10" placeholder=".instagram.com	TRUE	/	TRUE..."></textarea>
-        <button class="btn btn-primary" style="margin-top:12px;" onclick="saveCookiePaste()">💾 Save Cookies</button>
+        <button class="btn btn-primary" style="margin-top:12px;" onclick="window.saveCookiePaste()">💾 Save Cookies</button>
       </div>
 
       <div id="tab-upload" style="display:none;">
@@ -532,21 +535,107 @@
   </div>
 </div>
 
-<div id="cookie-preview-modal" style="display:none; position:fixed; inset:0; z-index:210; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+<div id="cookie-preview-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
   <div class="card" style="width:100%; max-width:680px; margin:20px;">
     <div class="card-header">
       <div class="card-title">🍪 Preview Cookies</div>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cookie-preview-modal').style.display='none'">✕</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cookie-preview-modal').style.removeProperty('display')">✕</button>
     </div>
     <div class="card-body">
       <div class="code-block" id="cookie-preview-content" style="max-height:400px; overflow-y:auto; font-size:11px;"></div>
     </div>
   </div>
 </div>
-
 {% endblock %}
 
 {% block scripts %}
+<script>
+/* ── Cookie Manager — window-scoped so always reachable from onclick ── */
+window.openCookieModal = function(accountId) {
+  try {
+    var modal = document.getElementById('cookie-manager-modal');
+    var idEl  = document.getElementById('current-account-id');
+    var lblEl = document.getElementById('current-account-label');
+    var txtEl = document.getElementById('cookie-text');
+    if (!modal || !idEl || !lblEl || !txtEl) {
+      alert('Cookie modal elements not found. Please reload the page.');
+      return;
+    }
+    idEl.value          = accountId;
+    lblEl.textContent   = accountId.toUpperCase();
+    txtEl.value         = '';
+    modal.style.setProperty('display', 'flex', 'important');
+    window.switchCookieTab && window.switchCookieTab('paste');
+  } catch(e) {
+    console.error('[openCookieModal]', e);
+    alert('Error opening cookie manager: ' + e.message);
+  }
+};
+
+window.switchCookieTab = function(tab) {
+  var paste  = document.getElementById('tab-paste');
+  var upload = document.getElementById('tab-upload');
+  var pBtn   = document.getElementById('tab-paste-btn');
+  var uBtn   = document.getElementById('tab-upload-btn');
+  if (!paste || !upload) return;
+  paste.style.display  = tab === 'paste'  ? 'block' : 'none';
+  upload.style.display = tab === 'upload' ? 'block' : 'none';
+  if (pBtn) { pBtn.style.background = tab === 'paste'  ? 'var(--bg-card)' : 'transparent'; pBtn.style.border = tab === 'paste' ? '1px solid var(--border)' : 'none'; }
+  if (uBtn) { uBtn.style.background = tab === 'upload' ? 'var(--bg-card)' : 'transparent'; uBtn.style.border = tab === 'upload' ? '1px solid var(--border)' : 'none'; }
+};
+
+window.closeCookieModal = function() {
+  var modal = document.getElementById('cookie-manager-modal');
+  if (modal) modal.style.removeProperty('display');
+};
+
+window.saveCookiePaste = async function() {
+  var txtEl = document.getElementById('cookie-text');
+  var idEl  = document.getElementById('current-account-id');
+  if (!txtEl || !idEl) return;
+  var text  = txtEl.value.trim();
+  var accId = idEl.value;
+  if (!text) { showToast('Paste your cookies.txt content first', 'warn'); return; }
+  if (!text.includes('instagram.com')) { showToast('This does not look like Instagram cookies', 'warn'); return; }
+  var resp = await postJSON('/api/settings/cookies/save', { content: text, account_id: accId });
+  if (resp.ok) {
+    if (resp.sessionid_warning) showToast('⚠️ Saved but sessionid missing — Instagram logins may fail', 'warn');
+    else showToast('Profile ' + accId.toUpperCase() + ' saved! (' + resp.lines + ' lines)', 'success');
+    setTimeout(function(){ location.reload(); }, 1400);
+  } else showToast(resp.error || 'Failed to save', 'error');
+};
+
+window.uploadCookieFile = async function(input) {
+  var file  = input.files[0];
+  var idEl  = document.getElementById('current-account-id');
+  if (!file || !idEl) return;
+  var accId = idEl.value;
+  var text  = await file.text();
+  if (!text.includes('instagram.com')) { showToast('This does not look like Instagram cookies', 'warn'); return; }
+  var resp = await postJSON('/api/settings/cookies/save', { content: text, account_id: accId });
+  if (resp.ok) {
+    if (resp.sessionid_warning) showToast('⚠️ Saved but sessionid missing — Instagram logins may fail', 'warn');
+    else showToast('Profile ' + accId.toUpperCase() + ' saved!', 'success');
+    setTimeout(function(){ location.reload(); }, 1400);
+  } else showToast(resp.error || 'Failed', 'error');
+};
+
+window.previewCookies = async function(accountId) {
+  var resp = await fetch('/api/settings/cookies/preview?account_id=' + accountId);
+  var data = await resp.json();
+  var el   = document.getElementById('cookie-preview-content');
+  var mod  = document.getElementById('cookie-preview-modal');
+  if (el) el.textContent = data.content || '(empty)';
+  if (mod) mod.style.setProperty('display', 'flex', 'important');
+};
+
+window.deleteCookies = async function(accountId) {
+  if (!confirm('Delete cookies for ' + accountId.toUpperCase() + '?')) return;
+  var resp = await postJSON('/api/settings/cookies/delete', { account_id: accountId });
+  if (resp.ok) location.reload();
+  else showToast(resp.error || 'Failed', 'error');
+};
+</script>
 <script>
 function showSettingsTab(tabId) {
   document.querySelectorAll('.settings-tab-content').forEach(el => el.classList.remove('active'));
@@ -725,58 +814,9 @@ async function testGPUsystem() {
   }
 }
 
-// ── Cookie Management ────────────────────────────────────
-function openCookieModal(accountId) {
-  document.getElementById('current-account-id').value = accountId;
-  document.getElementById('current-account-label').textContent = accountId.toUpperCase();
-  document.getElementById('cookie-text').value = '';
-  document.getElementById('cookie-manager-modal').style.display = 'flex';
-  switchCookieTab('paste');
-}
-
-function switchCookieTab(tab) {
-  document.getElementById('tab-paste').style.display    = tab === 'paste'  ? 'block' : 'none';
-  document.getElementById('tab-upload').style.display   = tab === 'upload' ? 'block' : 'none';
-  document.getElementById('tab-paste-btn').style.background  = tab === 'paste'  ? 'var(--bg-card)' : 'transparent';
-  document.getElementById('tab-paste-btn').style.border      = tab === 'paste'  ? '1px solid var(--border)' : 'none';
-  document.getElementById('tab-upload-btn').style.background = tab === 'upload' ? 'var(--bg-card)' : 'transparent';
-  document.getElementById('tab-upload-btn').style.border     = tab === 'upload' ? '1px solid var(--border)' : 'none';
-}
-
-async function saveCookiePaste() {
-  const text = document.getElementById('cookie-text').value.trim();
-  const accId = document.getElementById('current-account-id').value;
-  if (!text) { showToast('Paste your cookies.txt content first', 'warn'); return; }
-  if (!text.includes('instagram.com')) { showToast('This does not look like Instagram cookies', 'warn'); return; }
-  const resp = await postJSON('/api/settings/cookies/save', { content: text, account_id: accId });
-  if (resp.ok) { showToast('Profile ' + accId.toUpperCase() + ' saved! (' + resp.lines + ' lines)', 'success'); setTimeout(() => location.reload(), 1200); }
-  else showToast(resp.error || 'Failed to save', 'error');
-}
-
-async function uploadCookieFile(input) {
-  const file = input.files[0];
-  const accId = document.getElementById('current-account-id').value;
-  if (!file) return;
-  
-  const text = await file.text();
-  if (!text.includes('instagram.com')) { showToast('This does not look like Instagram cookies', 'warn'); return; }
-  const resp = await postJSON('/api/settings/cookies/save', { content: text, account_id: accId });
-  if (resp.ok) { showToast('Profile ' + accId.toUpperCase() + ' saved!', 'success'); setTimeout(() => location.reload(), 1200); }
-  else showToast(resp.error || 'Failed', 'error');
-}
-
-async function previewCookies(accountId) {
-  const resp = await fetch('/api/settings/cookies/preview?account_id=' + accountId);
-  const data = await resp.json();
-  document.getElementById('cookie-preview-content').textContent = data.content || '(empty)';
-  document.getElementById('cookie-preview-modal').style.display = 'flex';
-}
-
-async function deleteCookies(accountId) {
-
-  const resp = await postJSON('/api/settings/cookies/delete', { account_id: accountId });
-  if (resp.ok) { location.reload(); }
-}
+// ── Cookie Management — functions live in the modals block script above ──
+// (openCookieModal, switchCookieTab, saveCookiePaste, uploadCookieFile,
+//  previewCookies, deleteCookies are all window-scoped there)
 
 // ── Watermark position ───────────────────────────────────
 function selectSettingsPos(btn, value) {

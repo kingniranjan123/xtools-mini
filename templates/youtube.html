@@ -261,17 +261,27 @@
           <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
             <input type="checkbox" id="overlay-title" checked style="accent-color:var(--accent);margin-top:3px;">
             <div style="flex:1;">
-              <div style="font-size:13px;font-weight:600;">📌 Title (top-center)</div>
+              <div style="font-size:13px;font-weight:600;">📌 Title (Centered Top Area)</div>
               <div style="font-size:11px;color:var(--text-muted);">e.g. "Movie Name - Part 1"</div>
               <input class="form-input" id="reel-title" type="text" placeholder="Video title (auto-filled from YouTube if blank)" style="margin-top:8px;font-size:12px;">
+              <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+                <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Placement From Top:</span>
+                <input type="range" id="title-pos-pct" min="5" max="50" value="20" style="flex:1; accent-color:var(--accent);" oninput="document.getElementById('title-pos-val').textContent = this.value + '%'">
+                <span id="title-pos-val" style="font-size:11px; font-weight:600; min-width:30px; font-family:var(--font-mono)">20%</span>
+              </div>
             </div>
           </label>
 
-          <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
-            <input type="checkbox" id="overlay-part" checked style="accent-color:var(--accent);">
-            <div>
-              <div style="font-size:13px;font-weight:600;">🔢 Part Number (bottom area)</div>
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
+            <input type="checkbox" id="overlay-part" checked style="accent-color:var(--accent);margin-top:3px;">
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:600;">🔢 Part Number (Centered Bottom Area)</div>
               <div style="font-size:11px;color:var(--text-muted);">"Part -1", "Part -2" … auto-increments</div>
+              <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+                <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Placement From Top:</span>
+                <input type="range" id="part-pos-pct" min="50" max="95" value="82" style="flex:1; accent-color:var(--accent);" oninput="document.getElementById('part-pos-val').textContent = this.value + '%'">
+                <span id="part-pos-val" style="font-size:11px; font-weight:600; min-width:30px; font-family:var(--font-mono)">82%</span>
+              </div>
             </div>
           </label>
 
@@ -514,8 +524,12 @@ async function startReelConvert() {
   const clipEnd   = isEqual ? 0 : (parseFloat(document.getElementById('reel-clip-end').value)||0);
   const quality   = document.getElementById('reel-quality').value;
 
+  const titlePos  = parseInt(document.getElementById('title-pos-pct')?.value) || 20;
+  const partPos   = parseInt(document.getElementById('part-pos-pct')?.value) || 82;
+
   let payload = {title, watermark: wm, part_duration: partDur,
                   show_title: showTitle, show_part_label: showPart, show_watermark: showWm,
+                  title_pos_pct: titlePos, part_pos_pct: partPos,
                   clip_start: clipStart, clip_end: clipEnd, output_dir: outDir, quality};
 
   let endpoint;
