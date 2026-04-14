@@ -135,6 +135,13 @@
         value="{{ settings.content_niche or '' }}">
       <div class="form-hint">Tells the AI what your channel is about for more targeted suggestions.</div>
     </div>
+    <div class="form-group" style="margin-top:16px;">
+      <label class="form-label">🧠 Preferred OpenRouter Model (optional)</label>
+      <input class="form-input mono" id="openrouter-model" type="text"
+        placeholder="e.g. google/gemini-2.0-flash-001"
+        value="{{ settings.openrouter_model or '' }}">
+      <div class="form-hint">Leave blank to use automatic fallback models.</div>
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
       <button class="btn btn-primary" style="background:linear-gradient(135deg,#8250ff,#5e3adb);" onclick="saveOpenRouterKey()">✨ Save AI Settings</button>
       <button class="btn btn-secondary" id="or-test-btn" onclick="testOpenRouterKey()">🔌 Test Connection</button>
@@ -482,6 +489,7 @@
   <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
       <div class="card-title">🖥 GPU Hardware Acceleration (CUDA/NVENC)</div>
+      <div id="gpu-badge-container"></div>
     </div>
     <div class="card-body">
       <div style="padding:16px; background:rgba(0,212,168,0.06); border:1px solid rgba(0,212,168,0.2); border-radius:var(--radius);">
@@ -496,6 +504,17 @@
             <li>If NVIDIA is detected, app processes natively route heavily through the GPU.</li>
           </ol>
         </div>
+      </div>
+      <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" id="btn-gpu-test" onclick="testGPUsystem()">🔍 Run GPU Test</button>
+        <button class="btn btn-primary btn-sm" id="btn-initial-setup" onclick="runInitialSetup()">🚀 Run Initial Setup</button>
+      </div>
+      <div id="initial-setup-box" style="display:none; margin-top:12px; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card-2);">
+        <div id="initial-setup-status" style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">Preparing setup...</div>
+        <div id="initial-setup-progress" style="font-size:11px; color:var(--text-secondary); font-family:var(--font-mono); max-height:130px; overflow:auto;"></div>
+      </div>
+      <div id="gpu-test-result" style="display:none; margin-top:12px; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card-2);">
+        <div id="gpu-test-output" style="font-size:12px; color:var(--text-secondary);"></div>
       </div>
     </div>
   </div>
@@ -674,6 +693,70 @@ window.deleteCookies = async function(accountId) {
 };
 </script>
 <script>
+
+async function runInitialSetup() {
+  const btn = document.getElementById('btn-initial-setup');
+  const box = document.getElementById('initial-setup-box');
+  const status = document.getElementById('initial-setup-status');
+  const progress = document.getElementById('initial-setup-progress');
+
+  box.style.display = 'block';
+  progress.innerHTML = '';
+  status.textContent = 'Starting initial setup...';
+  btn.disabled = true;
+  btn.textContent = '⏳ Running Setup…';
+
+  try {
+    const startResp = await fetch('/api/system/initial-setup/start', { method: 'POST' });
+    const startData = await startResp.json();
+    if (!startResp.ok || !startData.ok || !startData.job_id) {
+      throw new Error(startData.error || ('HTTP ' + startResp.status));
+    }
+
+    const jobId = startData.job_id;
+    let done = false;
+    let shown = 0;
+
+    while (!done) {
+      await new Promise(r => setTimeout(r, 1200));
+      const pollResp = await fetch('/api/system/initial-setup/status/' + encodeURIComponent(jobId));
+      const pollData = await pollResp.json();
+      if (!pollResp.ok) throw new Error(pollData.error || ('HTTP ' + pollResp.status));
+
+      const events = pollData.events || [];
+      while (shown < events.length) {
+        const ev = events[shown++];
+        const line = document.createElement('div');
+        const ok = ev.ok ? '✅' : '❌';
+        line.textContent = ok + ' ' + ev.step + ': ' + (ev.detail || '');
+        progress.appendChild(line);
+        progress.scrollTop = progress.scrollHeight;
+      }
+
+      done = !!pollData.done;
+      if (done) {
+        if (pollData.ok) {
+          status.innerHTML = '<span style="color:#00d470; font-weight:700;">✅ Initial setup completed successfully.</span>';
+          showToast('Initial setup complete', 'success');
+        } else {
+          status.innerHTML = '<span style="color:#ff5a5a; font-weight:700;">⚠ Setup finished with issues. Check details below.</span>';
+          showToast('Initial setup finished with issues', 'warn');
+        }
+        try { await fetchSystemStatus(); } catch(e) {}
+      } else {
+        status.textContent = 'Running setup steps...';
+      }
+    }
+
+  } catch (e) {
+    status.innerHTML = '<span style="color:#ff5a5a; font-weight:700;">Failed to run setup: ' + e.message + '</span>';
+    showToast('Initial setup failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 Run Initial Setup';
+  }
+}
+
 async function runInfraTest() {
   var btn     = document.getElementById('infra-run-btn');
   var spinner = document.getElementById('infra-spinner');
@@ -688,7 +771,12 @@ async function runInfraTest() {
 
   try {
     var resp = await fetch('/api/system/test-infra');
+    if (!resp.ok) {
+      var failTxt = await resp.text();
+      throw new Error('HTTP ' + resp.status + ' ' + failTxt.slice(0, 160));
+    }
     var data = await resp.json();
+    if (data.error) throw new Error(data.error);
 
     spinner.style.display = 'none';
     btn.disabled = false;
@@ -774,7 +862,8 @@ async function saveApiKeys() {
 async function saveOpenRouterKey() {
   const key   = document.getElementById('openrouter-api-key').value.trim();
   const niche = document.getElementById('content-niche').value.trim();
-  const resp  = await postJSON('/api/settings/keys/save', { openrouter_api_key: key, content_niche: niche });
+  const model = document.getElementById('openrouter-model')?.value.trim() || '';
+  const resp  = await postJSON('/api/settings/keys/save', { openrouter_api_key: key, content_niche: niche, openrouter_model: model });
   if (resp.ok) { showToast('AI settings saved!', 'success'); setTimeout(() => location.reload(), 900); }
   else showToast(resp.error || 'Failed', 'error');
 }
@@ -1021,26 +1110,35 @@ async function fetchSystemStatus() {
     el.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:16px;">Loading system status... <span class="spinner"></span></div>';
     
     const resp = await fetch('/api/system/status');
+    if (!resp.ok) {
+      const failTxt = await resp.text();
+      throw new Error('HTTP ' + resp.status + ' ' + failTxt.slice(0, 160));
+    }
     const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    const ffmpeg = data.ffmpeg || {};
+    const ytdlp  = data.ytdlp || {};
+    const cuda   = data.cuda || {};
     
     let html = `
       <div style="font-size:13px; font-family:var(--font-mono); display:flex; align-items:center; gap:8px;">
-        ${data.ffmpeg.installed ? '<span style="color:#0f0;">[X]</span> FFmpeg installed' : '<span style="color:#f00;">[ ]</span> FFmpeg Missing'} 
-        ${data.ffmpeg.is_local ? ' <span class="badge badge-green">LOCAL</span>' : ''}
-        <span style="color:var(--text-muted); font-size:10px;">${data.ffmpeg.version ? `(${data.ffmpeg.version.substring(0,30)}...)` : ''}</span>
+        ${ffmpeg.installed ? '<span style="color:#0f0;">[X]</span> FFmpeg installed' : '<span style="color:#f00;">[ ]</span> FFmpeg Missing'} 
+        ${ffmpeg.is_local ? ' <span class="badge badge-green">LOCAL</span>' : ''}
+        <span style="color:var(--text-muted); font-size:10px;">${ffmpeg.version ? `(${ffmpeg.version.substring(0,30)}...)` : '(version unknown)'}</span>
       </div>
       <div style="font-size:13px; font-family:var(--font-mono); display:flex; align-items:center; gap:8px;">
-        ${data.ytdlp.installed ? '<span style="color:#0f0;">[X]</span> yt-dlp installed' : '<span style="color:#f00;">[ ]</span> yt-dlp Missing'} 
-        <span style="color:var(--text-muted); font-size:10px;">${data.ytdlp.version ? `(v${data.ytdlp.version})` : ''}</span>
+        ${ytdlp.installed ? '<span style="color:#0f0;">[X]</span> yt-dlp installed' : '<span style="color:#f00;">[ ]</span> yt-dlp Missing'} 
+        <span style="color:var(--text-muted); font-size:10px;">${ytdlp.version ? `(v${ytdlp.version})` : '(version unknown)'}</span>
       </div>
       <div style="font-size:13px; font-family:var(--font-mono); display:flex; align-items:center; gap:8px;">
-        ${data.cuda.available ? '<span style="color:#0f0;">[X]</span> NVIDIA CUDA detected' : '<span style="color:#aaa;">[ ]</span> CPU Only Mode (No CUDA)'} 
-        <span style="color:var(--text-muted); font-size:10px;">${data.cuda.device !== 'None' ? `(${data.cuda.device})` : ''}</span>
+        ${cuda.available ? '<span style="color:#0f0;">[X]</span> NVIDIA CUDA detected' : '<span style="color:#aaa;">[ ]</span> CPU Only Mode (No CUDA)'} 
+        <span style="color:var(--text-muted); font-size:10px;">${cuda.device && cuda.device !== 'None' ? `(${cuda.device})` : '(device unavailable)'}</span>
       </div>
+      <div style="font-size:11px; color:var(--text-muted); margin-top:8px;">Last checked: ${new Date().toLocaleString()}</div>
     `;
     el.innerHTML = html;
   } catch(e) {
-    document.getElementById('sys-tracker').innerHTML = '<div style="color:var(--accent-red);">Failed to fetch status</div>';
+    document.getElementById('sys-tracker').innerHTML = `<div style="color:var(--accent-red);">Failed to fetch status: ${e.message}</div>`;
   }
 }
 

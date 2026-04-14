@@ -387,9 +387,16 @@ def api_post_queue_add():
     db    = get_db()
     added = []
     skipped_duplicates = 0
+    invalid_items = []
     for item in items:
         fp = item.get('file_path', '').strip()
         if not fp:
+            continue
+        if os.path.isdir(fp):
+            invalid_items.append({'file_path': fp, 'error': 'Expected a single video file path, got a folder path'})
+            continue
+        if not os.path.isfile(fp):
+            invalid_items.append({'file_path': fp, 'error': 'File not found'})
             continue
             
         slot = int(item.get('account_slot', 1))
@@ -421,7 +428,9 @@ def api_post_queue_add():
         )
         added.append(cur.lastrowid)
     db.commit()
-    return jsonify({'ok': True, 'added': added, 'count': len(added), 'skipped_duplicates': skipped_duplicates})
+    if not added and invalid_items:
+        return jsonify({'ok': False, 'error': invalid_items[0]['error'], 'invalid_items': invalid_items}), 400
+    return jsonify({'ok': True, 'added': added, 'count': len(added), 'skipped_duplicates': skipped_duplicates, 'invalid_items': invalid_items})
 
 
 @app.route('/api/post-queue/<int:qid>/cancel', methods=['POST'])
@@ -511,32 +520,47 @@ def api_ai_test_key():
         return jsonify({'ok': False, 'error': 'No API key provided'})
     try:
         import requests as _req
-        resp = _req.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            headers={
-                'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'http://localhost:5055',
-                'X-Title': 'Nikethan Reels Toolkit',
-            },
-            json={
-                'model': 'google/gemini-2.5-pro',
-                'max_tokens': 10,
-                'temperature': 0.1,
-                'messages': [{'role': 'user', 'content': 'Hi'}],
-            },
-            timeout=15,
-        )
-        if resp.status_code == 401:
-            return jsonify({'ok': False, 'error': 'Invalid API key - unauthorized'})
-        if resp.status_code == 429:
-            return jsonify({'ok': True, 'error': 'Rate limit hit - but key is valid!'})
-        if resp.status_code != 200:
-            return jsonify({'ok': False, 'error': f'OpenRouter returned HTTP {resp.status_code}: {resp.text[:200]}'})
-        data_r = resp.json()
-        reply  = data_r.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-        model  = data_r.get('model', 'unknown')
-        return jsonify({'ok': True, 'reply': reply, 'model': model})
+        preferred = (_read_setting('openrouter_model') or '').strip()
+        candidates = [
+            preferred,
+            'google/gemini-2.5-pro',
+            'google/gemini-2.0-flash-001',
+            'openai/gpt-4o-mini',
+            'meta-llama/llama-3.1-8b-instruct:free',
+        ]
+        tried = []
+
+        for model_name in [m for m in candidates if m]:
+            tried.append(model_name)
+            resp = _req.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': 'http://localhost:5055',
+                    'X-Title': 'Nikethan Reels Toolkit',
+                },
+                json={
+                    'model': model_name,
+                    'max_tokens': 10,
+                    'temperature': 0.1,
+                    'messages': [{'role': 'user', 'content': 'Hi'}],
+                },
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                data_r = resp.json()
+                reply  = data_r.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                model  = data_r.get('model', model_name)
+                return jsonify({'ok': True, 'reply': reply, 'model': model, 'tried': tried})
+            if resp.status_code == 429:
+                return jsonify({'ok': True, 'error': 'Rate limit hit - key appears valid', 'model': model_name, 'tried': tried})
+            if resp.status_code in (401, 403):
+                return jsonify({'ok': False, 'error': 'Invalid or unauthorized API key', 'model': model_name})
+            if resp.status_code in (404, 422):
+                continue
+
+        return jsonify({'ok': False, 'error': f'Unable to validate key with available models. Tried: {", ".join(tried)}'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
 
@@ -737,7 +761,7 @@ def api_save_keys():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     data = request.get_json() or {}
     db = get_db()
-    for k in ['yt_api_key', 'home_channel', 'openrouter_api_key', 'content_niche']:
+    for k in ['yt_api_key', 'home_channel', 'openrouter_api_key', 'content_niche', 'openrouter_model']:
         if k in data:
             db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (k, data[k]))
     db.commit()
@@ -781,6 +805,124 @@ def api_system_update_ytdlp():
     threading.Thread(target=upgrade_ytdlp_thread, args=(_cb,), daemon=True).start()
     return jsonify({'ok': True, 'job_id': job_id})
 
+
+
+
+def _append_setup_event(job, step, ok, detail):
+    job['events'].append({
+        'ts': datetime.utcnow().isoformat(),
+        'step': step,
+        'ok': bool(ok),
+        'detail': (detail or '')[:600],
+    })
+
+
+def _run_initial_setup_job(job_id):
+    import platform
+    job = JOBS.get(job_id)
+    if not job:
+        return
+
+    def run_step(step_name, fn, critical=True):
+        try:
+            ok, detail = fn()
+        except Exception as e:
+            ok, detail = False, str(e)
+        _append_setup_event(job, step_name, ok, detail)
+        job['summary'].append({'step': step_name, 'ok': bool(ok), 'critical': bool(critical), 'detail': (detail or '')[:600]})
+        if critical and not ok:
+            job['ok'] = False
+        return ok
+
+    job['ok'] = True
+
+    def step_requirements():
+        req = os.path.join(BASE_DIR, 'requirements.txt')
+        if not os.path.isfile(req):
+            return False, 'requirements.txt not found'
+        cmd = [sys.executable, '-m', 'pip', 'install', '-r', req]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+        if r.returncode == 0:
+            return True, 'Python requirements installed/verified'
+        err = (r.stderr or r.stdout or '').strip()[-350:]
+        return False, f'pip install -r requirements.txt failed: {err}'
+
+    def step_instagrapi():
+        try:
+            import instagrapi  # noqa: F401
+            return True, 'instagrapi already installed'
+        except Exception:
+            pass
+        cmd = [sys.executable, '-m', 'pip', 'install', 'instagrapi']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        if r.returncode == 0:
+            return True, 'instagrapi installed'
+        err = (r.stderr or r.stdout or '').strip()[-350:]
+        return False, f'instagrapi install failed: {err}'
+
+    def step_ffmpeg():
+        if shutil.which('ffmpeg'):
+            return True, f'ffmpeg detected in PATH: {shutil.which("ffmpeg")}'
+        if platform.system().lower().startswith('win'):
+            msgs = []
+            def _cb(ev_type, msg):
+                if ev_type in ('status', 'error') and msg:
+                    msgs.append(msg)
+            install_ffmpeg_thread(_cb)
+            if shutil.which('ffmpeg'):
+                return True, 'FFmpeg installed locally in _dependencies and added to PATH'
+            return False, ('; '.join(msgs) or 'FFmpeg install attempted but ffmpeg still not detected')[:500]
+        return False, 'FFmpeg missing. Install via OS package manager (brew/apt/dnf) or place in PATH.'
+
+    def step_ytdlp():
+        cmd = [sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        if r.returncode == 0:
+            return True, 'yt-dlp upgraded/installed successfully'
+        err = (r.stderr or r.stdout or '').strip()[-350:]
+        return False, f'yt-dlp install/upgrade failed: {err}'
+
+    def step_healthcheck():
+        status = check_system_status()
+        ff_ok = bool((status.get('ffmpeg') or {}).get('installed'))
+        y_ok = bool((status.get('ytdlp') or {}).get('installed'))
+        detail = f"ffmpeg={ff_ok}, ytdlp={y_ok}, cuda={(status.get('cuda') or {}).get('available', False)}"
+        return (ff_ok and y_ok), detail
+
+    run_step('Python requirements', step_requirements, critical=True)
+    run_step('Instagram dependency (instagrapi)', step_instagrapi, critical=False)
+    run_step('FFmpeg availability', step_ffmpeg, critical=True)
+    run_step('yt-dlp availability', step_ytdlp, critical=True)
+    run_step('System health check', step_healthcheck, critical=True)
+
+    if not any(s.get('critical') and not s.get('ok') for s in job['summary']):
+        job['ok'] = True
+    job['done'] = True
+
+
+@app.route('/api/system/initial-setup/start', methods=['POST'])
+def api_system_initial_setup_start():
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    job_id = str(uuid.uuid4())
+    JOBS[job_id] = {'events': [], 'done': False, 'ok': False, 'summary': []}
+    threading.Thread(target=_run_initial_setup_job, args=(job_id,), daemon=True).start()
+    return jsonify({'ok': True, 'job_id': job_id})
+
+
+@app.route('/api/system/initial-setup/status/<job_id>', methods=['GET'])
+def api_system_initial_setup_status(job_id):
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    job = JOBS.get(job_id)
+    if not job:
+        return jsonify({'error': 'Job not found'}), 404
+    return jsonify({
+        'ok': bool(job.get('ok')),
+        'done': bool(job.get('done')),
+        'events': job.get('events', []),
+        'summary': job.get('summary', []),
+    })
 
 @app.route('/api/system/test-infra')
 def api_test_infra():
@@ -1091,6 +1233,27 @@ def api_pick_folder():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/utils/pick-file')
+def api_pick_file():
+    """Native file picker for selecting a single file path."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    filetypes = request.args.get('filetypes', 'video').strip().lower()
+    if filetypes == 'image':
+        tk_types = [('Image files', '*.jpg *.jpeg *.png *.webp *.bmp'), ('All files', '*.*')]
+    else:
+        tk_types = [('Video files', '*.mp4 *.mov *.mkv *.webm *.m4v *.avi'), ('All files', '*.*')]
+    try:
+        code = (
+            "import tkinter as tk, tkinter.filedialog as fd;"
+            "root=tk.Tk(); root.attributes('-topmost', True); root.withdraw();"
+            f"print(fd.askopenfilename(parent=root, title='Select File', filetypes={repr(tk_types)}))"
+        )
+        out = subprocess.check_output([sys.executable, '-c', code], text=True).strip()
+        if out == "None" or not out: out = ""
+        return jsonify({'file': out})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/utils/test-gpu')
 def api_test_gpu():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
@@ -1268,6 +1431,34 @@ def api_metadata_single(reel_id):
     row = db.execute('SELECT * FROM reels WHERE id=?', (reel_id,)).fetchone()
     if not row: abort(404)
     return jsonify(dict(row))
+
+@app.route('/api/metadata/<reel_id>/stream', methods=['GET'])
+def api_metadata_stream(reel_id):
+    """Secure video stream endpoint for metadata preview modal."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    db  = get_db()
+    row = db.execute('SELECT file_path FROM reels WHERE id=?', (reel_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'Reel not found'}), 404
+
+    fpath = (row['file_path'] or '').strip()
+    if not fpath:
+        return jsonify({'error': 'No file path set for this reel'}), 404
+    if not os.path.isfile(fpath):
+        return jsonify({'error': f'Video file missing: {fpath}'}), 404
+
+    ext = os.path.splitext(fpath)[1].lower()
+    if ext not in ('.mp4', '.mov', '.mkv', '.webm', '.m4v'):
+        return jsonify({'error': f'Unsupported video type: {ext}'}), 415
+
+    mime_map = {
+        '.mp4': 'video/mp4',
+        '.mov': 'video/quicktime',
+        '.mkv': 'video/x-matroska',
+        '.webm': 'video/webm',
+        '.m4v': 'video/x-m4v',
+    }
+    return send_file(fpath, mimetype=mime_map.get(ext, 'application/octet-stream'), conditional=True)
 
 @app.route('/api/metadata/<reel_id>', methods=['PATCH'])
 def api_metadata_update(reel_id):
