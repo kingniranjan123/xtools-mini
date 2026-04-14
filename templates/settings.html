@@ -507,6 +507,11 @@
       </div>
       <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <button class="btn btn-ghost btn-sm" id="btn-gpu-test" onclick="testGPUsystem()">🔍 Run GPU Test</button>
+        <button class="btn btn-primary btn-sm" id="btn-initial-setup" onclick="runInitialSetup()">🚀 Run Initial Setup</button>
+      </div>
+      <div id="initial-setup-box" style="display:none; margin-top:12px; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card-2);">
+        <div id="initial-setup-status" style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">Preparing setup...</div>
+        <div id="initial-setup-progress" style="font-size:11px; color:var(--text-secondary); font-family:var(--font-mono); max-height:130px; overflow:auto;"></div>
       </div>
       <div id="gpu-test-result" style="display:none; margin-top:12px; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card-2);">
         <div id="gpu-test-output" style="font-size:12px; color:var(--text-secondary);"></div>
@@ -688,6 +693,70 @@ window.deleteCookies = async function(accountId) {
 };
 </script>
 <script>
+
+async function runInitialSetup() {
+  const btn = document.getElementById('btn-initial-setup');
+  const box = document.getElementById('initial-setup-box');
+  const status = document.getElementById('initial-setup-status');
+  const progress = document.getElementById('initial-setup-progress');
+
+  box.style.display = 'block';
+  progress.innerHTML = '';
+  status.textContent = 'Starting initial setup...';
+  btn.disabled = true;
+  btn.textContent = '⏳ Running Setup…';
+
+  try {
+    const startResp = await fetch('/api/system/initial-setup/start', { method: 'POST' });
+    const startData = await startResp.json();
+    if (!startResp.ok || !startData.ok || !startData.job_id) {
+      throw new Error(startData.error || ('HTTP ' + startResp.status));
+    }
+
+    const jobId = startData.job_id;
+    let done = false;
+    let shown = 0;
+
+    while (!done) {
+      await new Promise(r => setTimeout(r, 1200));
+      const pollResp = await fetch('/api/system/initial-setup/status/' + encodeURIComponent(jobId));
+      const pollData = await pollResp.json();
+      if (!pollResp.ok) throw new Error(pollData.error || ('HTTP ' + pollResp.status));
+
+      const events = pollData.events || [];
+      while (shown < events.length) {
+        const ev = events[shown++];
+        const line = document.createElement('div');
+        const ok = ev.ok ? '✅' : '❌';
+        line.textContent = ok + ' ' + ev.step + ': ' + (ev.detail || '');
+        progress.appendChild(line);
+        progress.scrollTop = progress.scrollHeight;
+      }
+
+      done = !!pollData.done;
+      if (done) {
+        if (pollData.ok) {
+          status.innerHTML = '<span style="color:#00d470; font-weight:700;">✅ Initial setup completed successfully.</span>';
+          showToast('Initial setup complete', 'success');
+        } else {
+          status.innerHTML = '<span style="color:#ff5a5a; font-weight:700;">⚠ Setup finished with issues. Check details below.</span>';
+          showToast('Initial setup finished with issues', 'warn');
+        }
+        try { await fetchSystemStatus(); } catch(e) {}
+      } else {
+        status.textContent = 'Running setup steps...';
+      }
+    }
+
+  } catch (e) {
+    status.innerHTML = '<span style="color:#ff5a5a; font-weight:700;">Failed to run setup: ' + e.message + '</span>';
+    showToast('Initial setup failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 Run Initial Setup';
+  }
+}
+
 async function runInfraTest() {
   var btn     = document.getElementById('infra-run-btn');
   var spinner = document.getElementById('infra-spinner');

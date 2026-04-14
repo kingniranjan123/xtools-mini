@@ -806,6 +806,124 @@ def api_system_update_ytdlp():
     return jsonify({'ok': True, 'job_id': job_id})
 
 
+
+
+def _append_setup_event(job, step, ok, detail):
+    job['events'].append({
+        'ts': datetime.utcnow().isoformat(),
+        'step': step,
+        'ok': bool(ok),
+        'detail': (detail or '')[:600],
+    })
+
+
+def _run_initial_setup_job(job_id):
+    import platform
+    job = JOBS.get(job_id)
+    if not job:
+        return
+
+    def run_step(step_name, fn, critical=True):
+        try:
+            ok, detail = fn()
+        except Exception as e:
+            ok, detail = False, str(e)
+        _append_setup_event(job, step_name, ok, detail)
+        job['summary'].append({'step': step_name, 'ok': bool(ok), 'critical': bool(critical), 'detail': (detail or '')[:600]})
+        if critical and not ok:
+            job['ok'] = False
+        return ok
+
+    job['ok'] = True
+
+    def step_requirements():
+        req = os.path.join(BASE_DIR, 'requirements.txt')
+        if not os.path.isfile(req):
+            return False, 'requirements.txt not found'
+        cmd = [sys.executable, '-m', 'pip', 'install', '-r', req]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+        if r.returncode == 0:
+            return True, 'Python requirements installed/verified'
+        err = (r.stderr or r.stdout or '').strip()[-350:]
+        return False, f'pip install -r requirements.txt failed: {err}'
+
+    def step_instagrapi():
+        try:
+            import instagrapi  # noqa: F401
+            return True, 'instagrapi already installed'
+        except Exception:
+            pass
+        cmd = [sys.executable, '-m', 'pip', 'install', 'instagrapi']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        if r.returncode == 0:
+            return True, 'instagrapi installed'
+        err = (r.stderr or r.stdout or '').strip()[-350:]
+        return False, f'instagrapi install failed: {err}'
+
+    def step_ffmpeg():
+        if shutil.which('ffmpeg'):
+            return True, f'ffmpeg detected in PATH: {shutil.which("ffmpeg")}'
+        if platform.system().lower().startswith('win'):
+            msgs = []
+            def _cb(ev_type, msg):
+                if ev_type in ('status', 'error') and msg:
+                    msgs.append(msg)
+            install_ffmpeg_thread(_cb)
+            if shutil.which('ffmpeg'):
+                return True, 'FFmpeg installed locally in _dependencies and added to PATH'
+            return False, ('; '.join(msgs) or 'FFmpeg install attempted but ffmpeg still not detected')[:500]
+        return False, 'FFmpeg missing. Install via OS package manager (brew/apt/dnf) or place in PATH.'
+
+    def step_ytdlp():
+        cmd = [sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        if r.returncode == 0:
+            return True, 'yt-dlp upgraded/installed successfully'
+        err = (r.stderr or r.stdout or '').strip()[-350:]
+        return False, f'yt-dlp install/upgrade failed: {err}'
+
+    def step_healthcheck():
+        status = check_system_status()
+        ff_ok = bool((status.get('ffmpeg') or {}).get('installed'))
+        y_ok = bool((status.get('ytdlp') or {}).get('installed'))
+        detail = f"ffmpeg={ff_ok}, ytdlp={y_ok}, cuda={(status.get('cuda') or {}).get('available', False)}"
+        return (ff_ok and y_ok), detail
+
+    run_step('Python requirements', step_requirements, critical=True)
+    run_step('Instagram dependency (instagrapi)', step_instagrapi, critical=False)
+    run_step('FFmpeg availability', step_ffmpeg, critical=True)
+    run_step('yt-dlp availability', step_ytdlp, critical=True)
+    run_step('System health check', step_healthcheck, critical=True)
+
+    if not any(s.get('critical') and not s.get('ok') for s in job['summary']):
+        job['ok'] = True
+    job['done'] = True
+
+
+@app.route('/api/system/initial-setup/start', methods=['POST'])
+def api_system_initial_setup_start():
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    job_id = str(uuid.uuid4())
+    JOBS[job_id] = {'events': [], 'done': False, 'ok': False, 'summary': []}
+    threading.Thread(target=_run_initial_setup_job, args=(job_id,), daemon=True).start()
+    return jsonify({'ok': True, 'job_id': job_id})
+
+
+@app.route('/api/system/initial-setup/status/<job_id>', methods=['GET'])
+def api_system_initial_setup_status(job_id):
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    job = JOBS.get(job_id)
+    if not job:
+        return jsonify({'error': 'Job not found'}), 404
+    return jsonify({
+        'ok': bool(job.get('ok')),
+        'done': bool(job.get('done')),
+        'events': job.get('events', []),
+        'summary': job.get('summary', []),
+    })
+
 @app.route('/api/system/test-infra')
 def api_test_infra():
     """Deep live test: ffmpeg encode, GPU, yt-dlp version, Python encoding."""
