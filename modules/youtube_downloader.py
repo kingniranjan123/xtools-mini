@@ -58,7 +58,7 @@ def _download_yt_single(url, quality, output_dir, custom_dir, audio_only,
     else:
         channel_dir = os.path.join(output_dir, channel)
     os.makedirs(channel_dir, exist_ok=True)
-    out_template = os.path.join(channel_dir, f'{vid_id}.%(ext)s')
+    out_template = os.path.join(channel_dir, '%(title).150s.%(ext)s')
 
     if audio_only:
         dl_cmd = ytdlp + [

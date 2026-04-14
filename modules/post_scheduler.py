@@ -43,19 +43,36 @@ def _update(queue_id, **kwargs):
 
 
 def _get_due_items():
-    """Fetch pending items that are due now."""
-    now = datetime.utcnow().isoformat()
+    """Fetch pending items that are due now. Expire anything >12 hours late."""
+    now = datetime.utcnow()
     con = _db()
     rows = con.execute(
         '''SELECT * FROM post_queue
            WHERE status="pending"
              AND (scheduled_at IS NULL OR scheduled_at <= ?)
-           ORDER BY scheduled_at ASC, id ASC
-           LIMIT 10''',
-        (now,)
+           ORDER BY scheduled_at ASC, id ASC''',
+        (now.isoformat(),)
     ).fetchall()
+    
+    valid_items = []
+    for r in rows:
+        item = dict(r)
+        if item.get('scheduled_at'):
+            try:
+                sched_dt = datetime.fromisoformat(item['scheduled_at'])
+                # Expire if more than 12 hours late
+                if (now - sched_dt).total_seconds() > 12 * 3600:
+                    con.execute("UPDATE post_queue SET status='cancelled', note='Missed schedule window (>12h late)' WHERE id=?", (item['id'],))
+                    continue
+            except Exception:
+                pass
+        valid_items.append(item)
+        if len(valid_items) >= 10:
+            break
+            
+    con.commit()
     con.close()
-    return [dict(r) for r in rows]
+    return valid_items
 
 
 # ── Instagram posting ───────────────────────────────────────────

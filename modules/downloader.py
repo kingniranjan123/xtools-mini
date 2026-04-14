@@ -71,7 +71,7 @@ def _download_single(url, quality, cookies_file, downloads_dir, custom_dir, prog
         fmt = f'bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}][ext=mp4]/best'
 
     reel_id = raw_info.get('id', 'unknown')
-    out_template = os.path.join(out_dir, f'{reel_id}.%(ext)s')
+    out_template = os.path.join(out_dir, '%(title).150s.%(ext)s')
 
     dl_cmd = ytdlp + [
         '--format', fmt,
