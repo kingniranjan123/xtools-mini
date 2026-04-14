@@ -103,14 +103,14 @@
               <div style="display:flex;gap:8px;">
                 <input class="form-input mono" id="yt-m-file" type="text" placeholder="C:\videos\my_video.mp4" style="flex:1;"
                        oninput="ytAutoFillTitle()">
-                <button class="btn btn-secondary btn-sm" onclick="pickFile('yt-m-file')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
+                <button class="btn btn-secondary btn-sm" onclick="pickSingleFile('yt-m-file','video')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
               </div>
             </div>
             <div class="form-group">
               <label class="form-label">Thumbnail (optional)</label>
               <div style="display:flex;gap:8px;">
                 <input class="form-input mono" id="yt-m-thumb" type="text" placeholder="Path to .jpg image (optional)" style="flex:1;">
-                <button class="btn btn-ghost btn-sm" onclick="pickFile('yt-m-thumb')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
+                <button class="btn btn-ghost btn-sm" onclick="pickSingleFile('yt-m-thumb','image')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
               </div>
             </div>
           </div>
@@ -219,7 +219,7 @@
             <label class="form-label">Video Folder</label>
             <div style="display:flex;gap:8px;">
               <input class="form-input mono" id="yt-bulk-folder" type="text" placeholder="C:\videos\youtube_uploads" style="flex:1;">
-              <button class="btn btn-secondary btn-sm" onclick="pickFile('yt-bulk-folder')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
+              <button class="btn btn-secondary btn-sm" onclick="pickFolderPath('yt-bulk-folder')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -318,7 +318,7 @@
               <div style="display:flex;gap:8px;">
                 <input class="form-input mono" id="ig-m-file" type="text" placeholder="C:\videos\reel.mp4" style="flex:1;"
                        oninput="igAutoFillTitle()">
-                <button class="btn btn-secondary btn-sm" onclick="pickFile('ig-m-file')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
+                <button class="btn btn-secondary btn-sm" onclick="pickSingleFile('ig-m-file','video')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
               </div>
             </div>
             <div class="form-group">
@@ -413,7 +413,7 @@
             <label class="form-label">Video Folder</label>
             <div style="display:flex;gap:6px;">
               <input class="form-input mono" id="ig-bulk-folder" type="text" placeholder="C:\videos\reels" style="flex:1;">
-              <button class="btn btn-secondary btn-sm" onclick="pickFile('ig-bulk-folder')" style="padding:8px 10px;">Browse</button>
+              <button class="btn btn-secondary btn-sm" onclick="pickFolderPath('ig-bulk-folder')" style="padding:8px 10px;">Browse</button>
             </div>
           </div>
           <div class="form-group" style="margin:0;">
@@ -556,13 +556,21 @@ async function revokeYt(){
   if(resp.ok){ showToast('Disconnected','success'); setTimeout(()=>location.reload(),1000); }
 }
 
-// ── Folder picker (pick-folder API) ──────────────────────────
-async function pickFile(inputId) {
+// ── Native pickers (file / folder) ───────────────────────────
+async function pickFolderPath(inputId) {
   try {
     const resp = await fetch('/api/utils/pick-folder');
     const data = await resp.json();
     if(data.folder) document.getElementById(inputId).value = data.folder;
-  } catch { showToast('Type the path manually','warn'); }
+  } catch { showToast('Folder picker unavailable — type path manually','warn'); }
+}
+
+async function pickSingleFile(inputId, fileType='video') {
+  try {
+    const resp = await fetch('/api/utils/pick-file?filetypes=' + encodeURIComponent(fileType));
+    const data = await resp.json();
+    if(data.file) document.getElementById(inputId).value = data.file;
+  } catch { showToast('File picker unavailable — type path manually','warn'); }
 }
 
 // ── YouTube AI Generate (inline, rich) ─────────────────────────

@@ -387,9 +387,16 @@ def api_post_queue_add():
     db    = get_db()
     added = []
     skipped_duplicates = 0
+    invalid_items = []
     for item in items:
         fp = item.get('file_path', '').strip()
         if not fp:
+            continue
+        if os.path.isdir(fp):
+            invalid_items.append({'file_path': fp, 'error': 'Expected a single video file path, got a folder path'})
+            continue
+        if not os.path.isfile(fp):
+            invalid_items.append({'file_path': fp, 'error': 'File not found'})
             continue
             
         slot = int(item.get('account_slot', 1))
@@ -421,7 +428,9 @@ def api_post_queue_add():
         )
         added.append(cur.lastrowid)
     db.commit()
-    return jsonify({'ok': True, 'added': added, 'count': len(added), 'skipped_duplicates': skipped_duplicates})
+    if not added and invalid_items:
+        return jsonify({'ok': False, 'error': invalid_items[0]['error'], 'invalid_items': invalid_items}), 400
+    return jsonify({'ok': True, 'added': added, 'count': len(added), 'skipped_duplicates': skipped_duplicates, 'invalid_items': invalid_items})
 
 
 @app.route('/api/post-queue/<int:qid>/cancel', methods=['POST'])
@@ -1103,6 +1112,27 @@ def api_pick_folder():
         out = subprocess.check_output([sys.executable, '-c', code], text=True).strip()
         if out == "None" or not out: out = ""
         return jsonify({'folder': out})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/utils/pick-file')
+def api_pick_file():
+    """Native file picker for selecting a single file path."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    filetypes = request.args.get('filetypes', 'video').strip().lower()
+    if filetypes == 'image':
+        tk_types = [('Image files', '*.jpg *.jpeg *.png *.webp *.bmp'), ('All files', '*.*')]
+    else:
+        tk_types = [('Video files', '*.mp4 *.mov *.mkv *.webm *.m4v *.avi'), ('All files', '*.*')]
+    try:
+        code = (
+            "import tkinter as tk, tkinter.filedialog as fd;"
+            "root=tk.Tk(); root.attributes('-topmost', True); root.withdraw();"
+            f"print(fd.askopenfilename(parent=root, title='Select File', filetypes={repr(tk_types)}))"
+        )
+        out = subprocess.check_output([sys.executable, '-c', code], text=True).strip()
+        if out == "None" or not out: out = ""
+        return jsonify({'file': out})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

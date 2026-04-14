@@ -16,6 +16,8 @@ import json
 import sqlite3
 import threading
 import time
+import subprocess
+import sys
 from datetime import datetime, timedelta
 
 DB_PATH   = os.path.join(os.path.dirname(__file__), '..', 'reels_db.sqlite')
@@ -23,6 +25,8 @@ TICK      = 45   # seconds between checks
 
 _lock     = threading.Lock()   # prevent concurrent posts to same account
 _ig_clients = {}               # cache instagrapi clients per slot
+_ig_import_checked = False
+_ig_import_ok = False
 
 
 def _db():
@@ -111,6 +115,9 @@ def _ig_post(item):
     full_caption = f"{caption}\n\n{tags}".strip() if tags else caption
 
     try:
+        ok, err = _ensure_instagrapi()
+        if not ok:
+            return False, err
         from instagrapi import Client
 
         if slot not in _ig_clients:
@@ -156,6 +163,35 @@ def _ig_post(item):
     except Exception as e:
         _ig_clients.pop(slot, None)  # evict on error
         return False, str(e)[:200]
+
+
+def _ensure_instagrapi():
+    """Ensure instagrapi is importable; try one-time auto-install if missing."""
+    global _ig_import_checked, _ig_import_ok
+    if _ig_import_checked:
+        return _ig_import_ok, ('' if _ig_import_ok else 'instagrapi not available')
+
+    _ig_import_checked = True
+    try:
+        import instagrapi  # noqa: F401
+        _ig_import_ok = True
+        return True, ''
+    except Exception:
+        pass
+
+    try:
+        cmd = [sys.executable, '-m', 'pip', 'install', 'instagrapi']
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if res.returncode != 0:
+            _ig_import_ok = False
+            err = (res.stderr or res.stdout or 'pip install failed').strip()[:260]
+            return False, f'instagrapi install failed: {err}'
+        import instagrapi  # noqa: F401
+        _ig_import_ok = True
+        return True, ''
+    except Exception as e:
+        _ig_import_ok = False
+        return False, f'instagrapi missing and auto-install failed: {str(e)[:180]}'
 
 
 # ── YouTube posting ─────────────────────────────────────────────
