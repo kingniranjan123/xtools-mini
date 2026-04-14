@@ -4,176 +4,300 @@
 {% block breadcrumb %}Metadata{% endblock %}
 
 {% block topbar_actions %}
-<input class="form-input" type="search" placeholder="Search reels, tags…" id="meta-search" style="width:220px;" oninput="filterReels(this.value)" />
 <a href="{{ url_for('api_metadata_export') }}" class="btn btn-ghost btn-sm">↓ Export CSV</a>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1 class="page-title"><span class="grad-text">Metadata</span></h1>
-  <p class="page-subtitle">All extracted reel captions, hashtags, mentions and metadata.</p>
-</div>
-
-{% if reels %}
-<!-- Summary bar -->
-<div class="stat-grid" style="margin-bottom:24px;">
-  <div class="stat-card">
-    <div class="stat-icon">🎬</div>
-    <div class="stat-value">{{ reels|length }}</div>
-    <div class="stat-label">Total Reels</div>
+<div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-end;">
+  <div>
+    <h1 class="page-title"><span class="grad-text">Metadata</span></h1>
+    <p class="page-subtitle">Filter, convert, and manage extracted reels metadata.</p>
   </div>
-  <div class="stat-card">
-    <div class="stat-icon">#️⃣</div>
-    <div class="stat-value">{{ total_tags }}</div>
-    <div class="stat-label">Unique Tags</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-icon">👤</div>
-    <div class="stat-value">{{ total_accounts }}</div>
-    <div class="stat-label">Accounts</div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-ghost btn-sm" onclick="setView('grid')">▦ Grid</button>
+    <button class="btn btn-ghost btn-sm" onclick="setView('list')">☰ List</button>
   </div>
 </div>
 
-<div id="reels-container">
-  <div class="reels-grid" id="reels-grid">
-    {% for r in reels %}
-    <div class="reel-card" data-title="{{ (r.title or '') | lower }}" data-caption="{{ (r.caption or '') | lower }}" data-tags="{{ (r.tags or '') | lower }}">
-      <div class="reel-thumb">
-        {% if r.thumbnail %}
-          <img src="/thumb/{{ r.id }}" alt="Thumbnail" style="width:100%; height:100%; object-fit:cover;" />
-        {% else %}
-          🎬
-        {% endif %}
-        <div class="reel-duration">{{ r.duration or '?' }}s</div>
-      </div>
-      <div class="reel-info">
-        <div class="reel-account">@{{ r.account or 'unknown' }}</div>
-        <div class="reel-title">{{ r.title or r.id[:24] + '…' }}</div>
-        {% if r.caption %}
-        <div class="reel-caption">{{ r.caption }}</div>
-        {% endif %}
+<!-- Filters -->
+<div class="card" style="margin-bottom:24px; padding:16px;">
+  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+    <input class="form-input" type="search" placeholder="Search title or tags…" id="meta-search" style="width:220px;" onkeyup="if(event.key==='Enter') loadData(1)" />
+    
+    <select class="form-input" id="filter-account" onchange="loadData(1)" style="width:160px;">
+      <option value="">All Accounts</option>
+    </select>
 
-        <!-- Tags -->
-        {% if r.tags %}
-        <div class="tag-list" style="margin-top:8px;">
-          {% set tag_list = r.tags | from_json %}
-          {% for tag in tag_list[:6] %}
-            <span class="tag-pill hashtag">{{ tag }}</span>
-          {% endfor %}
-          {% if tag_list|length > 6 %}
-            <span class="tag-pill">+{{ tag_list|length - 6 }}</span>
-          {% endif %}
-        </div>
-        {% endif %}
-
-        <!-- Mentions -->
-        {% if r.mentions %}
-        <div class="tag-list">
-          {% set mention_list = r.mentions | from_json %}
-          {% for m in mention_list[:3] %}
-            <span class="tag-pill mention">{{ m }}</span>
-          {% endfor %}
-        </div>
-        {% endif %}
-
-        <div style="display:flex; gap:6px; margin-top:12px;">
-          <button class="btn btn-ghost btn-sm" onclick="openEditModal('{{ r.id }}')">✏️ Edit</button>
-          <a href="{{ url_for('api_metadata_single', reel_id=r.id) }}" class="btn btn-ghost btn-sm">JSON</a>
-          {% if r.watermarked %}
-            <span class="badge badge-green" style="margin-left:auto;">Watermarked</span>
-          {% endif %}
-        </div>
-      </div>
+    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+      <input type="checkbox" id="filter-no-tags" onchange="loadData(1)"> No Tags
+    </label>
+    
+    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+      <input type="checkbox" id="filter-no-desc" onchange="loadData(1)"> No Description
+    </label>
+    
+    <div style="margin-left:auto;">
+      <button class="btn btn-primary btn-sm" onclick="loadData(1)">Apply Filters</button>
     </div>
-    {% endfor %}
   </div>
 </div>
 
-<!-- Edit Modal -->
-<div id="edit-modal" style="display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
-  <div class="card" style="width:100%; max-width:520px; margin:20px;">
+<!-- Bulk Actions Bar -->
+<div id="bulk-bar" class="card" style="display:none; padding:12px 16px; margin-bottom:16px; background:rgba(0, 212, 168, 0.1); border-color:#00d4a8; display:flex; justify-content:space-between; align-items:center;">
+    <div><span id="sel-count">0</span> items selected</div>
+    <div style="display:flex; gap:12px;">
+      <button class="btn btn-danger btn-sm" onclick="batchAction('delete')">🗑 Delete</button>
+      <button class="btn btn-primary btn-sm" onclick="openBulkModal()">📤 Convert & Push to Auto-Poster</button>
+    </div>
+</div>
+
+<!-- Container -->
+<div id="reels-container" class="reels-grid">
+  <!-- Filled by JS -->
+</div>
+
+<!-- Pagination -->
+<div style="display:flex; justify-content:center; gap:16px; align-items:center; margin-top:32px;">
+    <button class="btn btn-ghost" id="pg-prev" onclick="loadData(currentPage-1)">← Previous</button>
+    <div style="font-weight:600; color:var(--text-secondary);" id="pg-info">Page 1 of 1</div>
+    <button class="btn btn-ghost" id="pg-next" onclick="loadData(currentPage+1)">Next →</button>
+</div>
+
+<!-- Bulk Push Modal -->
+<div id="bulk-modal" style="display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+  <div class="card" style="width:100%; max-width:560px; margin:20px;">
     <div class="card-header">
-      <div class="card-title">✏️ Edit Metadata</div>
-      <button class="btn btn-ghost btn-sm" onclick="closeEditModal()">✕</button>
+      <div class="card-title">📤 Bulk Push to Auto-Poster</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeBulkModal()">✕</button>
     </div>
     <div class="card-body">
-      <form id="edit-form">
-        <input type="hidden" id="edit-id" />
-        <div class="form-group">
-          <label class="form-label">Caption</label>
-          <textarea class="form-textarea" id="edit-caption" rows="4"></textarea>
+      <form id="bulk-form">
+        <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="bulk-convert"> 
+            <strong>Perform Portrait Formatting & Add Title</strong> (Creates 9:16 Video)
+        </label>
+        <p style="font-size:13px; color:var(--text-muted); margin:4px 0 16px 28px;">
+            This will preserve the original wide video, create a padded letterbox version, and burn the title onto the video.
+        </p>
+
+        <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="bulk-watermark"> 
+            <strong>Add Settings Watermark</strong>
+        </label>
+        
+        <hr style="border:0; border-top:1px solid var(--border); margin:16px 0;">
+
+        <div style="display:flex; gap:16px; margin-bottom:16px;">
+            <div style="flex:1;">
+                <label class="form-label">Platform</label>
+                <select id="bulk-platform" class="form-input">
+                    <option value="instagram">Instagram</option>
+                    <option value="youtube">YouTube</option>
+                </select>
+            </div>
+            <div style="flex:1;">
+                <label class="form-label">Target Slot</label>
+                <select id="bulk-slot" class="form-input">
+                    <option value="1">Slot 1</option>
+                    <option value="2">Slot 2</option>
+                    <option value="3">Slot 3</option>
+                    <option value="4">Slot 4</option>
+                    <option value="5">Slot 5</option>
+                </select>
+            </div>
         </div>
+
         <div class="form-group">
-          <label class="form-label">Tags (comma-separated)</label>
-          <input class="form-input" id="edit-tags" type="text" placeholder="#reel, #viral, #trending" />
+            <label class="form-label">Gap Between Posts (Minutes)</label>
+            <input type="number" id="bulk-gap" class="form-input" value="120" min="5" />
         </div>
-        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-          <button type="button" class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Changes</button>
+
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:24px;">
+          <button type="button" class="btn btn-ghost" onclick="closeBulkModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="submitBulkPush()">Submit Batch!</button>
         </div>
       </form>
     </div>
   </div>
 </div>
-
-{% else %}
-<div style="text-align:center; padding:80px 20px; color:var(--text-muted);">
-  <div style="font-size:48px; margin-bottom:16px;">📭</div>
-  <h3 style="font-size:16px; font-weight:600; margin-bottom:8px; color:var(--text);">No reels yet</h3>
-  <p>Download some Instagram Reels first to see their metadata here.</p>
-  <a href="{{ url_for('download_page') }}" class="btn btn-primary" style="margin-top:20px;">↓ Go to Downloader</a>
-</div>
-{% endif %}
-
 {% endblock %}
 
 {% block scripts %}
 <script>
-function filterReels(q) {
-  q = q.toLowerCase();
-  document.querySelectorAll('.reel-card').forEach(card => {
-    const haystack = (card.dataset.title + ' ' + card.dataset.caption + ' ' + card.dataset.tags);
-    card.style.display = haystack.includes(q) ? 'flex' : 'none';
-    card.style.flexDirection = 'column';
-  });
+let currentPage = 1;
+let currentView = 'grid'; // 'grid' | 'list'
+let selectedIds = new Set();
+let allLoadedIds = [];
+
+function setView(view) {
+    currentView = view;
+    document.getElementById('reels-container').className = (view === 'grid') ? 'reels-grid' : 'list-view';
 }
 
-function openEditModal(id) {
-  document.getElementById('edit-modal').style.display = 'flex';
-  document.getElementById('edit-id').value = id;
-  fetch('/api/metadata/' + id)
-    .then(r => r.json())
-    .then(d => {
-      document.getElementById('edit-caption').value = d.caption || '';
-      const tags = JSON.parse(d.tags || '[]');
-      document.getElementById('edit-tags').value = tags.join(', ');
+function toggleSel(id) {
+    if (selectedIds.has(id)) selectedIds.delete(id);
+    else selectedIds.add(id);
+    updateBulkBar();
+}
+
+function updateBulkBar() {
+    const bar = document.getElementById('bulk-bar');
+    if (selectedIds.size > 0) {
+        bar.style.display = 'flex';
+        document.getElementById('sel-count').innerText = selectedIds.size;
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+async function loadData(page) {
+    if (page < 1) page = 1;
+    
+    const search = document.getElementById('meta-search').value;
+    const account = document.getElementById('filter-account').value;
+    const noTags = document.getElementById('filter-no-tags').checked;
+    const noDesc = document.getElementById('filter-no-desc').checked;
+    
+    const params = new URLSearchParams({
+        page: page,
+        limit: 24,
+        search, account, no_tags: noTags, no_desc: noDesc
+    });
+    
+    try {
+        const res = await fetch('/api/metadata/list?' + params.toString());
+        const data = await res.json();
+        
+        currentPage = data.page;
+        document.getElementById('pg-info').innerText = `Page ${data.page} of ${data.total_pages}`;
+        document.getElementById('pg-prev').disabled = data.page <= 1;
+        document.getElementById('pg-next').disabled = data.page >= data.total_pages;
+        
+        // Update account dropdown on first load
+        const accSelect = document.getElementById('filter-account');
+        if (accSelect.options.length === 1 && data.accounts) {
+            data.accounts.forEach(acc => {
+                const opt = document.createElement('option');
+                opt.value = acc; opt.text = '@' + acc;
+                accSelect.appendChild(opt);
+            });
+            accSelect.value = account; 
+        }
+
+        renderItems(data.items);
+    } catch(e) {
+        console.error(e);
+        showToast('Error loading metadata', 'error');
+    }
+}
+
+function renderItems(items) {
+    const container = document.getElementById('reels-container');
+    container.innerHTML = '';
+    allLoadedIds = items.map(i => i.id);
+
+    if (items.length === 0) {
+        container.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:40px;">No reels match your filters.</div>';
+        return;
+    }
+
+    items.forEach(r => {
+        const checked = selectedIds.has(r.id) ? 'checked' : '';
+        const tags = (r.tags && r.tags !== '[]') ? `<span class="badge">Has Tags</span>` : `<span class="badge badge-red">No Tags</span>`;
+        const caption = r.caption ? `<span class="badge">Has Desc</span>` : `<span class="badge badge-red">No Desc</span>`;
+        
+        let tagsArr = [];
+        try { tagsArr = JSON.parse(r.tags || '[]'); } catch(e){}
+
+        const el = document.createElement('div');
+        el.className = 'reel-card';
+        el.innerHTML = `
+          <div style="position:absolute; top:8px; left:8px; z-index:10;">
+             <input type="checkbox" ${checked} onchange="toggleSel('${r.id}')" style="width:20px;height:20px;cursor:pointer;">
+          </div>
+          <div class="reel-thumb">
+              <img src="/thumb/${r.id}" alt="Thumbnail" onerror="this.style.display='none'" style="width:100%; height:100%; object-fit:cover;" />
+          </div>
+          <div class="reel-info">
+            <div class="reel-account">@${r.account || 'unknown'}</div>
+            <div class="reel-title">${r.title || r.id}</div>
+            
+            <div style="display:flex; gap:6px; margin:8px 0;">${caption} ${tags}</div>
+            
+            <div class="tag-list" style="margin-top:8px;">
+               ${tagsArr.slice(0,3).map(t => `<span class="tag-pill hashtag">${t}</span>`).join('')}
+            </div>
+          </div>
+        `;
+        container.appendChild(el);
     });
 }
 
-function closeEditModal() {
-  document.getElementById('edit-modal').style.display = 'none';
+function openBulkModal() {
+    document.getElementById('bulk-modal').style.display = 'flex';
+}
+function closeBulkModal() {
+    document.getElementById('bulk-modal').style.display = 'none';
 }
 
-document.getElementById('edit-form')?.addEventListener('submit', async function(e) {
-  e.preventDefault();
-  const id = document.getElementById('edit-id').value;
-  const caption = document.getElementById('edit-caption').value;
-  const tags = document.getElementById('edit-tags').value
-    .split(',').map(t => t.trim()).filter(Boolean);
+async function submitBulkPush() {
+    closeBulkModal();
+    const payload = {
+        action: 'queue',
+        ids: Array.from(selectedIds),
+        convert: document.getElementById('bulk-convert').checked,
+        apply_watermark: document.getElementById('bulk-watermark').checked,
+        platform: document.getElementById('bulk-platform').value,
+        account_slot: document.getElementById('bulk-slot').value,
+        gap_mins: document.getElementById('bulk-gap').value || 120,
+    };
 
-  const resp = await fetch('/api/metadata/' + id, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ caption, tags })
-  });
+    try {
+        const r = await fetch('/api/metadata/batch-action', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const res = await r.json();
+        if (res.ok) {
+            showToast('Batch submitted successfully! Check Create Post → Queue', 'success');
+            selectedIds.clear();
+            updateBulkBar();
+            loadData(currentPage);
+        } else {
+            showToast(res.error || 'Failed to submit batch', 'error');
+        }
+    } catch(e) { showToast(e.message, 'error'); }
+}
 
-  if (resp.ok) {
-    showToast('Metadata updated!', 'success');
-    closeEditModal();
-    setTimeout(() => location.reload(), 1000);
-  } else {
-    showToast('Failed to update', 'error');
-  }
+async function batchAction(action) {
+    if (action === 'delete') {
+
+        try {
+            const r = await fetch('/api/metadata/batch-action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ action: 'delete', ids: Array.from(selectedIds) })
+            });
+            const res = await r.json();
+            if (res.ok) {
+                showToast('Records deleted', 'success');
+                selectedIds.clear();
+                updateBulkBar();
+                loadData(currentPage);
+            }
+        } catch(e) { showToast(e.message, 'error'); }
+    }
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+    loadData(1);
 });
 </script>
+<style>
+.list-view { display:flex; flex-direction:column; gap:12px; }
+.list-view .reel-card { flex-direction:row; height:120px; align-items:center; padding-left:40px; }
+.list-view .reel-thumb { height:100px; width:100px; flex-shrink:0; }
+</style>
 {% endblock %}

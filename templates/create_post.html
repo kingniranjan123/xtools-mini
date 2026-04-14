@@ -560,7 +560,7 @@ async function saveYtSecret(){
   else showToast(resp.error||'Failed','error');
 }
 async function revokeYt(){
-  if(!confirm('Disconnect YouTube account?')) return;
+
   const resp = await postJSON('/api/youtube/oauth/revoke', {});
   if(resp.ok){ showToast('Disconnected','success'); setTimeout(()=>location.reload(),1000); }
 }
@@ -780,43 +780,49 @@ const STATUS_STYLE = {
   cancelled: {bg:'rgba(119,119,119,.1)','color':'#777',   label:'⊘ Cancelled'},
 };
 
-async function loadQueue(platform){
+let _currentYtPage = 1;
+let _currentIgPage = 1;
+
+async function loadQueue(platform, page){
   const tid = platform==='youtube' ? 'yt-queue-table' : 'ig-queue-table';
+  
+  if(page === undefined) {
+      page = platform==='youtube' ? _currentYtPage : _currentIgPage;
+  } else {
+      if(platform==='youtube') _currentYtPage = page; else _currentIgPage = page;
+  }
+  
   document.getElementById(tid).innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted);">Loading…</div>';
-  const resp = await fetch('/api/post-queue?platform='+platform);
+  const resp = await fetch(`/api/post-queue?platform=${platform}&page=${page}&limit=25`);
   const data = await resp.json();
   const items = data.items||[];
-  // update badge
-  const badge = platform==='youtube' ? 'yt-queue-badge' : 'ig-queue-badge';
-  const pending = items.filter(i=>i.status==='pending').length;
-  const b = document.getElementById(badge);
-  if(b){ b.textContent=pending; b.className='badge '+(pending>0?'badge-orange':'badge-gray'); }
 
   if(!items.length){
     document.getElementById(tid).innerHTML='<div style="text-align:center;padding:32px;color:var(--text-muted);">No items in queue for this platform.</div>';
     return;
   }
-  document.getElementById(tid).innerHTML=`
+  
+  let html = `
     <table style="width:100%;border-collapse:collapse;font-size:12px;">
       <thead><tr style="border-bottom:1px solid var(--border);background:var(--bg-card-2);color:var(--text-muted);">
-        <th style="padding:8px 12px;">ID</th>
-        <th style="padding:8px 12px;">File</th>
-        <th style="padding:8px 12px;">Title</th>
-        <th style="padding:8px 12px;">Scheduled</th>
-        <th style="padding:8px 12px;">Status</th>
-        <th style="padding:8px 12px;">Note</th>
-        <th style="padding:8px 12px;">Actions</th>
+        <th style="padding:8px 12px;text-align:left;">ID</th>
+        <th style="padding:8px 12px;text-align:left;">File</th>
+        <th style="padding:8px 12px;text-align:left;">Title</th>
+        <th style="padding:8px 12px;text-align:left;">Scheduled</th>
+        <th style="padding:8px 12px;text-align:left;">Status</th>
+        <th style="padding:8px 12px;text-align:left;">Note</th>
+        <th style="padding:8px 12px;text-align:left;">Actions</th>
       </tr></thead>
       <tbody>${items.map(r=>{
         const st = STATUS_STYLE[r.status]||{bg:'transparent',color:'#777',label:r.status};
         const fn = (r.file_path||'').split(/[\\/]/).pop();
         return `<tr style="border-bottom:1px solid var(--border);">
           <td style="padding:7px 12px;color:var(--text-muted);">#${r.id}</td>
-          <td style="padding:7px 12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:10px;">${fn}</td>
+          <td style="padding:7px 12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:10px;" title="${fn}">${fn}</td>
           <td style="padding:7px 12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.title||'—'}</td>
           <td style="padding:7px 12px;white-space:nowrap;">${(r.scheduled_at||'ASAP').slice(0,16).replace('T',' ')}</td>
           <td style="padding:7px 12px;"><span style="padding:2px 8px;border-radius:3px;background:${st.bg};color:${st.color};font-size:10px;font-weight:700;">${st.label}</span></td>
-          <td style="padding:7px 12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--text-muted);">${r.note||''}</td>
+          <td style="padding:7px 12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--text-muted);" title="${r.note||''}">${r.note||''}</td>
           <td style="padding:7px 12px;white-space:nowrap;">
             ${(r.status==='error'||r.status==='cancelled')?`<button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="qAction(${r.id},'retry','${platform}')">↺ Retry</button>`:''}
             ${r.status==='pending'?`<button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="qAction(${r.id},'cancel','${platform}')">✕ Cancel</button>`:''}
@@ -824,7 +830,15 @@ async function loadQueue(platform){
           </td>
         </tr>`;
       }).join('')}</tbody>
-    </table>`;
+    </table>
+    
+    <div style="display:flex; justify-content:center; align-items:center; gap:16px; margin-top:20px; padding-bottom:16px;">
+        <button class="btn btn-ghost btn-sm" ${data.page <= 1 ? 'disabled' : ''} onclick="loadQueue('${platform}', ${data.page - 1})">← Prev</button>
+        <span style="font-size:12px;color:var(--text-muted);">Page ${data.page} of ${data.total_pages}</span>
+        <button class="btn btn-ghost btn-sm" ${data.page >= data.total_pages ? 'disabled' : ''} onclick="loadQueue('${platform}', ${data.page + 1})">Next →</button>
+    </div>
+  `;
+  document.getElementById(tid).innerHTML = html;
 }
 
 async function qAction(id, action, platform){
@@ -832,7 +846,7 @@ async function qAction(id, action, platform){
   if(action==='cancel')      resp = await postJSON(`/api/post-queue/${id}/cancel`, {});
   else if(action==='retry')  resp = await postJSON(`/api/post-queue/${id}/retry`, {});
   else if(action==='delete'){
-    if(!confirm('Delete this queue item?')) return;
+
     resp = await fetch(`/api/post-queue/${id}`, {method:'DELETE'});
     resp = await resp.json();
   }

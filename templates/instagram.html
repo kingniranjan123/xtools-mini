@@ -703,7 +703,7 @@ async function startBatchUnfollow() {
   const targets = raw.split('\n').map(l => l.trim().replace('@','')).filter(Boolean).slice(0, 10);
   if (!targets.length) { showToast('No valid usernames', 'warn'); return; }
 
-  if (!confirm(`Unfollow ${targets.length} users? This cannot be undone automatically.`)) return;
+
 
   document.getElementById('unfollow-btn').disabled = true;
   document.getElementById('unfollow-btn').textContent = 'Processing…';
@@ -860,7 +860,7 @@ async function loadListToFollow(id, username) {
 }
 
 async function deleteList(id) {
-  if (!confirm('Delete this saved list?')) return;
+
   const resp = await postJSON('/api/instagram/lists/delete', { id });
   if (resp.ok) { showToast('Deleted', 'success'); location.reload(); }
 }

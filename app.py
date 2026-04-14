@@ -154,15 +154,7 @@ def download_page():
 @app.route('/metadata')
 def metadata_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
-    db = get_db()
-    reels = [dict(r) for r in db.execute('SELECT * FROM reels ORDER BY downloaded_at DESC').fetchall()]
-    total_tags     = sum(len(json.loads(r.get('tags') or '[]')) for r in reels)
-    total_accounts = len({r.get('account') for r in reels if r.get('account')})
-    return render_template('metadata.html',
-        reels=reels,
-        total_tags=total_tags,
-        total_accounts=total_accounts,
-    )
+    return render_template('metadata.html')
 
 @app.route('/watermark')
 def watermark_page():
@@ -354,15 +346,32 @@ def api_post_queue_list():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     platform = request.args.get('platform', '')
     status   = request.args.get('status', '')
+    page     = int(request.args.get('page', 1))
+    limit    = int(request.args.get('limit', 25))
+    offset   = (page - 1) * limit
+    
     db       = get_db()
-    q = 'SELECT * FROM post_queue'
+    
+    # Base WHERE clause
     clauses, vals = [], []
     if platform: clauses.append('platform=?'); vals.append(platform)
     if status:   clauses.append('status=?');   vals.append(status)
-    if clauses:  q += ' WHERE ' + ' AND '.join(clauses)
-    q += ' ORDER BY scheduled_at ASC, id DESC LIMIT 100'
-    rows = db.execute(q, vals).fetchall()
-    return jsonify({'items': [dict(r) for r in rows]})
+    where_sql = (' WHERE ' + ' AND '.join(clauses)) if clauses else ''
+    
+    # Get total count
+    total_count = db.execute(f'SELECT COUNT(*) FROM post_queue {where_sql}', vals).fetchone()[0]
+    total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
+    
+    q = f'SELECT * FROM post_queue {where_sql} ORDER BY scheduled_at ASC, id DESC LIMIT ? OFFSET ?'
+    rows = db.execute(q, vals + [limit, offset]).fetchall()
+    
+    return jsonify({
+        'items': [dict(r) for r in rows],
+        'page': page,
+        'limit': limit,
+        'total_count': total_count,
+        'total_pages': total_pages
+    })
 
 
 @app.route('/api/post-queue/add', methods=['POST'])
@@ -373,10 +382,20 @@ def api_post_queue_add():
     items = data.get('items', [data])   # accept single or list
     db    = get_db()
     added = []
+    skipped_duplicates = 0
     for item in items:
         fp = item.get('file_path', '').strip()
         if not fp:
             continue
+            
+        slot = int(item.get('account_slot', 1))
+        
+        # Deduplication check: ignore if this file_path is already in the queue for this account slot
+        exists = db.execute('SELECT 1 FROM post_queue WHERE file_path=? AND account_slot=? LIMIT 1', (fp, slot)).fetchone()
+        if exists:
+            skipped_duplicates += 1
+            continue
+            
         cur = db.execute(
             '''INSERT INTO post_queue
                (platform, account_slot, file_path, title, description, tags,
@@ -384,7 +403,7 @@ def api_post_queue_add():
                VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
             (
                 item.get('platform', 'instagram'),
-                item.get('account_slot', 1),
+                slot,
                 fp,
                 item.get('title', ''),
                 item.get('description', ''),
@@ -398,7 +417,7 @@ def api_post_queue_add():
         )
         added.append(cur.lastrowid)
     db.commit()
-    return jsonify({'ok': True, 'added': added, 'count': len(added)})
+    return jsonify({'ok': True, 'added': added, 'count': len(added), 'skipped_duplicates': skipped_duplicates})
 
 
 @app.route('/api/post-queue/<int:qid>/cancel', methods=['POST'])
@@ -875,6 +894,165 @@ def api_test_gpu():
 # ══════════════════════════════════════════════════════════════
 #  API — Metadata
 # ══════════════════════════════════════════════════════════════
+@app.route('/api/metadata/list', methods=['GET'])
+def api_metadata_list():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    
+    page    = int(request.args.get('page', 1))
+    limit   = int(request.args.get('limit', 24))
+    account = request.args.get('account', '')
+    no_tags = request.args.get('no_tags', 'false') == 'true'
+    no_desc = request.args.get('no_desc', 'false') == 'true'
+    search  = request.args.get('search', '').strip().lower()
+    
+    db = get_db()
+    clauses, vals = [], []
+    
+    if account:
+        clauses.append("account=?")
+        vals.append(account)
+    if no_tags:
+        clauses.append("(tags IS NULL OR tags='' OR tags='[]')")
+    if no_desc:
+        clauses.append("(caption IS NULL OR caption='')")
+    
+    where_sql = (' WHERE ' + ' AND '.join(clauses)) if clauses else ''
+    
+    total_count = db.execute(f"SELECT COUNT(*) FROM reels {where_sql}", vals).fetchone()[0]
+    total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
+    
+    q = f"SELECT * FROM reels {where_sql} ORDER BY downloaded_at DESC"
+    # if not doing manual search filter in SQL, we just grab all and filter down below for memory if needed, but here we do pagination:
+    # Actually, if we have a text search, do it in SQL:
+    if search:
+        clauses.append("(LOWER(title) LIKE ? OR LOWER(caption) LIKE ? OR LOWER(tags) LIKE ?)")
+        search_term = f"%{search}%"
+        vals.extend([search_term, search_term, search_term])
+        where_sql = (' WHERE ' + ' AND '.join(clauses)) if clauses else ''
+        total_count = db.execute(f"SELECT COUNT(*) FROM reels {where_sql}", vals).fetchone()[0]
+        total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
+        q = f"SELECT * FROM reels {where_sql} ORDER BY downloaded_at DESC"
+
+    q += " LIMIT ? OFFSET ?"
+    rows = db.execute(q, vals + [limit, (page - 1) * limit]).fetchall()
+    
+    # get distinct accounts for filter dropdown
+    accounts = [r[0] for r in db.execute("SELECT DISTINCT account FROM reels WHERE account IS NOT NULL").fetchall() if r[0]]
+    
+    return jsonify({
+        'items': [dict(r) for r in rows],
+        'page': page,
+        'limit': limit,
+        'total_count': total_count,
+        'total_pages': total_pages,
+        'accounts': accounts
+    })
+
+
+@app.route('/api/metadata/batch-action', methods=['POST'])
+def api_metadata_batch_action():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data   = request.get_json() or {}
+    action = data.get('action') # "delete" or "queue"
+    ids    = data.get('ids', [])
+    
+    if not ids or not action:
+        return jsonify({'error': 'Missing ids or action'}), 400
+        
+    db = get_db()
+    
+    if action == 'delete':
+        placeholders = ','.join(['?']*len(ids))
+        db.execute(f"DELETE FROM reels WHERE id IN ({placeholders})", ids)
+        db.commit()
+        return jsonify({'ok': True})
+        
+    if action == 'queue':
+        placeholders = ','.join(['?']*len(ids))
+        reels = [dict(r) for r in db.execute(f"SELECT * FROM reels WHERE id IN ({placeholders})", ids).fetchall()]
+        
+        convert  = data.get('convert', False)
+        platform = data.get('platform', 'instagram')
+        slot     = int(data.get('account_slot', 1))
+        # Custom scheduling
+        gap_mins = int(data.get('gap_mins', 120))
+        start_dt = data.get('start_time') # iso format
+        apply_wm = data.get('apply_watermark', False)
+        
+        watermark_text = _read_setting('watermark_text') if apply_wm else ''
+        
+        # We need a background thread for conversion since FFmpeg takes time
+        def _bg_process(reels_data, db_path, platform, slot, start_dt, gap_mins, convert, watermark_text):
+            from datetime import datetime, timedelta
+            import threading, sqlite3
+            con = sqlite3.connect(db_path)
+            
+            try:
+                base_time = datetime.fromisoformat(start_dt) if start_dt else datetime.utcnow()
+                
+                if convert: 
+                    from modules.reel_converter import convert_to_reels
+                    import re
+                    
+                for idx, r in enumerate(reels_data):
+                    fp = r['file_path']
+                    if not fp or not os.path.isfile(fp): continue
+                    
+                    target_time = base_time + timedelta(minutes=gap_mins * idx)
+                    
+                    # Dedup check
+                    exists = con.execute('SELECT 1 FROM post_queue WHERE file_path=? AND account_slot=? LIMIT 1', (fp, slot)).fetchone()
+                    
+                    if not convert:
+                        if exists: continue
+                        con.execute(
+                            '''INSERT INTO post_queue
+                               (platform, account_slot, file_path, title, description, tags, privacy, scheduled_at, ai_generated)
+                               VALUES (?,?,?,?,?,?,?,?,0)''',
+                            (platform, slot, fp, r['title'] or '', r['caption'] or '', r['tags'] or '', 'public', target_time.isoformat())
+                        )
+                    else:
+                        # Convert!
+                        safe_title = re.sub(r'[^\w\s-]', '', r['title'] or r['id']).strip().replace(' ', '_')
+                        if not safe_title: safe_title = r['id']
+                        
+                        out_dir = os.path.join(os.path.dirname(fp), safe_title)
+                        
+                        res = convert_to_reels(
+                            input_path=fp,
+                            output_dir=out_dir,
+                            title=r['title'] or '',
+                            watermark=watermark_text,
+                            part_duration_sec=60,
+                            show_title=True,
+                            show_part_label=True,
+                            show_watermark=bool(watermark_text)
+                        )
+                        
+                        for part_idx, part_fp in enumerate(res.get('parts', [])):
+                            p_time = target_time + timedelta(minutes=gap_mins * part_idx)
+                            if con.execute('SELECT 1 FROM post_queue WHERE file_path=? AND account_slot=? LIMIT 1', (part_fp, slot)).fetchone():
+                                continue
+                            con.execute(
+                                '''INSERT INTO post_queue
+                                   (platform, account_slot, file_path, title, description, tags, privacy, scheduled_at, ai_generated)
+                                   VALUES (?,?,?,?,?,?,?,?,0)''',
+                                (platform, slot, part_fp, f"{r['title']} Part {part_idx+1}", r['caption'] or '', r['tags'] or '', 'public', p_time.isoformat())
+                            )
+                            
+                con.commit()
+            except Exception as e:
+                app.logger.error(f'Batch convert/queue error: {e}')
+            finally:
+                con.close()
+                
+        import threading
+        t = threading.Thread(target=_bg_process, args=(reels, DB_PATH, platform, slot, start_dt, gap_mins, convert, watermark_text))
+        t.daemon = True
+        t.start()
+        
+        return jsonify({'ok': True, 'msg': 'Batch processing started in background'})
+
 @app.route('/api/metadata/<reel_id>', methods=['GET'])
 def api_metadata_single(reel_id):
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401

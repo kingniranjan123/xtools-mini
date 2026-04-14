@@ -612,7 +612,7 @@ async function previewCookies(accountId) {
 }
 
 async function deleteCookies(accountId) {
-  if (!confirm(`Clear cookies for ${accountId.toUpperCase()}?`)) return;
+
   const resp = await postJSON('/api/settings/cookies/delete', { account_id: accountId });
   if (resp.ok) { location.reload(); }
 }
