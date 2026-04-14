@@ -551,7 +551,7 @@ def api_ai_test_key():
             )
             if resp.status_code == 200:
                 data_r = resp.json()
-                reply  = data_r.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                reply  = (data_r.get('choices', [{}])[0].get('message', {}).get('content') or '').strip()
                 model  = data_r.get('model', model_name)
                 return jsonify({'ok': True, 'reply': reply, 'model': model, 'tried': tried})
             if resp.status_code == 429:
@@ -1624,7 +1624,7 @@ def api_cookies_save():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     data    = request.get_json()
     account_id = data.get('account_id', 'p1')
-    content = data.get('content', '').strip()
+    content = (data.get('content') or '').strip()
     if not content: return jsonify({'error': 'Empty content'}), 400
     
     lines = [l for l in content.splitlines() if l.strip() and not l.startswith('#')]
