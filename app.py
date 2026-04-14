@@ -148,7 +148,8 @@ def index():
 
 def _get_settings_dict():
     rows = get_db().execute('SELECT key, value FROM settings').fetchall()
-    return {r['key']: r['value'] for r in rows}
+    # Coerce NULL DB values to '' so callers can safely call .strip() on any value
+    return {r['key']: (r['value'] or '') for r in rows}
 
 @app.route('/download')
 def download_page():

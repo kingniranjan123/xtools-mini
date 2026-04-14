@@ -52,9 +52,13 @@ def _call_ai(api_key: str, system_prompt: str, user_prompt: str,
         )
 
         if resp.status_code == 200:
-            data = resp.json()
-            content = data['choices'][0]['message']['content']
-            return content.strip()
+            data    = resp.json()
+            content = (data.get('choices') or [{}])[0].get('message', {}).get('content') or ''
+            if content:
+                return content.strip()
+            # Empty content — try next model
+            last_error = f'{model_name}: returned empty content'
+            continue
         if resp.status_code in (401, 403):
             raise ValueError('OpenRouter API key is invalid or unauthorised.')
         if resp.status_code == 429:
