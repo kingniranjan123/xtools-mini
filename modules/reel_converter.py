@@ -25,6 +25,37 @@ REEL_W = 1080
 REEL_H = 1920
 
 
+# ── Cross-platform font resolver ─────────────────────────────────
+
+_FONT_CANDIDATES = [
+    # Windows
+    'C:/Windows/Fonts/arial.ttf',
+    'C:/Windows/Fonts/Arial.ttf',
+    'C:/Windows/Fonts/arialbd.ttf',
+    'C:/Windows/Fonts/calibri.ttf',
+    'C:/Windows/Fonts/tahoma.ttf',
+    'C:/Windows/Fonts/segoeui.ttf',
+    # Linux / Mac
+    '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    '/Library/Fonts/Arial.ttf',
+    '/System/Library/Fonts/Helvetica.ttf',
+]
+
+# Bundled fallback (we'll copy a font into static/ if all system paths fail)
+_BUNDLED_FONT = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                              'static', 'NotoSans-Bold.ttf')
+
+def _resolve_font() -> str:
+    """Return the first available font file path, or empty string if none found."""
+    for path in _FONT_CANDIDATES:
+        if os.path.isfile(path):
+            return path.replace('\\', '/').replace(':', '\\:')  # ffmpeg escape
+    if os.path.isfile(_BUNDLED_FONT):
+        return _BUNDLED_FONT.replace('\\', '/').replace(':', '\\:')
+    return ''
+
+
 # ── Video probe ───────────────────────────────────────────────────
 
 def probe_video(path: str) -> dict:
@@ -75,6 +106,9 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
 
     filters = [scale_pad]
 
+    font_file = _resolve_font()
+    font_attr = f"fontfile='{font_file}':" if font_file else ''
+
     # Title: Custom centered placement
     if show_title and title.strip():
         safe_title = title.replace("'", "\\'").replace(":", "\\:")
@@ -82,7 +116,8 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
         y_pos = f"h*{title_pos_pct/100.0:.2f}"
         filters.append(
             f"drawtext=text='{text}':"
-            f"fontcolor=white:fontsize=52:font='Sans':"
+            f"{font_attr}"
+            f"fontcolor=white:fontsize=52:"
             f"x=(w-text_w)/2:y={y_pos}:"
             f"shadowcolor=black@0.85:shadowx=2:shadowy=2"
         )
@@ -93,7 +128,8 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
         y_pos = f"h*{part_pos_pct/100.0:.2f}"
         filters.append(
             f"drawtext=text='{part_label}':"
-            f"fontcolor=white:fontsize=64:font='Sans':"
+            f"{font_attr}"
+            f"fontcolor=white:fontsize=64:"
             f"x=(w-text_w)/2:y={y_pos}:"
             f"shadowcolor=black@0.9:shadowx=3:shadowy=3"
         )
@@ -103,7 +139,8 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
         safe_wm = watermark.replace("'", "\\'").replace(":", "\\:")
         filters.append(
             f"drawtext=text='{safe_wm}':"
-            f"fontcolor=white@0.55:fontsize=34:font='Sans':"
+            f"{font_attr}"
+            f"fontcolor=white@0.55:fontsize=34:"
             f"x=w-text_w-28:y=h-text_h-28:"
             f"shadowcolor=black@0.5:shadowx=1:shadowy=1"
         )
