@@ -501,6 +501,86 @@ def api_ai_generate_post():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/ai/test-key', methods=['POST'])
+def api_ai_test_key():
+    """Ultra-cheap connection test: sends Hi with max_tokens=10. Costs ~0 credits."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data    = request.get_json() or {}
+    api_key = data.get('api_key', '').strip() or _read_setting('openrouter_api_key', '').strip()
+    if not api_key:
+        return jsonify({'ok': False, 'error': 'No API key provided'})
+    try:
+        import requests as _req
+        resp = _req.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'http://localhost:5055',
+                'X-Title': 'Nikethan Reels Toolkit',
+            },
+            json={
+                'model': 'google/gemini-2.5-pro',
+                'max_tokens': 10,
+                'temperature': 0.1,
+                'messages': [{'role': 'user', 'content': 'Hi'}],
+            },
+            timeout=15,
+        )
+        if resp.status_code == 401:
+            return jsonify({'ok': False, 'error': 'Invalid API key - unauthorized'})
+        if resp.status_code == 429:
+            return jsonify({'ok': True, 'error': 'Rate limit hit - but key is valid!'})
+        if resp.status_code != 200:
+            return jsonify({'ok': False, 'error': f'OpenRouter returned HTTP {resp.status_code}: {resp.text[:200]}'})
+        data_r = resp.json()
+        reply  = data_r.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+        model  = data_r.get('model', 'unknown')
+        return jsonify({'ok': True, 'reply': reply, 'model': model})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/ai/credits', methods=['GET'])
+def api_ai_credits():
+    """Check OpenRouter credit balance via two methods with graceful fallback."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    api_key = _read_setting('openrouter_api_key', '').strip()
+    if not api_key:
+        return jsonify({'ok': False, 'error': 'No API key configured'})
+    try:
+        import requests as _req
+        headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
+
+        # Method 1: /api/v1/credits (works with Management keys)
+        cr = _req.get('https://openrouter.ai/api/v1/credits', headers=headers, timeout=10)
+        if cr.status_code == 200:
+            d = cr.json()
+            used      = float(d.get('total_usage', 0) or 0)
+            purchased = float(d.get('total_credits', d.get('total_credits_purchased', 0)) or 0)
+            remaining = purchased - used
+            return jsonify({'ok': True, 'method': 'credits_api',
+                            'total_credits': round(purchased, 6),
+                            'used_credits':  round(used, 6),
+                            'remaining':     round(remaining, 6)})
+
+        # Method 2: /api/v1/auth/key (any key - returns rate limits + is_free_tier)
+        kr = _req.get('https://openrouter.ai/api/v1/auth/key', headers=headers, timeout=10)
+        if kr.status_code == 200:
+            d = kr.json().get('data', kr.json())
+            return jsonify({'ok': True, 'method': 'key_info',
+                            'label': d.get('label', 'API Key'),
+                            'usage': d.get('usage', 0),
+                            'limit': d.get('limit'),
+                            'is_free_tier': d.get('is_free_tier', False),
+                            'rate_limit': d.get('rate_limit', {}),
+                            'note': 'For full balance use a Management API key from openrouter.ai/settings'})
+
+        return jsonify({'ok': False, 'error': f'OpenRouter returned HTTP {cr.status_code}'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
 @app.route('/analytics')
 def analytics_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
