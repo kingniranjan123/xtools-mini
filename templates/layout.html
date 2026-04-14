@@ -67,6 +67,10 @@
       <a class="nav-item {% if request.endpoint == 'post_page' %}active{% endif %}" href="{{ url_for('post_page') }}">
         <span class="nav-icon">🤖</span> Auto-Post
       </a>
+      <a class="nav-item {% if request.endpoint == 'create_post_page' %}active{% endif %}" href="{{ url_for('create_post_page') }}">
+        <span class="nav-icon">📤</span> Create Post
+        <span class="nav-badge" style="background:rgba(0,212,168,.15);color:#00d4a8;border-color:rgba(0,212,168,.3);">NEW</span>
+      </a>
 
       <div class="nav-label" style="margin-top:12px;">Insights</div>
       <a class="nav-item {% if request.endpoint == 'analytics_page' %}active{% endif %}" href="{{ url_for('analytics_page') }}">

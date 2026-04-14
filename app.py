@@ -258,11 +258,225 @@ def post_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
     db = get_db()
     accounts = [dict(r) for r in db.execute('SELECT * FROM poster_accounts ORDER BY id').fetchall()]
-    # Mask passwords
     for a in accounts:
         if a.get('password'):
             a['password'] = '********'
     return render_template('post.html', accounts=accounts)
+
+
+@app.route('/create-post')
+def create_post_page():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    db       = get_db()
+    settings = _get_settings_dict()
+    accounts = [dict(r) for r in db.execute('SELECT id, label, username, enabled FROM poster_accounts ORDER BY id').fetchall()]
+    # YouTube auth status
+    from modules.yt_uploader import is_authorized, get_channel_info, YT_CATEGORIES
+    yt_authorized  = is_authorized()
+    yt_channel     = get_channel_info() if yt_authorized else {}
+    yt_cs_saved    = bool(settings.get('yt_client_secret', '').strip())
+    ai_configured  = bool(settings.get('openrouter_api_key', '').strip())
+    return render_template('create_post.html',
+        accounts=accounts,
+        yt_authorized=yt_authorized,
+        yt_channel=yt_channel,
+        yt_cs_saved=yt_cs_saved,
+        ai_configured=ai_configured,
+        yt_categories=YT_CATEGORIES,
+        settings=settings,
+    )
+
+
+# ── YouTube OAuth ─────────────────────────────────────────────────
+@app.route('/youtube/oauth/start')
+def youtube_oauth_start():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    from modules.yt_uploader import get_auth_url
+    cs_json = _get_settings_dict().get('yt_client_secret', '')
+    if not cs_json:
+        flash('Paste your YouTube client_secret.json in Settings → YouTube OAuth first.', 'danger')
+        return redirect(url_for('create_post_page'))
+    redirect_uri = request.host_url.rstrip('/') + '/youtube/oauth/callback'
+    try:
+        auth_url = get_auth_url(cs_json, redirect_uri)
+        return redirect(auth_url)
+    except Exception as e:
+        flash(f'OAuth error: {e}', 'danger')
+        return redirect(url_for('create_post_page'))
+
+
+@app.route('/youtube/oauth/callback')
+def youtube_oauth_callback():
+    code  = request.args.get('code')
+    state = request.args.get('state')
+    if not code:
+        flash('OAuth authorization failed — no code returned.', 'danger')
+        return redirect(url_for('create_post_page'))
+    from modules.yt_uploader import exchange_code
+    ok = exchange_code(code, state)
+    if ok:
+        flash('✅ YouTube authorized successfully!', 'success')
+    else:
+        flash('❌ Failed to exchange authorization code.', 'danger')
+    return redirect(url_for('create_post_page'))
+
+
+@app.route('/api/youtube/oauth/save-secret', methods=['POST'])
+def api_yt_save_secret():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    cs   = data.get('client_secret', '').strip()
+    if not cs:
+        return jsonify({'error': 'Empty client_secret'}), 400
+    try:
+        json.loads(cs)  # validate JSON
+    except Exception:
+        return jsonify({'error': 'Invalid JSON'}), 400
+    db = get_db()
+    db.execute('INSERT INTO settings (key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+               ('yt_client_secret', cs))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/youtube/oauth/revoke', methods=['POST'])
+def api_yt_revoke():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    db = get_db()
+    db.execute("DELETE FROM settings WHERE key IN ('yt_oauth_token','yt_oauth_flow_state','yt_oauth_client_config','yt_oauth_redirect_uri')")
+    db.commit()
+    return jsonify({'ok': True})
+
+
+# ── Post Queue API ────────────────────────────────────────────────
+@app.route('/api/post-queue', methods=['GET'])
+def api_post_queue_list():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    platform = request.args.get('platform', '')
+    status   = request.args.get('status', '')
+    db       = get_db()
+    q = 'SELECT * FROM post_queue'
+    clauses, vals = [], []
+    if platform: clauses.append('platform=?'); vals.append(platform)
+    if status:   clauses.append('status=?');   vals.append(status)
+    if clauses:  q += ' WHERE ' + ' AND '.join(clauses)
+    q += ' ORDER BY scheduled_at ASC, id DESC LIMIT 100'
+    rows = db.execute(q, vals).fetchall()
+    return jsonify({'items': [dict(r) for r in rows]})
+
+
+@app.route('/api/post-queue/add', methods=['POST'])
+def api_post_queue_add():
+    """Add one or more items to the post queue."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data  = request.get_json() or {}
+    items = data.get('items', [data])   # accept single or list
+    db    = get_db()
+    added = []
+    for item in items:
+        fp = item.get('file_path', '').strip()
+        if not fp:
+            continue
+        cur = db.execute(
+            '''INSERT INTO post_queue
+               (platform, account_slot, file_path, title, description, tags,
+                privacy, category_id, thumbnail_path, scheduled_at, ai_generated)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
+            (
+                item.get('platform', 'instagram'),
+                item.get('account_slot', 1),
+                fp,
+                item.get('title', ''),
+                item.get('description', ''),
+                item.get('tags', ''),
+                item.get('privacy', 'public'),
+                item.get('category_id', '22'),
+                item.get('thumbnail_path', ''),
+                item.get('scheduled_at') or None,
+                int(item.get('ai_generated', 0)),
+            )
+        )
+        added.append(cur.lastrowid)
+    db.commit()
+    return jsonify({'ok': True, 'added': added, 'count': len(added)})
+
+
+@app.route('/api/post-queue/<int:qid>/cancel', methods=['POST'])
+def api_post_queue_cancel(qid):
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    db = get_db()
+    db.execute("UPDATE post_queue SET status='cancelled' WHERE id=? AND status IN ('pending','error')", (qid,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/post-queue/<int:qid>/retry', methods=['POST'])
+def api_post_queue_retry(qid):
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    db = get_db()
+    db.execute("UPDATE post_queue SET status='pending', note='' WHERE id=? AND status IN ('error','cancelled')", (qid,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/post-queue/<int:qid>', methods=['DELETE'])
+def api_post_queue_delete(qid):
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    db = get_db()
+    db.execute('DELETE FROM post_queue WHERE id=?', (qid,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+# ── Folder scan for bulk upload ────────────────────────────────────
+@app.route('/api/post-queue/scan-folder', methods=['POST'])
+def api_post_queue_scan():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data   = request.get_json() or {}
+    folder = data.get('folder', '').strip()
+    if not folder or not os.path.isdir(folder):
+        return jsonify({'error': 'Folder not found'}), 404
+    VIDEO_EXTS = ('.mp4','.mov','.m4v','.avi','.mkv','.webm','.ts')
+    files = sorted([
+        f for f in os.listdir(folder)
+        if os.path.splitext(f)[1].lower() in VIDEO_EXTS
+    ])
+    result = []
+    for fn in files:
+        stem = os.path.splitext(fn)[0]
+        result.append({
+            'file_path': os.path.join(folder, fn),
+            'filename':  fn,
+            'title_guess': stem.replace('_',' ').replace('-',' ').title(),
+        })
+    return jsonify({'files': result, 'count': len(result)})
+
+
+# ── AI content generation for a given file/title ──────────────────
+@app.route('/api/ai/generate-post', methods=['POST'])
+def api_ai_generate_post():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data     = request.get_json() or {}
+    topic    = data.get('topic', '').strip()
+    platform = data.get('platform', 'youtube')
+    if not topic:
+        return jsonify({'error': 'No topic provided'}), 400
+    cfg     = _get_settings_dict()
+    api_key = cfg.get('openrouter_api_key', '').strip()
+    if not api_key:
+        return jsonify({'error': 'OpenRouter API key not configured'}), 400
+    niche   = cfg.get('content_niche', '')
+    try:
+        if platform == 'youtube':
+            from modules.ai_generator import generate_youtube_content
+            result = generate_youtube_content(topic, api_key, niche, is_short=False)
+        else:
+            from modules.ai_generator import generate_instagram_content
+            result = generate_instagram_content(topic, api_key, niche, 'reel')
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/analytics')
 def analytics_page():
@@ -1733,6 +1947,9 @@ if __name__ == '__main__':
 
     from modules.poster import run_poster_daemon
     threading.Thread(target=run_poster_daemon, daemon=True).start()
+
+    from modules.post_scheduler import run_post_scheduler
+    threading.Thread(target=run_post_scheduler, daemon=True).start()
 
     cuda_str = 'CUDA ACTIVE' if CUDA_INFO['available'] else 'CPU Mode'
     print(f'\n  *** Nikethan Reels Toolkit ***')

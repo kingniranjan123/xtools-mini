@@ -97,6 +97,27 @@ CREATE TABLE IF NOT EXISTS poster_log (
   note       TEXT,
   logged_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS post_queue (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  platform       TEXT NOT NULL,    -- 'youtube' | 'instagram'
+  account_slot   INTEGER,          -- instagram: poster_accounts.id (1-5); youtube: always 1
+  file_path      TEXT NOT NULL,
+  title          TEXT DEFAULT '',
+  description    TEXT DEFAULT '',
+  tags           TEXT DEFAULT '',  -- comma-separated or JSON array
+  privacy        TEXT DEFAULT 'public',   -- youtube: public/unlisted/private
+  category_id    TEXT DEFAULT '22',       -- youtube category (22=People&Blogs)
+  thumbnail_path TEXT DEFAULT '',
+  scheduled_at   DATETIME,         -- NULL = post as soon as possible
+  status         TEXT DEFAULT 'pending',  -- pending|posting|done|error|cancelled
+  ai_generated   INTEGER DEFAULT 0,       -- 1 if content was AI-generated
+  posted_at      DATETIME,
+  note           TEXT DEFAULT '',
+  created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS ix_queue_status ON post_queue(status, scheduled_at);
 """
 
 def get_db():

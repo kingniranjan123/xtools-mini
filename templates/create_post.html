@@ -1,0 +1,855 @@
+{% extends "layout.html" %}
+{% block title %}Create Post — Nikethan{% endblock %}
+{% block breadcrumb %}Create Post{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title"><span class="grad-text">📤 Create Post</span></h1>
+  <p class="page-subtitle">Post to <strong>YouTube</strong> or <strong>Instagram</strong> — manually, in bulk, AI-assisted, or scheduled. Queue runs automatically with per-account cooling.</p>
+</div>
+
+<!-- Flash messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for cat, msg in messages %}
+    <div style="padding:12px 16px;border-radius:var(--radius-sm);margin-bottom:16px;
+                background:{% if cat=='success' %}rgba(0,212,168,.1){% else %}rgba(255,65,65,.1){% endif %};
+                border:1px solid {% if cat=='success' %}rgba(0,212,168,.3){% else %}rgba(255,65,65,.3){% endif %};
+                color:{% if cat=='success' %}#00d4a8{% else %}#ff4141{% endif %};">
+      {{ msg }}
+    </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<!-- ════════ Platform Tab Bar ════════ -->
+<div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:24px;">
+  <button class="btn btn-sm active" id="ptab-yt-btn" onclick="switchPTab('yt')" style="background:var(--bg-card);border:1px solid var(--border);">
+    ▶ YouTube
+  </button>
+  <button class="btn btn-sm btn-ghost" id="ptab-ig-btn" onclick="switchPTab('ig')">
+    📸 Instagram
+  </button>
+</div>
+
+<!-- ══════════════════════════════════════
+     YOUTUBE TAB
+══════════════════════════════════════ -->
+<div id="ptab-yt">
+
+  {% if not yt_authorized %}
+  <!-- YouTube OAuth Setup Card -->
+  <div class="card" style="margin-bottom:20px;border:1px solid rgba(255,215,0,.3);background:rgba(255,215,0,.04);">
+    <div class="card-header">
+      <div class="card-title">⚠ YouTube Authorization Required</div>
+    </div>
+    <div class="card-body">
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.7;">
+        To upload to YouTube, you need to authorize once using your Google account.<br>
+        <strong>Steps:</strong>
+        <ol style="margin:8px 0 0 20px;font-size:12px;">
+          <li>Go to <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent);">Google Cloud Console</a> → enable <code>YouTube Data API v3</code></li>
+          <li>Create OAuth 2.0 credentials → Desktop App → download <code>client_secret.json</code></li>
+          <li>Paste the JSON contents below and save</li>
+          <li>Click Authorize</li>
+        </ol>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Paste client_secret.json contents</label>
+        <textarea class="form-textarea mono" id="yt-client-secret" rows="4"
+                  placeholder='{"installed":{"client_id":"...","client_secret":"...","redirect_uris":["http://localhost"],...}}'></textarea>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary" onclick="saveYtSecret()">💾 Save JSON</button>
+        {% if yt_cs_saved %}
+        <a href="/youtube/oauth/start" class="btn btn-primary">🔑 Authorize YouTube Account</a>
+        {% endif %}
+      </div>
+      {% if yt_cs_saved %}
+      <div style="font-size:11px;color:var(--accent-green);margin-top:8px;">✅ client_secret.json saved — click "Authorize YouTube Account" to complete setup.</div>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <!-- Channel Connected -->
+  <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:rgba(0,212,168,.08);border:1px solid rgba(0,212,168,.25);border-radius:var(--radius-sm);margin-bottom:16px;">
+    <span style="font-size:18px;">✅</span>
+    <div style="flex:1;">
+      <strong>{{ yt_channel.get('title', 'YouTube Channel') }}</strong>
+      <span style="color:var(--text-muted);font-size:11px;margin-left:8px;">
+        {{ yt_channel.get('subscriber_count', '?') }} subscribers · {{ yt_channel.get('video_count', '?') }} videos
+      </span>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="revokeYt()">Disconnect</button>
+  </div>
+  {% endif %}
+
+  <!-- Sub-tabs: Manual / Bulk / Queue -->
+  <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:3px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:16px;">
+    <button class="btn btn-sm active" id="yt-sub-manual-btn" onclick="switchYtSub('manual')" style="background:var(--bg-card);border:1px solid var(--border);">✏ Manual Post</button>
+    <button class="btn btn-sm btn-ghost" id="yt-sub-bulk-btn" onclick="switchYtSub('bulk')">📂 Bulk Upload</button>
+    <button class="btn btn-sm btn-ghost" id="yt-sub-queue-btn" onclick="switchYtSub('queue')">📋 Queue <span id="yt-queue-badge" class="badge badge-gray" style="margin-left:4px;">0</span></button>
+  </div>
+
+  <!-- Manual YT Post -->
+  <div id="yt-sub-manual">
+    <div class="two-col">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">🎬 Video File</div></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Video File Path</label>
+              <div style="display:flex;gap:8px;">
+                <input class="form-input mono" id="yt-m-file" type="text" placeholder="C:\videos\my_video.mp4" style="flex:1;"
+                       oninput="ytAutoFillTitle()">
+                <button class="btn btn-secondary btn-sm" onclick="pickFile('yt-m-file')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Thumbnail (optional)</label>
+              <div style="display:flex;gap:8px;">
+                <input class="form-input mono" id="yt-m-thumb" type="text" placeholder="Path to .jpg image (optional)" style="flex:1;">
+                <button class="btn btn-ghost btn-sm" onclick="pickFile('yt-m-thumb')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">📝 Content</div>
+            {% if ai_configured %}
+            <button class="btn btn-sm" id="yt-m-ai-btn" onclick="ytManualAI()"
+                    style="background:linear-gradient(135deg,rgba(130,80,255,.2),rgba(0,212,168,.1));border:1px solid rgba(130,80,255,.3);color:#8250ff;">
+              🤖 AI Generate
+            </button>
+            {% else %}
+            <span style="font-size:11px;color:var(--text-muted);">Configure OpenRouter key for AI</span>
+            {% endif %}
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Title</label>
+              <input class="form-input" id="yt-m-title" type="text" placeholder="Video title" maxlength="100">
+              <div class="form-hint" id="yt-m-title-count" style="text-align:right;">0 / 100</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Description</label>
+              <textarea class="form-textarea" id="yt-m-desc" rows="5" placeholder="Video description…" maxlength="5000"
+                        oninput="updateCharCount('yt-m-desc','yt-m-desc-count',5000)"></textarea>
+              <div class="form-hint" id="yt-m-desc-count" style="text-align:right;">0 / 5000</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tags <span style="color:var(--text-muted);font-weight:400;">(comma-separated)</span></label>
+              <input class="form-input" id="yt-m-tags" type="text" placeholder="tag1, tag2, tag3">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="form-group" style="margin:0;">
+                <label class="form-label">Category</label>
+                <select class="form-select" id="yt-m-cat">
+                  {% for cid, cname in yt_categories.items() %}
+                  <option value="{{ cid }}" {% if cid=='22' %}selected{% endif %}>{{ cname }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label class="form-label">Privacy</label>
+                <select class="form-select" id="yt-m-privacy">
+                  <option value="public">🌍 Public</option>
+                  <option value="unlisted">🔗 Unlisted</option>
+                  <option value="private">🔒 Private</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">⏰ Schedule</div></div>
+          <div class="card-body">
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" onclick="setYtSchedule('now')">
+                <input type="radio" name="yt-m-schedule" value="now" checked style="accent-color:var(--accent);">
+                <div><div style="font-size:13px;font-weight:600;">⚡ Post Now</div><div style="font-size:11px;color:var(--text-muted);">Adds to queue, posts immediately</div></div>
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" onclick="setYtSchedule('later')">
+                <input type="radio" name="yt-m-schedule" value="later" style="accent-color:var(--accent);">
+                <div><div style="font-size:13px;font-weight:600;">📅 Schedule for Later</div><div style="font-size:11px;color:var(--text-muted);">Pick date and time</div></div>
+              </label>
+              <div id="yt-m-datetime-box" style="display:none;padding:10px 12px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);">
+                <label class="form-label" style="font-size:11px;">Schedule Date & Time</label>
+                <input class="form-input" id="yt-m-datetime" type="datetime-local">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI results panel -->
+        <div class="card" id="yt-m-ai-panel" style="display:none;">
+          <div class="card-header">
+            <div class="card-title">🤖 AI Suggestions</div>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('yt-m-ai-panel').style.display='none'">✕</button>
+          </div>
+          <div class="card-body" id="yt-m-ai-body" style="font-size:12px;">
+            <div style="text-align:center;padding:20px;color:var(--text-muted);">Generating…</div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-full btn-lg" id="yt-m-add-btn"
+                onclick="addYtManualToQueue()"
+                style="background:linear-gradient(135deg,#ff0000,#cc0000);">
+          📤 Add to Queue
+        </button>
+        <div style="font-size:11px;color:var(--text-muted);text-align:center;">
+          The scheduler checks every 45s and posts automatically
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk YT Upload -->
+  <div id="yt-sub-bulk" style="display:none;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📂 Bulk YouTube Upload</div>
+        {% if ai_configured %}
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          <input type="checkbox" id="yt-bulk-ai" style="accent-color:var(--accent);">
+          🤖 AI-generate content for each file
+        </label>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Video Folder</label>
+            <div style="display:flex;gap:8px;">
+              <input class="form-input mono" id="yt-bulk-folder" type="text" placeholder="C:\videos\youtube_uploads" style="flex:1;">
+              <button class="btn btn-secondary btn-sm" onclick="pickFile('yt-bulk-folder')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Privacy</label>
+              <select class="form-select" id="yt-bulk-privacy">
+                <option value="public">Public</option>
+                <option value="unlisted">Unlisted</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Category</label>
+              <select class="form-select" id="yt-bulk-cat">
+                {% for cid, cname in yt_categories.items() %}
+                <option value="{{ cid }}" {% if cid=='22' %}selected{% endif %}>{{ cname }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
+          <div class="form-group" style="margin:0;">
+            <label class="form-label" style="font-size:10px;">Schedule Start</label>
+            <input class="form-input" id="yt-bulk-start-dt" type="datetime-local">
+            <div class="form-hint" style="font-size:9px;">Leave blank to post immediately</div>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label" style="font-size:10px;">Gap Between Posts (min)</label>
+            <input class="form-input" id="yt-bulk-gap" type="number" value="60" min="10">
+          </div>
+          <div style="display:flex;align-items:flex-end;padding-bottom:2px;">
+            <button class="btn btn-secondary btn-full" onclick="scanYtBulkFolder()">🔍 Scan Folder</button>
+          </div>
+        </div>
+        <!-- File list -->
+        <div id="yt-bulk-list" style="display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div id="yt-bulk-count" style="font-size:12px;color:var(--text-muted);"></div>
+            <button class="btn btn-primary btn-sm" onclick="addYtBulkToQueue()">📤 Add All to Queue</button>
+          </div>
+          <div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead><tr style="background:var(--bg-card-2);border-bottom:1px solid var(--border);">
+                <th style="padding:7px 10px;text-align:left;">File</th>
+                <th style="padding:7px 10px;text-align:left;">Title (auto / editable)</th>
+                <th style="padding:7px 10px;">Scheduled</th>
+              </tr></thead>
+              <tbody id="yt-bulk-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- YT Queue -->
+  <div id="yt-sub-queue" style="display:none;">
+    {% include 'partials/_queue_table.html' ignore missing %}
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📋 YouTube Post Queue</div>
+        <button class="btn btn-ghost btn-sm" onclick="loadQueue('youtube')">🔄 Refresh</button>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto;">
+        <div id="yt-queue-table">
+          <div style="text-align:center;padding:32px;color:var(--text-muted);">Loading…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /ptab-yt -->
+
+
+<!-- ══════════════════════════════════════
+     INSTAGRAM TAB
+══════════════════════════════════════ -->
+<div id="ptab-ig" style="display:none;">
+
+  <!-- Sub-tabs -->
+  <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:3px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:16px;">
+    <button class="btn btn-sm active" id="ig-sub-manual-btn" onclick="switchIgSub('manual')" style="background:var(--bg-card);border:1px solid var(--border);">✏ Manual Post</button>
+    <button class="btn btn-sm btn-ghost" id="ig-sub-bulk-btn" onclick="switchIgSub('bulk')">📂 Bulk Upload</button>
+    <button class="btn btn-sm btn-ghost" id="ig-sub-queue-btn" onclick="switchIgSub('queue')">📋 Queue <span id="ig-queue-badge" class="badge badge-gray" style="margin-left:4px;">0</span></button>
+  </div>
+
+  <!-- Manual IG Post -->
+  <div id="ig-sub-manual">
+    <div class="two-col">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">📹 Reel / Post File</div></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Video File Path</label>
+              <div style="display:flex;gap:8px;">
+                <input class="form-input mono" id="ig-m-file" type="text" placeholder="C:\videos\reel.mp4" style="flex:1;"
+                       oninput="igAutoFillTitle()">
+                <button class="btn btn-secondary btn-sm" onclick="pickFile('ig-m-file')" style="white-space:nowrap;padding:8px 12px;">Browse…</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Instagram Account</label>
+              <select class="form-select" id="ig-m-account">
+                {% for a in accounts %}
+                <option value="{{ a.id }}">Slot {{ a.id }} — {{ a.label or 'Account '~a.id }}{% if a.username %} (@{{ a.username }}){% endif %}{% if not a.enabled %} (disabled){% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">📝 Caption & Tags</div>
+            {% if ai_configured %}
+            <button class="btn btn-sm" id="ig-m-ai-btn" onclick="igManualAI()"
+                    style="background:linear-gradient(135deg,rgba(255,60,172,.2),rgba(130,80,255,.1));border:1px solid rgba(255,60,172,.3);color:#ff3cac;">
+              🤖 AI Generate
+            </button>
+            {% endif %}
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Caption / Description</label>
+              <textarea class="form-textarea" id="ig-m-caption" rows="5"
+                        placeholder="Caption for the reel&#10;&#10;#hashtag #reels" maxlength="2200"
+                        oninput="updateCharCount('ig-m-caption','ig-m-cap-count',2200)"></textarea>
+              <div class="form-hint" id="ig-m-cap-count" style="text-align:right;">0 / 2200</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hashtags <span style="color:var(--text-muted);font-weight:400;">(appended to caption)</span></label>
+              <input class="form-input mono" id="ig-m-tags" type="text" placeholder="#viral #trending #reels">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">⏰ Schedule</div></div>
+          <div class="card-body">
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" onclick="setIgSchedule('now')">
+                <input type="radio" name="ig-m-schedule" value="now" checked style="accent-color:var(--accent);">
+                <div><div style="font-size:13px;font-weight:600;">⚡ Post Now</div><div style="font-size:11px;color:var(--text-muted);">Posts immediately (next daemon tick)</div></div>
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" onclick="setIgSchedule('later')">
+                <input type="radio" name="ig-m-schedule" value="later" style="accent-color:var(--accent);">
+                <div><div style="font-size:13px;font-weight:600;">📅 Schedule for Later</div></div>
+              </label>
+              <div id="ig-m-datetime-box" style="display:none;padding:10px 12px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);">
+                <input class="form-input" id="ig-m-datetime" type="datetime-local">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI results -->
+        <div class="card" id="ig-m-ai-panel" style="display:none;">
+          <div class="card-header">
+            <div class="card-title">🤖 AI Suggestions</div>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ig-m-ai-panel').style.display='none'">✕</button>
+          </div>
+          <div class="card-body" id="ig-m-ai-body" style="font-size:12px;max-height:320px;overflow-y:auto;"></div>
+        </div>
+
+        <button class="btn btn-primary btn-full btn-lg" id="ig-m-add-btn" onclick="addIgManualToQueue()"
+                style="background:linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);">
+          📤 Add to Queue
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk IG Upload -->
+  <div id="ig-sub-bulk" style="display:none;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📂 Bulk Instagram Upload</div>
+        {% if ai_configured %}
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          <input type="checkbox" id="ig-bulk-ai" style="accent-color:var(--accent);">
+          🤖 AI-generate captions from filename
+        </label>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Video Folder</label>
+            <div style="display:flex;gap:6px;">
+              <input class="form-input mono" id="ig-bulk-folder" type="text" placeholder="C:\videos\reels" style="flex:1;">
+              <button class="btn btn-secondary btn-sm" onclick="pickFile('ig-bulk-folder')" style="padding:8px 10px;">Browse</button>
+            </div>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Account Slot</label>
+            <select class="form-select" id="ig-bulk-account">
+              {% for a in accounts %}
+              <option value="{{ a.id }}">Slot {{ a.id }} — {{ a.label or '' }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Gap Between Posts (min)</label>
+            <input class="form-input" id="ig-bulk-gap" type="number" value="30" min="5">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:16px;">
+          <div class="form-group" style="margin:0;">
+            <label class="form-label" style="font-size:10px;">Schedule Start (optional)</label>
+            <input class="form-input" id="ig-bulk-start-dt" type="datetime-local">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Default Caption (applies to all unless AI enabled)</label>
+            <input class="form-input" id="ig-bulk-caption" type="text" placeholder="Follow for more! #reels #viral">
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="scanIgBulkFolder()">🔍 Scan Folder</button>
+        <div id="ig-bulk-list" style="display:none;margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div id="ig-bulk-count" style="font-size:12px;color:var(--text-muted);"></div>
+            <button class="btn btn-primary btn-sm" onclick="addIgBulkToQueue()"
+                    style="background:linear-gradient(135deg,#f09433,#bc1888);">📤 Add All to Queue</button>
+          </div>
+          <div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead><tr style="background:var(--bg-card-2);border-bottom:1px solid var(--border);">
+                <th style="padding:7px 10px;text-align:left;">File</th>
+                <th style="padding:7px 10px;text-align:left;">Caption preview</th>
+                <th style="padding:7px 10px;">Scheduled</th>
+              </tr></thead>
+              <tbody id="ig-bulk-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IG Queue -->
+  <div id="ig-sub-queue" style="display:none;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📋 Instagram Post Queue</div>
+        <button class="btn btn-ghost btn-sm" onclick="loadQueue('instagram')">🔄 Refresh</button>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto;">
+        <div id="ig-queue-table">
+          <div style="text-align:center;padding:32px;color:var(--text-muted);">Loading…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /ptab-ig -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── State ─────────────────────────────────────────────────────
+let _ytBulkFiles = [];
+let _igBulkFiles = [];
+
+// ── Platform tabs ─────────────────────────────────────────────
+function switchPTab(t) {
+  ['yt','ig'].forEach(id => {
+    const el = document.getElementById('ptab-'+id); if(el) el.style.display = id===t?'block':'none';
+    const b  = document.getElementById('ptab-'+id+'-btn');
+    if(b){ b.classList.toggle('active',id===t); b.style.background=id===t?'var(--bg-card)':'transparent'; b.style.border=id===t?'1px solid var(--border)':'none'; }
+  });
+  if(t==='yt')  loadQueueBadge('youtube','yt-queue-badge');
+  if(t==='ig')  loadQueueBadge('instagram','ig-queue-badge');
+}
+function switchYtSub(s) {
+  ['manual','bulk','queue'].forEach(id => {
+    const el = document.getElementById('yt-sub-'+id); if(el) el.style.display=id===s?'block':'none';
+    const b  = document.getElementById('yt-sub-'+id+'-btn');
+    if(b){ b.classList.toggle('active',id===s); b.style.background=id===s?'var(--bg-card)':'transparent'; b.style.border=id===s?'1px solid var(--border)':'none'; }
+  });
+  if(s==='queue') loadQueue('youtube');
+}
+function switchIgSub(s) {
+  ['manual','bulk','queue'].forEach(id => {
+    const el = document.getElementById('ig-sub-'+id); if(el) el.style.display=id===s?'block':'none';
+    const b  = document.getElementById('ig-sub-'+id+'-btn');
+    if(b){ b.classList.toggle('active',id===s); b.style.background=id===s?'var(--bg-card)':'transparent'; b.style.border=id===s?'1px solid var(--border)':'none'; }
+  });
+  if(s==='queue') loadQueue('instagram');
+}
+function setYtSchedule(v){ document.getElementById('yt-m-datetime-box').style.display=v==='later'?'block':'none'; }
+function setIgSchedule(v){ document.getElementById('ig-m-datetime-box').style.display=v==='later'?'block':'none'; }
+
+// ── Char counter ──────────────────────────────────────────────
+function updateCharCount(tid, cid, max) {
+  const el = document.getElementById(tid);
+  const cnt= document.getElementById(cid);
+  if(el && cnt) cnt.textContent = el.value.length + ' / ' + max;
+}
+document.getElementById('yt-m-title') && document.getElementById('yt-m-title').addEventListener('input', function(){
+  document.getElementById('yt-m-title-count').textContent = this.value.length + ' / 100';
+});
+
+// ── Auto-fill title from filename ─────────────────────────────
+function ytAutoFillTitle(){
+  const fp = document.getElementById('yt-m-file').value;
+  if(!fp) return;
+  const base = fp.split(/[\\/]/).pop();
+  const stem = base.replace(/\.[^.]+$/, '').replace(/[_-]/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  document.getElementById('yt-m-title').value = stem;
+  document.getElementById('yt-m-title-count').textContent = stem.length + ' / 100';
+}
+function igAutoFillTitle(){
+  const fp = document.getElementById('ig-m-file').value;
+  if(!fp) return;
+  const base = fp.split(/[\\/]/).pop();
+  const stem = base.replace(/\.[^.]+$/, '').replace(/[_-]/g,' ');
+  document.getElementById('ig-m-caption').value = stem;
+  updateCharCount('ig-m-caption','ig-m-cap-count',2200);
+}
+
+// ── YouTube OAuth ─────────────────────────────────────────────
+async function saveYtSecret(){
+  const cs = document.getElementById('yt-client-secret') ? document.getElementById('yt-client-secret').value.trim() : '';
+  if(!cs){ showToast('Paste the client_secret.json content first','warn'); return; }
+  const resp = await postJSON('/api/youtube/oauth/save-secret', {client_secret: cs});
+  if(resp.ok){ showToast('Saved! Now click "Authorize YouTube Account"','success'); setTimeout(()=>location.reload(),1200); }
+  else showToast(resp.error||'Failed','error');
+}
+async function revokeYt(){
+  if(!confirm('Disconnect YouTube account?')) return;
+  const resp = await postJSON('/api/youtube/oauth/revoke', {});
+  if(resp.ok){ showToast('Disconnected','success'); setTimeout(()=>location.reload(),1000); }
+}
+
+// ── Folder picker (pick-folder API) ──────────────────────────
+async function pickFile(inputId) {
+  try {
+    const resp = await fetch('/api/utils/pick-folder');
+    const data = await resp.json();
+    if(data.folder) document.getElementById(inputId).value = data.folder;
+  } catch { showToast('Type the path manually','warn'); }
+}
+
+// ── AI Helpers ────────────────────────────────────────────────
+async function ytManualAI(){
+  const title = document.getElementById('yt-m-title').value.trim() ||
+                (document.getElementById('yt-m-file').value.split(/[\\/]/).pop() || '');
+  if(!title){ showToast('Enter a title or select a file first','warn'); return; }
+  const panel = document.getElementById('yt-m-ai-panel');
+  const body  = document.getElementById('yt-m-ai-body');
+  panel.style.display='block';
+  body.innerHTML='<div style="text-align:center;padding:16px;color:var(--text-muted);">🤖 Generating…</div>';
+  document.getElementById('yt-m-ai-btn').disabled=true;
+  document.getElementById('yt-m-ai-btn').textContent='⏳ Generating…';
+
+  const resp = await postJSON('/api/ai/generate-post', {topic: title, platform: 'youtube'});
+  document.getElementById('yt-m-ai-btn').disabled=false;
+  document.getElementById('yt-m-ai-btn').textContent='🤖 AI Generate';
+  if(resp.error){ body.innerHTML=`<div style="color:var(--accent-red);">${resp.error}</div>`; return; }
+
+  const titles = resp.titles||[];
+  const desc   = resp.description||'';
+  const tags   = resp.tags||[];
+  body.innerHTML = `
+    ${titles.length?`<div style="margin-bottom:10px;"><strong>Titles:</strong>${titles.map((t,i)=>`<div style="display:flex;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="flex:1;">${t}</span><button class="btn btn-ghost btn-sm" onclick="document.getElementById('yt-m-title').value=${JSON.stringify(t)}">Use</button></div>`).join('')}</div>`:''}
+    ${desc?`<div style="margin-bottom:8px;"><strong>Description:</strong><div style="display:flex;gap:6px;align-items:flex-start;padding:5px 0;"><span style="flex:1;font-size:11px;color:var(--text-secondary);white-space:pre-wrap;">${desc.substring(0,300)}…</span><button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="document.getElementById('yt-m-desc').value=${JSON.stringify(desc)};updateCharCount('yt-m-desc','yt-m-desc-count',5000)">Use</button></div></div>`:''}
+    ${tags.length?`<div><strong>Tags:</strong><div style="display:flex;gap:6px;align-items:center;padding:5px 0;"><span style="flex:1;font-size:11px;">${tags.join(', ')}</span><button class="btn btn-ghost btn-sm" onclick="document.getElementById('yt-m-tags').value=${JSON.stringify(tags.join(', '))}">Use</button></div></div>`:''}
+  `;
+}
+
+async function igManualAI(){
+  const fp = document.getElementById('ig-m-file').value;
+  const title = fp ? fp.split(/[\\/]/).pop().replace(/\.[^.]+$/,'').replace(/[_-]/g,' ') : '';
+  if(!title){ showToast('Select a file first','warn'); return; }
+  const panel = document.getElementById('ig-m-ai-panel');
+  const body  = document.getElementById('ig-m-ai-body');
+  panel.style.display='block';
+  body.innerHTML='<div style="text-align:center;padding:16px;color:var(--text-muted);">🤖 Generating…</div>';
+  document.getElementById('ig-m-ai-btn').disabled=true;
+  const resp = await postJSON('/api/ai/generate-post', {topic: title, platform: 'instagram'});
+  document.getElementById('ig-m-ai-btn').disabled=false;
+  if(resp.error){ body.innerHTML=`<div style="color:var(--accent-red);">${resp.error}</div>`; return; }
+  const caps = resp.captions||[];
+  const tags  = resp.hashtags||resp.tags||[];
+  body.innerHTML = `
+    ${caps.length?`<div style="margin-bottom:10px;"><strong>Captions:</strong>${caps.map(c=>`<div style="padding:6px 0;border-bottom:1px solid var(--border);"><div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">${c.substring(0,120)}…</div><button class="btn btn-ghost btn-sm" onclick="document.getElementById('ig-m-caption').value=${JSON.stringify(c)};updateCharCount('ig-m-caption','ig-m-cap-count',2200)">Use</button></div>`).join('')}</div>`:''}
+    ${tags.length?`<div><strong>Hashtags:</strong><div style="display:flex;gap:6px;align-items:center;padding:5px 0;"><span style="flex:1;font-size:11px;">${Array.isArray(tags)?tags.join(' '):tags}</span><button class="btn btn-ghost btn-sm" onclick="document.getElementById('ig-m-tags').value=${JSON.stringify(Array.isArray(tags)?tags.join(' '):tags)}">Use</button></div></div>`:''}
+  `;
+}
+
+// ── Manual YT add to queue ────────────────────────────────────
+async function addYtManualToQueue(){
+  const fp  = document.getElementById('yt-m-file').value.trim();
+  if(!fp){ showToast('Select a video file','warn'); return; }
+  const sched = document.querySelector('input[name="yt-m-schedule"]:checked').value;
+  const dt    = sched==='later' ? (document.getElementById('yt-m-datetime').value || null) : null;
+  const payload = {
+    platform: 'youtube', account_slot: 1,
+    file_path: fp,
+    title:       document.getElementById('yt-m-title').value.trim(),
+    description: document.getElementById('yt-m-desc').value.trim(),
+    tags:        document.getElementById('yt-m-tags').value.trim(),
+    privacy:     document.getElementById('yt-m-privacy').value,
+    category_id: document.getElementById('yt-m-cat').value,
+    thumbnail_path: document.getElementById('yt-m-thumb').value.trim(),
+    scheduled_at: dt,
+  };
+  document.getElementById('yt-m-add-btn').disabled=true;
+  document.getElementById('yt-m-add-btn').textContent='Adding…';
+  const resp = await postJSON('/api/post-queue/add', payload);
+  document.getElementById('yt-m-add-btn').disabled=false;
+  document.getElementById('yt-m-add-btn').textContent='📤 Add to Queue';
+  if(resp.ok){
+    showToast(`✅ Added to queue! ID: ${resp.added[0]}`,'success');
+    switchYtSub('queue');
+  } else {
+    showToast(resp.error||'Failed','error');
+  }
+}
+
+// ── Manual IG add to queue ────────────────────────────────────
+async function addIgManualToQueue(){
+  const fp  = document.getElementById('ig-m-file').value.trim();
+  if(!fp){ showToast('Select a video file','warn'); return; }
+  const sched   = document.querySelector('input[name="ig-m-schedule"]:checked').value;
+  const dt      = sched==='later' ? (document.getElementById('ig-m-datetime').value||null) : null;
+  const caption = document.getElementById('ig-m-caption').value.trim();
+  const tags    = document.getElementById('ig-m-tags').value.trim();
+  const slot    = parseInt(document.getElementById('ig-m-account').value)||1;
+  const payload = {
+    platform: 'instagram', account_slot: slot,
+    file_path: fp,
+    title: fp.split(/[\\/]/).pop().replace(/\.[^.]+$/,''),
+    description: caption,
+    tags: tags,
+    scheduled_at: dt,
+  };
+  document.getElementById('ig-m-add-btn').disabled=true;
+  const resp = await postJSON('/api/post-queue/add', payload);
+  document.getElementById('ig-m-add-btn').disabled=false;
+  if(resp.ok){ showToast(`✅ Added! ID: ${resp.added[0]}`,'success'); switchIgSub('queue'); }
+  else showToast(resp.error||'Failed','error');
+}
+
+// ── Bulk folder scan ──────────────────────────────────────────
+async function scanYtBulkFolder(){
+  const folder = document.getElementById('yt-bulk-folder').value.trim();
+  if(!folder){ showToast('Enter a folder path','warn'); return; }
+  const resp = await postJSON('/api/post-queue/scan-folder', {folder});
+  if(resp.error){ showToast(resp.error,'error'); return; }
+  _ytBulkFiles = resp.files||[];
+  const startDt = document.getElementById('yt-bulk-start-dt').value;
+  const gapMins = parseInt(document.getElementById('yt-bulk-gap').value)||60;
+  let baseTime = startDt ? new Date(startDt) : null;
+  document.getElementById('yt-bulk-count').textContent = `${_ytBulkFiles.length} files found`;
+  document.getElementById('yt-bulk-list').style.display='block';
+  const tbody = document.getElementById('yt-bulk-tbody');
+  tbody.innerHTML = _ytBulkFiles.map((f,i) => {
+    const schedDt = baseTime ? new Date(baseTime.getTime() + i*gapMins*60000).toLocaleString() : 'ASAP';
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:7px 10px;font-size:11px;font-family:var(--font-mono);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.filename}</td>
+      <td style="padding:7px 10px;"><input class="form-input" id="yt-bulk-title-${i}" type="text" value="${f.title_guess}" style="font-size:11px;padding:4px 8px;"></td>
+      <td style="padding:7px 10px;font-size:11px;color:var(--text-muted);text-align:center;">${schedDt}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function addYtBulkToQueue(){
+  if(!_ytBulkFiles.length){ showToast('Scan a folder first','warn'); return; }
+  const startDt = document.getElementById('yt-bulk-start-dt').value;
+  const gapMins = parseInt(document.getElementById('yt-bulk-gap').value)||60;
+  const privacy = document.getElementById('yt-bulk-privacy').value;
+  const catId   = document.getElementById('yt-bulk-cat').value;
+  const useAI   = document.getElementById('yt-bulk-ai') ? document.getElementById('yt-bulk-ai').checked : false;
+  let baseTime  = startDt ? new Date(startDt) : null;
+
+  const items = _ytBulkFiles.map((f, i) => ({
+    platform: 'youtube', account_slot: 1,
+    file_path: f.file_path,
+    title: document.getElementById(`yt-bulk-title-${i}`)?.value || f.title_guess,
+    description: '', tags: '',
+    privacy, category_id: catId,
+    ai_generated: useAI ? 1 : 0,
+    scheduled_at: baseTime ? new Date(baseTime.getTime()+i*gapMins*60000).toISOString().slice(0,16) : null,
+  }));
+
+  const resp = await postJSON('/api/post-queue/add', {items});
+  if(resp.ok){
+    showToast(`✅ ${resp.count} items added to queue!`,'success');
+    if(useAI) showToast('AI content will be generated by scheduler before posting','info');
+    switchYtSub('queue');
+  } else showToast(resp.error||'Failed','error');
+}
+
+async function scanIgBulkFolder(){
+  const folder = document.getElementById('ig-bulk-folder').value.trim();
+  if(!folder){ showToast('Enter a folder path','warn'); return; }
+  const resp = await postJSON('/api/post-queue/scan-folder', {folder});
+  if(resp.error){ showToast(resp.error,'error'); return; }
+  _igBulkFiles = resp.files||[];
+  const startDt = document.getElementById('ig-bulk-start-dt').value;
+  const gapMins = parseInt(document.getElementById('ig-bulk-gap').value)||30;
+  const defCap  = document.getElementById('ig-bulk-caption').value.trim();
+  let baseTime  = startDt ? new Date(startDt) : null;
+  document.getElementById('ig-bulk-count').textContent = `${_igBulkFiles.length} files found`;
+  document.getElementById('ig-bulk-list').style.display='block';
+  const tbody = document.getElementById('ig-bulk-tbody');
+  tbody.innerHTML = _igBulkFiles.map((f,i) => {
+    const schedDt = baseTime ? new Date(baseTime.getTime()+i*gapMins*60000).toLocaleString() : 'ASAP';
+    const cap = defCap || f.title_guess;
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:7px 10px;font-size:11px;font-family:var(--font-mono);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.filename}</td>
+      <td style="padding:7px 10px;"><input class="form-input" id="ig-bulk-cap-${i}" type="text" value="${cap}" style="font-size:11px;padding:4px 8px;"></td>
+      <td style="padding:7px 10px;font-size:11px;color:var(--text-muted);text-align:center;">${schedDt}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function addIgBulkToQueue(){
+  if(!_igBulkFiles.length){ showToast('Scan a folder first','warn'); return; }
+  const startDt = document.getElementById('ig-bulk-start-dt').value;
+  const gapMins = parseInt(document.getElementById('ig-bulk-gap').value)||30;
+  const slot    = parseInt(document.getElementById('ig-bulk-account').value)||1;
+  const useAI   = document.getElementById('ig-bulk-ai') ? document.getElementById('ig-bulk-ai').checked : false;
+  let baseTime  = startDt ? new Date(startDt) : null;
+
+  const items = _igBulkFiles.map((f, i) => ({
+    platform: 'instagram', account_slot: slot,
+    file_path: f.file_path,
+    title: f.title_guess,
+    description: document.getElementById(`ig-bulk-cap-${i}`)?.value || '',
+    tags: '', ai_generated: useAI ? 1 : 0,
+    scheduled_at: baseTime ? new Date(baseTime.getTime()+i*gapMins*60000).toISOString().slice(0,16) : null,
+  }));
+
+  const resp = await postJSON('/api/post-queue/add', {items});
+  if(resp.ok){ showToast(`✅ ${resp.count} items added!`,'success'); switchIgSub('queue'); }
+  else showToast(resp.error||'Failed','error');
+}
+
+// ── Queue table ───────────────────────────────────────────────
+const STATUS_STYLE = {
+  pending:   {bg:'rgba(255,215,0,.12)', color:'#ffd700',  label:'⏳ Pending'},
+  posting:   {bg:'rgba(0,212,168,.12)', color:'#00d4a8',  label:'📤 Posting'},
+  done:      {bg:'rgba(0,212,168,.15)', color:'#00d4a8',  label:'✅ Done'},
+  error:     {bg:'rgba(255,65,65,.12)', color:'#ff4141',  label:'❌ Error'},
+  cancelled: {bg:'rgba(119,119,119,.1)','color':'#777',   label:'⊘ Cancelled'},
+};
+
+async function loadQueue(platform){
+  const tid = platform==='youtube' ? 'yt-queue-table' : 'ig-queue-table';
+  document.getElementById(tid).innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted);">Loading…</div>';
+  const resp = await fetch('/api/post-queue?platform='+platform);
+  const data = await resp.json();
+  const items = data.items||[];
+  // update badge
+  const badge = platform==='youtube' ? 'yt-queue-badge' : 'ig-queue-badge';
+  const pending = items.filter(i=>i.status==='pending').length;
+  const b = document.getElementById(badge);
+  if(b){ b.textContent=pending; b.className='badge '+(pending>0?'badge-orange':'badge-gray'); }
+
+  if(!items.length){
+    document.getElementById(tid).innerHTML='<div style="text-align:center;padding:32px;color:var(--text-muted);">No items in queue for this platform.</div>';
+    return;
+  }
+  document.getElementById(tid).innerHTML=`
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead><tr style="border-bottom:1px solid var(--border);background:var(--bg-card-2);color:var(--text-muted);">
+        <th style="padding:8px 12px;">ID</th>
+        <th style="padding:8px 12px;">File</th>
+        <th style="padding:8px 12px;">Title</th>
+        <th style="padding:8px 12px;">Scheduled</th>
+        <th style="padding:8px 12px;">Status</th>
+        <th style="padding:8px 12px;">Note</th>
+        <th style="padding:8px 12px;">Actions</th>
+      </tr></thead>
+      <tbody>${items.map(r=>{
+        const st = STATUS_STYLE[r.status]||{bg:'transparent',color:'#777',label:r.status};
+        const fn = (r.file_path||'').split(/[\\/]/).pop();
+        return `<tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:7px 12px;color:var(--text-muted);">#${r.id}</td>
+          <td style="padding:7px 12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:10px;">${fn}</td>
+          <td style="padding:7px 12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.title||'—'}</td>
+          <td style="padding:7px 12px;white-space:nowrap;">${(r.scheduled_at||'ASAP').slice(0,16).replace('T',' ')}</td>
+          <td style="padding:7px 12px;"><span style="padding:2px 8px;border-radius:3px;background:${st.bg};color:${st.color};font-size:10px;font-weight:700;">${st.label}</span></td>
+          <td style="padding:7px 12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--text-muted);">${r.note||''}</td>
+          <td style="padding:7px 12px;white-space:nowrap;">
+            ${(r.status==='error'||r.status==='cancelled')?`<button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="qAction(${r.id},'retry','${platform}')">↺ Retry</button>`:''}
+            ${r.status==='pending'?`<button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="qAction(${r.id},'cancel','${platform}')">✕ Cancel</button>`:''}
+            <button class="btn btn-ghost btn-sm" style="font-size:10px;color:var(--accent-red);" onclick="qAction(${r.id},'delete','${platform}')">🗑</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+}
+
+async function qAction(id, action, platform){
+  let resp;
+  if(action==='cancel')      resp = await postJSON(`/api/post-queue/${id}/cancel`, {});
+  else if(action==='retry')  resp = await postJSON(`/api/post-queue/${id}/retry`, {});
+  else if(action==='delete'){
+    if(!confirm('Delete this queue item?')) return;
+    resp = await fetch(`/api/post-queue/${id}`, {method:'DELETE'});
+    resp = await resp.json();
+  }
+  if(resp&&resp.ok){ showToast('Done','success'); loadQueue(platform); }
+  else showToast('Failed','error');
+}
+
+async function loadQueueBadge(platform, badgeId){
+  const resp = await fetch('/api/post-queue?platform='+platform+'&status=pending');
+  const data = await resp.json();
+  const cnt  = (data.items||[]).length;
+  const el   = document.getElementById(badgeId);
+  if(el){ el.textContent=cnt; el.className='badge '+(cnt>0?'badge-orange':'badge-gray'); }
+}
+
+// Init
+loadQueueBadge('youtube','yt-queue-badge');
+loadQueueBadge('instagram','ig-queue-badge');
+</script>
+{% endblock %}
