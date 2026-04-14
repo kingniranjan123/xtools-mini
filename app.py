@@ -22,6 +22,10 @@ from modules.instagram_social import (lookup_user, extract_followers,
 from modules.audio_tools import (extract_mp3, extract_mp3_from_folder,
                                  merge_audio_video, batch_merge)
 from modules.youtube_downloader import download_youtube
+from modules.dependency_manager import init_runtime_path, check_system_status, install_ffmpeg_thread, upgrade_ytdlp_thread
+
+# Safely inject local ffmpeg into runtime PATH before anything else does ffmpeg checks
+init_runtime_path()
 
 # Upload temp dir for file uploads
 UPLOAD_TEMP = os.path.join(os.path.dirname(__file__), 'tmp_uploads')
@@ -658,6 +662,44 @@ def api_save_keys():
             db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (k, data[k]))
     db.commit()
     return jsonify({'ok': True})
+
+# ══════════════════════════════════════════════════════════════
+#  API — System Dependencies
+# ══════════════════════════════════════════════════════════════
+
+@app.route('/api/system/status')
+def api_system_status():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    from modules.dependency_manager import check_system_status
+    return jsonify(check_system_status())
+
+@app.route('/api/system/update-ffmpeg', methods=['POST'])
+def api_system_update_ffmpeg():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    job_id = str(uuid.uuid4())
+    JOBS[job_id] = {'events': [], 'done': False}
+    
+    def _cb(ev_type, msg):
+        JOBS[job_id]['events'].append({'type': ev_type, 'msg': msg, 'ts': datetime.utcnow().isoformat()})
+        if ev_type == 'done':
+            JOBS[job_id]['done'] = True
+            
+    threading.Thread(target=install_ffmpeg_thread, args=(_cb,), daemon=True).start()
+    return jsonify({'ok': True, 'job_id': job_id})
+
+@app.route('/api/system/update-ytdlp', methods=['POST'])
+def api_system_update_ytdlp():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    job_id = str(uuid.uuid4())
+    JOBS[job_id] = {'events': [], 'done': False}
+    
+    def _cb(ev_type, msg):
+        JOBS[job_id]['events'].append({'type': ev_type, 'msg': msg, 'ts': datetime.utcnow().isoformat()})
+        if ev_type == 'done':
+            JOBS[job_id]['done'] = True
+            
+    threading.Thread(target=upgrade_ytdlp_thread, args=(_cb,), daemon=True).start()
+    return jsonify({'ok': True, 'job_id': job_id})
 
 
 # ── AI Content Studio ──────────────────────────────────────────
