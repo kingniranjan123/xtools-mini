@@ -35,6 +35,7 @@ def _call_ai(api_key: str, system_prompt: str, user_prompt: str,
         json={
             'model': MODEL,
             'temperature': temperature,
+            'max_tokens': 700,
             'messages': [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user',   'content': user_prompt},
@@ -70,9 +71,13 @@ def _parse_json_block(text: str) -> dict:
 #  YouTube AI Content Generator
 # ─────────────────────────────────────────────────────────────
 
-YOUTUBE_SYSTEM = """You are an expert YouTube SEO strategist and viral content creator.
-You specialise in creating high-ranking, click-worthy YouTube content that drives real engagement.
-Always respond with ONLY valid JSON — no markdown prose outside the JSON block."""
+YOUTUBE_SYSTEM = """You are a YouTube SEO expert and content creator writing for an Indian audience.
+You write in a natural Indian-English style — friendly, conversational, energetic. Use common Indian expressions naturally (like 'yaar', 'bhai', 'ekdum', 'bilkul', 'full on', 'too good', 'mind-blowing stuff', 'must watch') but keep it professional.
+STRICT LIMITS:
+- Title: max 100 characters
+- Description: max 300 words
+- Tags: max 10 tags, each tag max 30 characters
+Always respond with ONLY valid JSON. No markdown prose outside the JSON block."""
 
 def generate_youtube_content(topic: str, api_key: str,
                               channel_niche: str = '',
@@ -85,72 +90,54 @@ def generate_youtube_content(topic: str, api_key: str,
     niche_context = f'Channel niche: {channel_niche}. ' if channel_niche else ''
 
     prompt = f"""
-{niche_context}Generate a complete YouTube content package for this topic:
+{niche_context}Generate a YouTube content package for this video topic (in Indian-English style):
 "{topic}"
 
 Video type: {type_label}
 
-Return ONLY valid JSON — no markdown, no extra prose:
+STRICT RULES (follow exactly):
+- Title: MAXIMUM 100 characters. Make it catchy, use Indian hooks where relevant.
+- Description: MAXIMUM 300 words. Write in friendly Indian-English (use expressions like 'yaar', 'ekdum solid', 'must watch', 'too good', 'bilkul free' where they fit naturally). End with 3-4 relevant hashtags inline.
+- Tags: EXACTLY 10 tags. Each tag max 30 characters. Mix broad SEO + niche terms.
+- trending_now: 1 currently trending tag related to topic with reason.
+- future_trending: 1 predicted upcoming tag with reason + timeframe.
+
+Return ONLY valid JSON, no extra text:
 {{
   "titles": [
-    {{"text": "Title Option 1", "type": "curiosity_hook", "score": 95}},
-    {{"text": "Title Option 2", "type": "how_to", "score": 88}},
-    {{"text": "Title Option 3", "type": "listicle", "score": 82}}
+    {{"text": "Title under 100 chars", "type": "curiosity_hook", "score": 95}},
+    {{"text": "Another title under 100 chars", "type": "how_to", "score": 88}},
+    {{"text": "Third option under 100 chars", "type": "listicle", "score": 82}}
   ],
-  "description": "Full YouTube description (300-500 words). Include timestamps, CTA, social links, and #hashtags at end.",
+  "description": "300 words max. Friendly Indian-English. Include a CTA at the end. #hashtag1 #hashtag2 #hashtag3",
   "tags": [
-    {{"tag": "broad primary tag", "weight": 100, "type": "primary", "monthly_searches": "high"}},
-    {{"tag": "second broad tag", "weight": 92, "type": "primary", "monthly_searches": "high"}},
-    {{"tag": "niche specific tag", "weight": 85, "type": "secondary", "monthly_searches": "medium"}},
-    {{"tag": "long tail phrase for this video", "weight": 75, "type": "long_tail", "monthly_searches": "medium"}},
-    {{"tag": "related keyword 1", "weight": 68, "type": "secondary", "monthly_searches": "medium"}},
-    {{"tag": "related keyword 2", "weight": 60, "type": "secondary", "monthly_searches": "medium"}},
-    {{"tag": "community or brand tag", "weight": 52, "type": "niche", "monthly_searches": "low"}},
-    {{"tag": "niche tag 1", "weight": 44, "type": "niche", "monthly_searches": "low"}},
-    {{"tag": "niche tag 2", "weight": 36, "type": "niche", "monthly_searches": "low"}},
-    {{"tag": "niche tag 3", "weight": 28, "type": "niche", "monthly_searches": "low"}},
-    {{"tag": "hyper niche tag 1", "weight": 20, "type": "niche", "monthly_searches": "low"}},
-    {{"tag": "hyper niche tag 2", "weight": 15, "type": "niche", "monthly_searches": "low"}},
-    {{"tag": "long tail phrase 2", "weight": 45, "type": "long_tail", "monthly_searches": "low"}},
-    {{"tag": "long tail phrase 3", "weight": 40, "type": "long_tail", "monthly_searches": "low"}},
-    {{"tag": "broad search term variation", "weight": 80, "type": "primary", "monthly_searches": "high"}}
+    {{"tag": "primary tag", "weight": 100, "type": "primary", "monthly_searches": "high"}},
+    {{"tag": "second tag", "weight": 90, "type": "primary", "monthly_searches": "high"}},
+    {{"tag": "niche tag 1", "weight": 80, "type": "secondary", "monthly_searches": "medium"}},
+    {{"tag": "niche tag 2", "weight": 70, "type": "secondary", "monthly_searches": "medium"}},
+    {{"tag": "long tail phrase 1", "weight": 60, "type": "long_tail", "monthly_searches": "medium"}},
+    {{"tag": "long tail phrase 2", "weight": 50, "type": "long_tail", "monthly_searches": "medium"}},
+    {{"tag": "community tag 1", "weight": 40, "type": "niche", "monthly_searches": "low"}},
+    {{"tag": "community tag 2", "weight": 30, "type": "niche", "monthly_searches": "low"}},
+    {{"tag": "hyper niche 1", "weight": 20, "type": "niche", "monthly_searches": "low"}},
+    {{"tag": "hyper niche 2", "weight": 10, "type": "niche", "monthly_searches": "low"}}
   ],
   "trending_now": {{
-    "tag": "#ActualTrendingTagNow",
-    "reason": "Why this tag is popular right now and how it connects to this video",
-    "urgency": "Post within X days for maximum reach"
+    "tag": "#TrendingTagNow",
+    "reason": "Short reason why trending now (1-2 lines)",
+    "urgency": "Post within X days for max reach"
   }},
   "future_trending": {{
-    "tag": "#PredictedFutureTrendTag",
-    "reason": "Why this topic or keyword is predicted to grow significantly",
-    "timeframe": "Expected to peak in X weeks/months — get in early"
+    "tag": "#FutureTrendTag",
+    "reason": "Why this will grow (1-2 lines)",
+    "timeframe": "Expected to peak in X weeks/months"
   }},
-  "category": "one of: Education, Entertainment, Gaming, Music, Film, Tech, Sports, News, People, Travel, Comedy, Science, HowTo",
-  "thumbnail_headlines": [
-    "PUNCHY HEADLINE 1 (max 5 words)",
-    "PUNCHY HEADLINE 2 (max 5 words)",
-    "PUNCHY HEADLINE 3 (max 5 words)"
-  ],
-  "hook_lines": [
-    "Opening hook sentence 1 (first 15 seconds)",
-    "Opening hook sentence 2 variant",
-    "Opening hook sentence 3 variant"
-  ],
-  "end_screen_cta": "Compelling end-screen call to action (1 sentence)",
-  "chapters": [
-    {{"time": "00:00", "title": "Intro"}},
-    {{"time": "01:30", "title": "Main topic chapter"}},
-    {{"time": "05:00", "title": "Deep dive"}},
-    {{"time": "09:30", "title": "Tips and tricks"}},
-    {{"time": "12:00", "title": "Outro and CTA"}}
-  ],
-  "seo_keywords": ["primary search keyword", "secondary keyword", "3rd keyword"],
-  "best_posting_time": "e.g. Tuesday or Thursday, 14:00-16:00 UTC",
-  "content_tips": ["tip 1", "tip 2", "tip 3"]
+  "category": "Education",
+  "hook_lines": ["Hook line 1 (max 15 words)", "Hook line 2"],
+  "best_posting_time": "Tue/Thu 6-9 PM IST"
 }}
-
-IMPORTANT for the tags array: MUST include exactly 15 tag objects sorted by weight descending. Weight 80-100 = primary broad tags with high search volume. Weight 50-79 = secondary medium competition tags. Weight 30-49 = long-tail phrases. Weight 1-29 = hyper-niche community tags. Set monthly_searches to 'high', 'medium', or 'low' accordingly.
 """
+
     raw = _call_ai(api_key, YOUTUBE_SYSTEM, prompt, temperature=0.8)
     try:
         result = _parse_json_block(raw)
@@ -166,10 +153,13 @@ IMPORTANT for the tags array: MUST include exactly 15 tag objects sorted by weig
 #  Instagram AI Content Generator
 # ─────────────────────────────────────────────────────────────
 
-INSTAGRAM_SYSTEM = """You are an expert Instagram content strategist and growth hacker.
-You specialise in viral Instagram Reels content, captions that stop the scroll, and
-hashtag strategies that maximise reach for all follower sizes.
-Always respond with ONLY valid JSON — no markdown prose outside the JSON block."""
+INSTAGRAM_SYSTEM = """You are an Instagram content expert writing for an Indian audience.
+Write captions in natural Indian-English — fun, relatable, and engaging. Use expressions like 'yaar', 'ekdum viral', 'must follow', 'too good to miss', 'bilkul free hai', 'full paisa vasool' where they fit naturally.
+STRICT LIMITS:
+- Caption: max 300 words per caption
+- Hashtags: max 10 hashtags total
+Always respond with ONLY valid JSON. No markdown prose outside the JSON block."""
+
 
 def generate_instagram_content(topic: str, api_key: str,
                                 account_niche: str = '',

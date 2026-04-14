@@ -542,10 +542,11 @@
 function showSettingsTab(tabId) {
   document.querySelectorAll('.settings-tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.settings-tab-btn').forEach(el => el.classList.remove('active'));
-  
   document.getElementById('settings-tab-' + tabId).classList.add('active');
   document.getElementById('tabbtn-' + tabId).classList.add('active');
+  if(tabId === 'sys') { try { fetchSystemStatus(); } catch(e) {} }
 }
+
 
 // ── API Keys ──────────────────────────────────────────────
 function toggleKeyVisibility(inputId, btn) {
@@ -816,20 +817,8 @@ async function triggerSysUpdate(type) {
     }
 }
 
-// Intercept tab click to load status
-const oldShowSettingsTab = window.showSettingsTab;
-window.showSettingsTab = function(tabName) {
-    if(oldShowSettingsTab) oldShowSettingsTab(tabName);
-    // Alternatively, just manually do it here if showSettingsTab is inline:
-    document.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.settings-tab-content').forEach(c => c.classList.remove('active'));
-    document.getElementById('tabbtn-' + tabName)?.classList.add('active');
-    document.getElementById('settings-tab-' + tabName)?.classList.add('active');
-    
-    if(tabName === 'sys') {
-        fetchSystemStatus();
-    }
-}
+
+// Init preview
 
 // Init preview
 updateWMPreview();

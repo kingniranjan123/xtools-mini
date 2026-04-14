@@ -36,7 +36,8 @@ def probe_video(path: str) -> dict:
         path,
     ]
     try:
-        out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True)
+        raw = subprocess.check_output(cmd, stderr=subprocess.DEVNULL)
+        out = raw.decode('utf-8', errors='replace')
         data = json.loads(out)
         s = data['streams'][0]
         return {
@@ -46,6 +47,7 @@ def probe_video(path: str) -> dict:
         }
     except Exception as e:
         raise RuntimeError(f'ffprobe failed: {e}')
+
 
 
 # ── FFmpeg filter builder ─────────────────────────────────────────
@@ -131,12 +133,21 @@ def encode_part(input_path: str, output_path: str,
     if progress_cb:
         progress_cb(f'  ffmpeg start: {os.path.basename(output_path)}')
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    # Use binary mode + explicit decode to avoid Windows cp1252 codec crash
+    # on FFmpeg's unicode progress characters (e.g. block chars 0x8d etc.)
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     if result.returncode != 0:
         if progress_cb:
-            progress_cb(f'  ✗ ffmpeg error: {result.stderr[-400:]}')
+            # Safely decode stderr — ignore any undecodable bytes
+            stderr_text = (result.stderr or b'').decode('utf-8', errors='replace')
+            progress_cb(f'  \u2717 ffmpeg error: {stderr_text[-400:]}')
         return False
     return True
+
 
 
 # ── Main conversion entry point ───────────────────────────────────
