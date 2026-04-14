@@ -121,13 +121,14 @@
             <div class="card-title">📝 Content</div>
             {% if ai_configured %}
             <button class="btn btn-sm" id="yt-m-ai-btn" onclick="ytManualAI()"
-                    style="background:linear-gradient(135deg,rgba(130,80,255,.2),rgba(0,212,168,.1));border:1px solid rgba(130,80,255,.3);color:#8250ff;">
-              🤖 AI Generate
+                    style="background:linear-gradient(135deg,rgba(130,80,255,.25),rgba(0,212,168,.15));border:1px solid rgba(130,80,255,.4);color:#a87fff;font-weight:600;">
+              ✨ AI Generate
             </button>
             {% else %}
-            <span style="font-size:11px;color:var(--text-muted);">Configure OpenRouter key for AI</span>
+            <a href="/settings" style="font-size:11px;color:#8250ff;text-decoration:none;border:1px solid rgba(130,80,255,.3);padding:4px 10px;border-radius:4px;">⚙ Configure AI Key</a>
             {% endif %}
           </div>
+
           <div class="card-body">
             <div class="form-group">
               <label class="form-label">Title</label>
@@ -187,16 +188,6 @@
           </div>
         </div>
 
-        <!-- AI results panel -->
-        <div class="card" id="yt-m-ai-panel" style="display:none;">
-          <div class="card-header">
-            <div class="card-title">🤖 AI Suggestions</div>
-            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('yt-m-ai-panel').style.display='none'">✕</button>
-          </div>
-          <div class="card-body" id="yt-m-ai-body" style="font-size:12px;">
-            <div style="text-align:center;padding:20px;color:var(--text-muted);">Generating…</div>
-          </div>
-        </div>
 
         <button class="btn btn-primary btn-full btn-lg" id="yt-m-add-btn"
                 onclick="addYtManualToQueue()"
@@ -574,32 +565,140 @@ async function pickFile(inputId) {
   } catch { showToast('Type the path manually','warn'); }
 }
 
-// ── AI Helpers ────────────────────────────────────────────────
+// ── YouTube AI Generate (inline, rich) ─────────────────────────
 async function ytManualAI(){
-  const title = document.getElementById('yt-m-title').value.trim() ||
-                (document.getElementById('yt-m-file').value.split(/[\\/]/).pop() || '');
-  if(!title){ showToast('Enter a title or select a file first','warn'); return; }
+  // Derive topic from file path or typed title
+  const filePath = document.getElementById('yt-m-file').value.trim();
+  const typedTitle = document.getElementById('yt-m-title').value.trim();
+  const topic = typedTitle || (filePath ? filePath.split(/[/\\]/).pop().replace(/\.[^.]+$/, '').replace(/[-_]+/g,' ').trim() : '');
+  if(!topic){ showToast('Select a file or enter a title first','warn'); return; }
+
+  const btn  = document.getElementById('yt-m-ai-btn');
   const panel = document.getElementById('yt-m-ai-panel');
   const body  = document.getElementById('yt-m-ai-body');
-  panel.style.display='block';
-  body.innerHTML='<div style="text-align:center;padding:16px;color:var(--text-muted);">🤖 Generating…</div>';
-  document.getElementById('yt-m-ai-btn').disabled=true;
-  document.getElementById('yt-m-ai-btn').textContent='⏳ Generating…';
+  panel.style.display = 'block';
+  body.innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner" style="width:28px;height:28px;border-width:3px;margin:0 auto 12px;"></div><div style="color:var(--text-muted);font-size:13px;">Generating full YouTube content package for:<br><strong style="color:var(--text);">${topic}</strong></div></div>`;
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating…';
 
-  const resp = await postJSON('/api/ai/generate-post', {topic: title, platform: 'youtube'});
-  document.getElementById('yt-m-ai-btn').disabled=false;
-  document.getElementById('yt-m-ai-btn').textContent='🤖 AI Generate';
-  if(resp.error){ body.innerHTML=`<div style="color:var(--accent-red);">${resp.error}</div>`; return; }
+  const resp = await postJSON('/api/ai/generate-post', {topic, platform: 'youtube'});
+  btn.disabled = false;
+  btn.textContent = '✨ AI Generate';
 
-  const titles = resp.titles||[];
-  const desc   = resp.description||'';
-  const tags   = resp.tags||[];
+  if(resp.error){
+    body.innerHTML = `<div style="color:var(--accent-red);padding:12px;">❌ ${resp.error}</div>`;
+    return;
+  }
+
+  // Helper to get weight bar color
+  const weightColor = w => w>=80 ? '#00d4a8' : w>=50 ? '#4e9eff' : w>=30 ? '#ffd700' : '#8250ff';
+  const tagTypeLabel = t => t==='primary'?'🔴 Primary':t==='secondary'?'🔵 Secondary':t==='long_tail'?'🟡 Long-tail':'🟣 Niche';
+
+  // Tags — array of objects or plain strings (handle both)
+  const tagsRaw = resp.tags || [];
+  const tagsAreObjects = tagsRaw.length > 0 && typeof tagsRaw[0] === 'object';
+  const tagsForField = tagsAreObjects ? tagsRaw.map(t=>t.tag).join(', ') : tagsRaw.join(', ');
+
+  // Titles section
+  const titlesHTML = (resp.titles||[]).map((t,i) => {
+    const tObj = typeof t === 'object' ? t : {text:t, score:80, type:'title'};
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;">
+        <div style="font-size:12px;">${tObj.text}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${tObj.type||''} · score: ${tObj.score||'–'}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;flex-shrink:0;" onclick="document.getElementById('yt-m-title').value=${JSON.stringify(tObj.text)};updateCharCount('yt-m-title','yt-m-title-count',100)">Use</button>
+    </div>`;
+  }).join('');
+
+  // Tags section with weightage bars
+  const tagsHTML = tagsAreObjects ? tagsRaw.map(t => {
+    const pct = Math.max(5, t.weight||50);
+    const col = weightColor(pct);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+      <div style="width:90px;font-size:11px;color:var(--text);">${t.tag}</div>
+      <div style="flex:1;height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${col};border-radius:3px;transition:width 0.5s;"></div>
+      </div>
+      <div style="width:28px;font-size:10px;color:${col};text-align:right;">${pct}</div>
+      <div style="width:52px;font-size:9px;color:var(--text-muted);">${tagTypeLabel(t.type)}</div>
+    </div>`;
+  }).join('') : `<div style="font-size:11px;color:var(--text-muted);">${tagsRaw.join(', ')}</div>`;
+
+  // Trending now
+  const trendNow = resp.trending_now || null;
+  const trendFuture = resp.future_trending || null;
+  const trendingHTML = `
+    ${trendNow ? `<div style="padding:10px;background:rgba(255,65,0,0.08);border:1px solid rgba(255,100,0,0.25);border-radius:6px;margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:700;color:#ff6400;">🔥 Trending NOW: <span style="color:#fff;">${trendNow.tag}</span></div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">${trendNow.reason}</div>
+      <div style="font-size:10px;color:#ffd700;margin-top:2px;">⚡ ${trendNow.urgency}</div>
+    </div>` : ''}
+    ${trendFuture ? `<div style="padding:10px;background:rgba(130,80,255,0.08);border:1px solid rgba(130,80,255,0.25);border-radius:6px;">
+      <div style="font-size:11px;font-weight:700;color:#8250ff;">🚀 Future Trending: <span style="color:#fff;">${trendFuture.tag}</span></div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">${trendFuture.reason}</div>
+      <div style="font-size:10px;color:#4e9eff;margin-top:2px;">📅 ${trendFuture.timeframe}</div>
+    </div>` : ''}`;
+
+  // "Use All" — fill every field at once
+  const bestTitle = resp.titles && resp.titles.length > 0 ? (typeof resp.titles[0]==='object' ? resp.titles[0].text : resp.titles[0]) : topic;
+
   body.innerHTML = `
-    ${titles.length?`<div style="margin-bottom:10px;"><strong>Titles:</strong>${titles.map((t,i)=>`<div style="display:flex;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="flex:1;">${t}</span><button class="btn btn-ghost btn-sm" onclick="document.getElementById('yt-m-title').value=${JSON.stringify(t)}">Use</button></div>`).join('')}</div>`:''}
-    ${desc?`<div style="margin-bottom:8px;"><strong>Description:</strong><div style="display:flex;gap:6px;align-items:flex-start;padding:5px 0;"><span style="flex:1;font-size:11px;color:var(--text-secondary);white-space:pre-wrap;">${desc.substring(0,300)}…</span><button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="document.getElementById('yt-m-desc').value=${JSON.stringify(desc)};updateCharCount('yt-m-desc','yt-m-desc-count',5000)">Use</button></div></div>`:''}
-    ${tags.length?`<div><strong>Tags:</strong><div style="display:flex;gap:6px;align-items:center;padding:5px 0;"><span style="flex:1;font-size:11px;">${tags.join(', ')}</span><button class="btn btn-ghost btn-sm" onclick="document.getElementById('yt-m-tags').value=${JSON.stringify(tags.join(', '))}">Use</button></div></div>`:''}
+    <!-- USE ALL BUTTON -->
+    <div style="padding:10px 0 14px;">
+      <button class="btn btn-primary btn-full" onclick="ytAiUseAll(${JSON.stringify(bestTitle)}, ${JSON.stringify(resp.description||'')}, ${JSON.stringify(tagsForField)})">
+        ✅ Use All — Auto-fill Title, Description & Tags
+      </button>
+    </div>
+
+    <!-- TITLES -->
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px;">TITLES</div>
+      ${titlesHTML}
+    </div>
+
+    <!-- DESCRIPTION -->
+    ${resp.description ? `<div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.5px;">DESCRIPTION</div>
+        <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="document.getElementById('yt-m-desc').value=${JSON.stringify(resp.description)};updateCharCount('yt-m-desc','yt-m-desc-count',5000);showToast('Description applied','success')">Use</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-secondary);background:var(--bg-card-2);padding:8px;border-radius:4px;max-height:80px;overflow-y:auto;white-space:pre-wrap;">${(resp.description||'').substring(0,300)}…</div>
+    </div>` : ''}
+
+    <!-- TAGS WITH WEIGHTAGE -->
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.5px;">TAGS — WEIGHTAGE</div>
+        <button class="btn btn-ghost btn-sm" style="font-size:10px;" onclick="document.getElementById('yt-m-tags').value=${JSON.stringify(tagsForField)};showToast('Tags applied','success')">Use All Tags</button>
+      </div>
+      <div style="max-height:180px;overflow-y:auto;">${tagsHTML}</div>
+    </div>
+
+    <!-- TRENDING TAGS -->
+    ${(trendNow||trendFuture) ? `<div style="margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.5px;margin-bottom:8px;">TRENDING INTEL</div>
+      ${trendingHTML}
+    </div>` : ''}
+
+    <!-- HOOKS -->
+    ${resp.hook_lines && resp.hook_lines.length ? `<div style="margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px;">OPENING HOOKS</div>
+      ${resp.hook_lines.map(h=>`<div style="font-size:11px;color:var(--text-secondary);padding:5px 0;border-bottom:1px solid var(--border);">💬 ${h}</div>`).join('')}
+    </div>` : ''}
+
+    <!-- BEST TIME -->
+    ${resp.best_posting_time ? `<div style="font-size:11px;color:var(--text-muted);padding:8px;background:rgba(0,212,168,0.06);border-radius:4px;">⏰ Best posting time: <strong style="color:var(--accent-green);">${resp.best_posting_time}</strong></div>` : ''}
   `;
 }
+
+function ytAiUseAll(title, description, tags){
+  if(title) { document.getElementById('yt-m-title').value = title; updateCharCount('yt-m-title','yt-m-title-count',100); }
+  if(description) { document.getElementById('yt-m-desc').value = description; updateCharCount('yt-m-desc','yt-m-desc-count',5000); }
+  if(tags) { document.getElementById('yt-m-tags').value = tags; }
+  showToast('✅ All AI content applied to form!','success');
+}
+
 
 async function igManualAI(){
   const fp = document.getElementById('ig-m-file').value;

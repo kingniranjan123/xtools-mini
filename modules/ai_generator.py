@@ -79,9 +79,9 @@ def generate_youtube_content(topic: str, api_key: str,
                               is_short: bool = False) -> dict:
     """
     Generate comprehensive YouTube content package from a one-line topic.
-    Returns dict with titles, description, tags, category, hooks, thumbnail text.
+    Returns dict with titles, description, tags with weightage, trending tags, hooks.
     """
-    type_label = 'YouTube Short (≤60 seconds, vertical)' if is_short else 'standard YouTube video'
+    type_label = 'YouTube Short (<=60 seconds, vertical)' if is_short else 'standard YouTube video'
     niche_context = f'Channel niche: {channel_niche}. ' if channel_niche else ''
 
     prompt = f"""
@@ -90,15 +90,41 @@ def generate_youtube_content(topic: str, api_key: str,
 
 Video type: {type_label}
 
-Return ONLY this JSON structure (no extra text):
+Return ONLY valid JSON — no markdown, no extra prose:
 {{
   "titles": [
     {{"text": "Title Option 1", "type": "curiosity_hook", "score": 95}},
     {{"text": "Title Option 2", "type": "how_to", "score": 88}},
     {{"text": "Title Option 3", "type": "listicle", "score": 82}}
   ],
-  "description": "Full YouTube description (300-500 words). Include:\\n\\n⏱ TIMESTAMPS:\\n00:00 Intro\\n[relevant timestamps]\\n\\n📌 LINKS:\\n[placeholder links]\\n\\n🔔 Subscribe for more: [channel link]\\n\\n📱 Social:\\n[social placeholders]\\n\\n#relevant #hashtags at end",
-  "tags": ["tag1", "tag2", ... 20 tags sorted by search volume, mix broad and niche],
+  "description": "Full YouTube description (300-500 words). Include timestamps, CTA, social links, and #hashtags at end.",
+  "tags": [
+    {{"tag": "broad primary tag", "weight": 100, "type": "primary", "monthly_searches": "high"}},
+    {{"tag": "second broad tag", "weight": 92, "type": "primary", "monthly_searches": "high"}},
+    {{"tag": "niche specific tag", "weight": 85, "type": "secondary", "monthly_searches": "medium"}},
+    {{"tag": "long tail phrase for this video", "weight": 75, "type": "long_tail", "monthly_searches": "medium"}},
+    {{"tag": "related keyword 1", "weight": 68, "type": "secondary", "monthly_searches": "medium"}},
+    {{"tag": "related keyword 2", "weight": 60, "type": "secondary", "monthly_searches": "medium"}},
+    {{"tag": "community or brand tag", "weight": 52, "type": "niche", "monthly_searches": "low"}},
+    {{"tag": "niche tag 1", "weight": 44, "type": "niche", "monthly_searches": "low"}},
+    {{"tag": "niche tag 2", "weight": 36, "type": "niche", "monthly_searches": "low"}},
+    {{"tag": "niche tag 3", "weight": 28, "type": "niche", "monthly_searches": "low"}},
+    {{"tag": "hyper niche tag 1", "weight": 20, "type": "niche", "monthly_searches": "low"}},
+    {{"tag": "hyper niche tag 2", "weight": 15, "type": "niche", "monthly_searches": "low"}},
+    {{"tag": "long tail phrase 2", "weight": 45, "type": "long_tail", "monthly_searches": "low"}},
+    {{"tag": "long tail phrase 3", "weight": 40, "type": "long_tail", "monthly_searches": "low"}},
+    {{"tag": "broad search term variation", "weight": 80, "type": "primary", "monthly_searches": "high"}}
+  ],
+  "trending_now": {{
+    "tag": "#ActualTrendingTagNow",
+    "reason": "Why this tag is popular right now and how it connects to this video",
+    "urgency": "Post within X days for maximum reach"
+  }},
+  "future_trending": {{
+    "tag": "#PredictedFutureTrendTag",
+    "reason": "Why this topic or keyword is predicted to grow significantly",
+    "timeframe": "Expected to peak in X weeks/months — get in early"
+  }},
   "category": "one of: Education, Entertainment, Gaming, Music, Film, Tech, Sports, News, People, Travel, Comedy, Science, HowTo",
   "thumbnail_headlines": [
     "PUNCHY HEADLINE 1 (max 5 words)",
@@ -115,13 +141,15 @@ Return ONLY this JSON structure (no extra text):
     {{"time": "00:00", "title": "Intro"}},
     {{"time": "01:30", "title": "Main topic chapter"}},
     {{"time": "05:00", "title": "Deep dive"}},
-    {{"time": "09:30", "title": "Tips & tricks"}},
-    {{"time": "12:00", "title": "Outro & CTA"}}
+    {{"time": "09:30", "title": "Tips and tricks"}},
+    {{"time": "12:00", "title": "Outro and CTA"}}
   ],
-  "seo_keywords": ["3-5 primary search keywords this video should rank for"],
-  "best_posting_time": "e.g. Tuesday or Thursday, 14:00–16:00 UTC for broad tech audiences",
-  "content_tips": ["optional production/strategy tip 1", "tip 2", "tip 3"]
+  "seo_keywords": ["primary search keyword", "secondary keyword", "3rd keyword"],
+  "best_posting_time": "e.g. Tuesday or Thursday, 14:00-16:00 UTC",
+  "content_tips": ["tip 1", "tip 2", "tip 3"]
 }}
+
+IMPORTANT for the tags array: MUST include exactly 15 tag objects sorted by weight descending. Weight 80-100 = primary broad tags with high search volume. Weight 50-79 = secondary medium competition tags. Weight 30-49 = long-tail phrases. Weight 1-29 = hyper-niche community tags. Set monthly_searches to 'high', 'medium', or 'low' accordingly.
 """
     raw = _call_ai(api_key, YOUTUBE_SYSTEM, prompt, temperature=0.8)
     try:
