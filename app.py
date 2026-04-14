@@ -511,32 +511,47 @@ def api_ai_test_key():
         return jsonify({'ok': False, 'error': 'No API key provided'})
     try:
         import requests as _req
-        resp = _req.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            headers={
-                'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'http://localhost:5055',
-                'X-Title': 'Nikethan Reels Toolkit',
-            },
-            json={
-                'model': 'google/gemini-2.5-pro',
-                'max_tokens': 10,
-                'temperature': 0.1,
-                'messages': [{'role': 'user', 'content': 'Hi'}],
-            },
-            timeout=15,
-        )
-        if resp.status_code == 401:
-            return jsonify({'ok': False, 'error': 'Invalid API key - unauthorized'})
-        if resp.status_code == 429:
-            return jsonify({'ok': True, 'error': 'Rate limit hit - but key is valid!'})
-        if resp.status_code != 200:
-            return jsonify({'ok': False, 'error': f'OpenRouter returned HTTP {resp.status_code}: {resp.text[:200]}'})
-        data_r = resp.json()
-        reply  = data_r.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-        model  = data_r.get('model', 'unknown')
-        return jsonify({'ok': True, 'reply': reply, 'model': model})
+        preferred = (_read_setting('openrouter_model') or '').strip()
+        candidates = [
+            preferred,
+            'google/gemini-2.5-pro',
+            'google/gemini-2.0-flash-001',
+            'openai/gpt-4o-mini',
+            'meta-llama/llama-3.1-8b-instruct:free',
+        ]
+        tried = []
+
+        for model_name in [m for m in candidates if m]:
+            tried.append(model_name)
+            resp = _req.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': 'http://localhost:5055',
+                    'X-Title': 'Nikethan Reels Toolkit',
+                },
+                json={
+                    'model': model_name,
+                    'max_tokens': 10,
+                    'temperature': 0.1,
+                    'messages': [{'role': 'user', 'content': 'Hi'}],
+                },
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                data_r = resp.json()
+                reply  = data_r.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                model  = data_r.get('model', model_name)
+                return jsonify({'ok': True, 'reply': reply, 'model': model, 'tried': tried})
+            if resp.status_code == 429:
+                return jsonify({'ok': True, 'error': 'Rate limit hit - key appears valid', 'model': model_name, 'tried': tried})
+            if resp.status_code in (401, 403):
+                return jsonify({'ok': False, 'error': 'Invalid or unauthorized API key', 'model': model_name})
+            if resp.status_code in (404, 422):
+                continue
+
+        return jsonify({'ok': False, 'error': f'Unable to validate key with available models. Tried: {", ".join(tried)}'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
 
@@ -737,7 +752,7 @@ def api_save_keys():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     data = request.get_json() or {}
     db = get_db()
-    for k in ['yt_api_key', 'home_channel', 'openrouter_api_key', 'content_niche']:
+    for k in ['yt_api_key', 'home_channel', 'openrouter_api_key', 'content_niche', 'openrouter_model']:
         if k in data:
             db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (k, data[k]))
     db.commit()
@@ -1268,6 +1283,34 @@ def api_metadata_single(reel_id):
     row = db.execute('SELECT * FROM reels WHERE id=?', (reel_id,)).fetchone()
     if not row: abort(404)
     return jsonify(dict(row))
+
+@app.route('/api/metadata/<reel_id>/stream', methods=['GET'])
+def api_metadata_stream(reel_id):
+    """Secure video stream endpoint for metadata preview modal."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    db  = get_db()
+    row = db.execute('SELECT file_path FROM reels WHERE id=?', (reel_id,)).fetchone()
+    if not row:
+        return jsonify({'error': 'Reel not found'}), 404
+
+    fpath = (row['file_path'] or '').strip()
+    if not fpath:
+        return jsonify({'error': 'No file path set for this reel'}), 404
+    if not os.path.isfile(fpath):
+        return jsonify({'error': f'Video file missing: {fpath}'}), 404
+
+    ext = os.path.splitext(fpath)[1].lower()
+    if ext not in ('.mp4', '.mov', '.mkv', '.webm', '.m4v'):
+        return jsonify({'error': f'Unsupported video type: {ext}'}), 415
+
+    mime_map = {
+        '.mp4': 'video/mp4',
+        '.mov': 'video/quicktime',
+        '.mkv': 'video/x-matroska',
+        '.webm': 'video/webm',
+        '.m4v': 'video/x-m4v',
+    }
+    return send_file(fpath, mimetype=mime_map.get(ext, 'application/octet-stream'), conditional=True)
 
 @app.route('/api/metadata/<reel_id>', methods=['PATCH'])
 def api_metadata_update(reel_id):

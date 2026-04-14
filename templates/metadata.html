@@ -56,6 +56,20 @@
   <!-- Filled by JS -->
 </div>
 
+<!-- Preview Modal -->
+<div id="meta-preview-modal" style="display:none; position:fixed; inset:0; z-index:300; background:rgba(0,0,0,.75); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+  <div class="card" style="width:min(1000px,96vw); max-height:90vh;">
+    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="card-title" id="meta-preview-title">Video Preview</div>
+      <button class="btn btn-ghost btn-sm" onclick="closePreview()">✕</button>
+    </div>
+    <div class="card-body">
+      <video id="meta-preview-video" controls playsinline preload="metadata" style="width:100%; max-height:70vh; background:#000; border-radius:8px;"></video>
+      <div id="meta-preview-error" style="display:none; margin-top:10px; color:#ff6a6a; font-size:13px;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Pagination -->
 <div style="display:flex; justify-content:center; gap:16px; align-items:center; margin-top:32px;">
     <button class="btn btn-ghost" id="pg-prev" onclick="loadData(currentPage-1)">← Previous</button>
@@ -211,6 +225,11 @@ function renderItems(items) {
 
         const el = document.createElement('div');
         el.className = 'reel-card';
+        el.style.cursor = 'pointer';
+        el.onclick = (ev) => {
+          if (ev.target && ev.target.tagName === 'INPUT') return;
+          openPreview(r);
+        };
         el.innerHTML = `
           <div style="position:absolute; top:8px; left:8px; z-index:10;">
              <input type="checkbox" ${checked} onchange="toggleSel('${r.id}')" style="width:20px;height:20px;cursor:pointer;">
@@ -290,9 +309,50 @@ async function batchAction(action) {
     }
 }
 
+function openPreview(reel) {
+    const modal = document.getElementById('meta-preview-modal');
+    const vid   = document.getElementById('meta-preview-video');
+    const err   = document.getElementById('meta-preview-error');
+    const title = document.getElementById('meta-preview-title');
+    if (!modal || !vid) return;
+
+    title.textContent = reel.title || reel.id || 'Video Preview';
+    err.style.display = 'none';
+    err.textContent = '';
+    vid.pause();
+    vid.removeAttribute('src');
+    vid.load();
+
+    const src = `/api/metadata/${encodeURIComponent(reel.id)}/stream`;
+    vid.src = src;
+    modal.style.display = 'flex';
+
+    vid.onerror = async () => {
+      err.style.display = 'block';
+      err.textContent = 'Unable to preview this video. File may be missing or unsupported.';
+    };
+}
+
+function closePreview() {
+    const modal = document.getElementById('meta-preview-modal');
+    const vid   = document.getElementById('meta-preview-video');
+    if (vid) {
+      vid.pause();
+      vid.removeAttribute('src');
+      vid.load();
+    }
+    if (modal) modal.style.display = 'none';
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
     loadData(1);
+    const modal = document.getElementById('meta-preview-modal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closePreview();
+      });
+    }
 });
 </script>
 <style>

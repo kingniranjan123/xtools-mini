@@ -12,7 +12,12 @@ except ImportError:
     HAS_REQUESTS = False
 
 OPENROUTER_BASE = 'https://openrouter.ai/api/v1'
-MODEL = 'google/gemini-2.5-pro'
+MODEL_CANDIDATES = [
+    'google/gemini-2.5-pro',
+    'google/gemini-2.0-flash-001',
+    'openai/gpt-4o-mini',
+    'meta-llama/llama-3.1-8b-instruct:free',
+]
 APP_NAME = 'Nikethan Reels Toolkit'
 
 
@@ -24,36 +29,45 @@ def _call_ai(api_key: str, system_prompt: str, user_prompt: str,
     if not api_key or len(api_key) < 10:
         raise ValueError('OpenRouter API key not configured. Go to Settings → API Keys.')
 
-    resp = _req.post(
-        f'{OPENROUTER_BASE}/chat/completions',
-        headers={
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'http://localhost:5055',
-            'X-Title': APP_NAME,
-        },
-        json={
-            'model': MODEL,
-            'temperature': temperature,
-            'max_tokens': 700,
-            'messages': [
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user',   'content': user_prompt},
-            ],
-        },
-        timeout=60
-    )
+    last_error = 'Unknown OpenRouter error'
+    for model_name in MODEL_CANDIDATES:
+        resp = _req.post(
+            f'{OPENROUTER_BASE}/chat/completions',
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'http://localhost:5055',
+                'X-Title': APP_NAME,
+            },
+            json={
+                'model': model_name,
+                'temperature': temperature,
+                'max_tokens': 700,
+                'messages': [
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user',   'content': user_prompt},
+                ],
+            },
+            timeout=60
+        )
 
-    if resp.status_code == 401:
-        raise ValueError('OpenRouter API key is invalid or unauthorised.')
-    if resp.status_code == 429:
-        raise ValueError('OpenRouter rate limit hit. Wait a moment and try again.')
-    if resp.status_code != 200:
-        raise RuntimeError(f'OpenRouter error {resp.status_code}: {resp.text[:300]}')
+        if resp.status_code == 200:
+            data = resp.json()
+            content = data['choices'][0]['message']['content']
+            return content.strip()
+        if resp.status_code in (401, 403):
+            raise ValueError('OpenRouter API key is invalid or unauthorised.')
+        if resp.status_code == 429:
+            raise ValueError('OpenRouter rate limit hit. Wait a moment and try again.')
 
-    data = resp.json()
-    content = data['choices'][0]['message']['content']
-    return content.strip()
+        # model not available for key/tier/etc.; try next candidate
+        if resp.status_code in (404, 422):
+            last_error = f'{model_name}: unavailable for this key/tier'
+            continue
+
+        last_error = f'{model_name}: HTTP {resp.status_code} {resp.text[:200]}'
+
+    raise RuntimeError(last_error)
 
 
 def _parse_json_block(text: str) -> dict:
