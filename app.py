@@ -1021,7 +1021,7 @@ def api_ai_youtube():
     api_key = cfg.get('openrouter_api_key', '').strip()
     if not api_key: return jsonify({'error': 'OpenRouter API key not configured. Go to Settings → API Keys.'}), 400
     niche    = cfg.get('content_niche', '')
-    language = cfg.get('ai_language', 'multi')
+    language = cfg.get('ai_language', 'english')
     try:
         from modules.ai_generator import generate_youtube_content
         result = generate_youtube_content(topic, api_key, niche, is_short, language=language)
@@ -1044,7 +1044,7 @@ def api_ai_instagram():
     api_key = cfg.get('openrouter_api_key', '').strip()
     if not api_key: return jsonify({'error': 'OpenRouter API key not configured. Go to Settings → API Keys.'}), 400
     niche    = cfg.get('content_niche', '')
-    language = cfg.get('ai_language', 'multi')
+    language = cfg.get('ai_language', 'english')
     try:
         from modules.ai_generator import generate_instagram_content
         result = generate_instagram_content(topic, api_key, niche, content_type, language=language)

@@ -146,8 +146,9 @@ def _parse_json_block(text: str) -> dict:
 #  YouTube AI Content Generator
 # ─────────────────────────────────────────────────────────────
 
-YOUTUBE_SYSTEM = """You are a YouTube SEO expert and content creator writing for an Indian audience.
-You write in a natural Indian-English style — friendly, conversational, energetic. Use common Indian expressions naturally (like 'yaar', 'bhai', 'ekdum', 'bilkul', 'full on', 'too good', 'mind-blowing stuff', 'must watch') but keep it professional.
+YOUTUBE_SYSTEM = """You are a YouTube SEO expert and content creator.
+Write in clear, natural, professional English.
+Do NOT use Hindi, Tamil, Telugu, Malayalam, or transliterated local slang unless explicitly requested by the user.
 STRICT LIMITS:
 - Title: max 100 characters
 - Description: max 300 words
@@ -157,25 +158,22 @@ Always respond with ONLY valid JSON. No markdown prose outside the JSON block.""
 def generate_youtube_content(topic: str, api_key: str,
                               channel_niche: str = '',
                               is_short: bool = False,
-                              language: str = 'multi') -> dict:
+                              language: str = 'english') -> dict:
     """
     Generate comprehensive YouTube content package from a one-line topic.
-    language: 'multi' = mix Indian languages+English | specific language name = generate in that language
+    language: 'english' = English-only | specific language name = generate in that language
     Returns dict with titles, description, tags with weightage, trending tags, hooks.
     """
     type_label    = 'YouTube Short (<=60 seconds, vertical)' if is_short else 'standard YouTube video'
     niche_context = f'Channel niche: {channel_niche}. ' if channel_niche else ''
 
-    if language and language != 'multi':
+    if language and language.lower() not in ('english', 'en'):
         lang_instruction = f'IMPORTANT: Generate ALL text content (titles, description, hooks, tags) entirely in {language}.'
     else:
         lang_instruction = (
-            'LANGUAGE MIX: Generate content as follows — '
-            'Titles: English (60%) + Hindi/Tamil/Telugu alternating (40%). '
-            'Description: Natural Indian-English with Tamil/Hindi/Malayalam phrases mixed in. '
-            'Tags: English only (for SEO). '
-            'Hook lines: Mix of English and regional (Tamil yaar, Hindi bhai etc). '
-            'This maximises reach across India.'
+            'LANGUAGE: Generate all content in clean global English only. '
+            'Do not use Hindi/Tamil/Telugu/Malayalam words, transliterated slang, '
+            'or local-language fillers.'
         )
 
     prompt = f"""
@@ -187,8 +185,8 @@ Generate a YouTube content package for this video topic:
 Video type: {type_label}
 
 STRICT RULES (follow exactly):
-- Title: MAXIMUM 100 characters. Make it catchy, use Indian hooks where relevant.
-- Description: MAXIMUM 300 words. Write in friendly Indian-English (use expressions like 'yaar', 'ekdum solid', 'must watch', 'too good', 'bilkul free' where they fit naturally). End with 3-4 relevant hashtags inline.
+- Title: MAXIMUM 100 characters. Make it catchy and clear.
+- Description: MAXIMUM 300 words in natural English. End with 3-4 relevant hashtags inline.
 - Tags: EXACTLY 10 tags. Each tag max 30 characters. Mix broad SEO + niche terms.
 - trending_now: 1 currently trending tag related to topic with reason.
 - future_trending: 1 predicted upcoming tag with reason + timeframe.
@@ -200,7 +198,7 @@ Return ONLY valid JSON, no extra text:
     {{"text": "Another title under 100 chars", "type": "how_to", "score": 88}},
     {{"text": "Third option under 100 chars", "type": "listicle", "score": 82}}
   ],
-  "description": "300 words max. Friendly Indian-English. Include a CTA at the end. #hashtag1 #hashtag2 #hashtag3",
+  "description": "300 words max. Natural English. Include a CTA at the end. #hashtag1 #hashtag2 #hashtag3",
   "tags": [
     {{"tag": "primary tag", "weight": 100, "type": "primary", "monthly_searches": "high"}},
     {{"tag": "second tag", "weight": 90, "type": "primary", "monthly_searches": "high"}},
@@ -240,8 +238,9 @@ Return ONLY valid JSON, no extra text:
 #  Instagram AI Content Generator
 # ─────────────────────────────────────────────────────────────
 
-INSTAGRAM_SYSTEM = """You are an Instagram content expert writing for an Indian audience.
-Write captions in natural Indian-English — fun, relatable, and engaging. Use expressions like 'yaar', 'ekdum viral', 'must follow', 'too good to miss', 'bilkul free hai', 'full paisa vasool' where they fit naturally.
+INSTAGRAM_SYSTEM = """You are an Instagram content expert.
+Write captions in natural, engaging, professional English.
+Do NOT use Hindi, Tamil, Telugu, Malayalam, or transliterated local slang unless explicitly requested by the user.
 STRICT LIMITS:
 - Caption: max 300 words per caption
 - Hashtags: max 10 hashtags total
@@ -251,21 +250,20 @@ Always respond with ONLY valid JSON. No markdown prose outside the JSON block.""
 def generate_instagram_content(topic: str, api_key: str,
                                 account_niche: str = '',
                                 content_type: str = 'reel',
-                                language: str = 'multi') -> dict:
+                                language: str = 'english') -> dict:
     """
     Generate comprehensive Instagram content package from a one-line topic.
-    language: 'multi' = Indian mix | specific language = generate in that language
+    language: 'english' = English-only | specific language = generate in that language
     content_type: 'reel', 'post', or 'story'
     """
     niche_context = f'Account niche: {account_niche}. ' if account_niche else ''
 
-    if language and language != 'multi':
+    if language and language.lower() not in ('english', 'en'):
         lang_instruction = f'IMPORTANT: Write ALL captions and text entirely in {language}.'
     else:
         lang_instruction = (
-            'LANGUAGE: Write captions in natural Indian-English, freely mixing Tamil/Hindi/Malayalam '
-            'expressions where they fit. Use expressions like "yaar", "ekdum viral", "must follow", '
-            '"bilkul free hai", "full paisa vasool". This resonates with Indian audiences.'
+            'LANGUAGE: Write all captions and text in clean global English only. '
+            'Do not use Hindi/Tamil/Telugu/Malayalam words or transliterated slang.'
         )
 
     prompt = f"""
