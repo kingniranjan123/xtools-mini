@@ -295,12 +295,17 @@
 
           <div style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
             <div style="font-size:13px;font-weight:600;">🖼 Bottom Overlay Image (single file)</div>
-            <div style="font-size:11px;color:var(--text-muted);margin:4px 0 8px;">Image fills the lower cinematic compartment. 100% uses the full bottom area below the movie frame, and the minimum is 1%.</div>
+            <div style="font-size:11px;color:var(--text-muted);margin:4px 0 8px;">Bottom compartment is fixed to the lower third of 9:16. At 100% the full image is contained without side trimming. Use Zoom to punch in up to 200%.</div>
             <input class="form-input" id="overlay-image-file" type="file" accept="image/*" style="font-size:12px;">
             <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
               <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Fill</span>
               <input type="range" id="overlay-image-comp-pct" min="1" max="100" value="100" style="flex:1;accent-color:var(--accent);">
               <span id="overlay-image-comp-pct-val" style="font-size:11px;font-family:var(--font-mono);min-width:42px;">100%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+              <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Zoom</span>
+              <input type="range" id="overlay-image-zoom-pct" min="100" max="200" value="100" style="flex:1;accent-color:var(--accent);">
+              <span id="overlay-image-zoom-pct-val" style="font-size:11px;font-family:var(--font-mono);min-width:42px;">100%</span>
             </div>
           </div>
         </div>
@@ -368,7 +373,9 @@
             </div>
           </div>
           <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:6px;text-align:center;min-height:46px;">
-            <img id="mock-overlay-image" alt="overlay preview" style="display:none;width:96%;max-height:34px;object-fit:cover;object-position:center center;margin:0 auto 4px auto;">
+            <div style="height:84px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:4px;">
+              <img id="mock-overlay-image" alt="overlay preview" style="display:none;width:96%;height:100%;object-fit:contain;object-position:center center;margin:0 auto;">
+            </div>
             <div style="font-size:10px;color:#fff;font-weight:700;" id="mock-part">Part -1</div>
           </div>
           <div style="position:absolute;bottom:4px;right:5px;font-size:6px;color:rgba(255,255,255,.5);" id="mock-wm"></div>
@@ -450,7 +457,9 @@ function updateMock() {
   const title = document.getElementById('reel-title').value.trim() || 'Video Title';
   const wm    = document.getElementById('reel-watermark').value.trim();
   const compPct = parseInt(document.getElementById('overlay-image-comp-pct')?.value || '100');
+  const zoomPct = parseInt(document.getElementById('overlay-image-zoom-pct')?.value || '100');
   const normalizedCompPct = Math.max(1, Math.min(100, compPct));
+  const normalizedZoomPct = Math.max(100, Math.min(200, zoomPct));
   const mockImg = document.getElementById('mock-overlay-image');
   document.getElementById('mock-title').textContent = title + ' - Part 1';
   document.getElementById('mock-wm').textContent    = wm || '';
@@ -458,9 +467,13 @@ function updateMock() {
   document.getElementById('mock-part').style.display  = document.getElementById('overlay-part').checked  ? '' : 'none';
   document.getElementById('mock-wm').style.display    = (document.getElementById('overlay-watermark').checked && wm) ? '' : 'none';
   document.getElementById('overlay-image-comp-pct-val').textContent = normalizedCompPct + '%';
-  if (mockImg) mockImg.style.maxHeight = `${normalizedCompPct}%`;
+  document.getElementById('overlay-image-zoom-pct-val').textContent = normalizedZoomPct + '%';
+  if (mockImg) {
+    mockImg.style.maxHeight = `${normalizedCompPct}%`;
+    mockImg.style.transform = `scale(${(normalizedZoomPct / 100).toFixed(2)})`;
+  }
 }
-['reel-title','reel-watermark','overlay-title','overlay-part','overlay-watermark','overlay-image-comp-pct'].forEach(id => {
+['reel-title','reel-watermark','overlay-title','overlay-part','overlay-watermark','overlay-image-comp-pct','overlay-image-zoom-pct'].forEach(id => {
   const el = document.getElementById(id);
   if(el) el.addEventListener('input', updateMock);
   if(el) el.addEventListener('change', updateMock);
@@ -592,6 +605,7 @@ async function startReelConvert() {
   const outputSizeEl = document.querySelector('input[name="reel_output_size"]:checked');
   const outputSize = outputSizeEl ? outputSizeEl.value : 'instagram';
   const overlayCompPct = Math.max(1, Math.min(100, parseInt(document.getElementById('overlay-image-comp-pct')?.value || '100')));
+  const overlayZoomPct = Math.max(100, Math.min(200, parseInt(document.getElementById('overlay-image-zoom-pct')?.value || '100')));
   const deleteSource = document.getElementById('reel-delete-source').checked;
 
   let payload = {title, watermark: wm, part_duration: partDur,
@@ -600,7 +614,7 @@ async function startReelConvert() {
                   clip_start: clipStart, clip_end: clipEnd, output_dir: outDir, quality,
                   output_size: outputSize,
                   overlay_image_path: _overlayImagePath,
-                  overlay_image_zoom: 1.0,
+                  overlay_image_zoom: overlayZoomPct / 100.0,
                   overlay_image_comp_pct: overlayCompPct,
                   delete_source: deleteSource};
 
