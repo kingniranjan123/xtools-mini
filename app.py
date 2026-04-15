@@ -40,6 +40,56 @@ DOWNLOADS_DIR = os.path.join(BASE_DIR, 'downloads')
 COOKIES_FILE  = os.path.join(BASE_DIR, 'cookies.txt')
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
+FOLDER_LAYOUT = [
+    ('instagram_downloads', os.path.join('instagram', 'downloads')),
+    ('instagram_extractions', os.path.join('instagram', 'extractions')),
+    ('instagram_cookies', os.path.join('instagram', 'cookies')),
+    ('youtube_downloads', os.path.join('youtube', 'downloads')),
+    ('youtube_reels', os.path.join('youtube', 'reels')),
+    ('youtube_audio_mp3', os.path.join('youtube', 'audio_mp3')),
+    ('watermarks', 'watermarks'),
+    ('temp_uploads', os.path.join('temp', 'uploads')),
+    ('temp_mp3_output', os.path.join('temp', 'mp3_output')),
+    ('temp_merged_output', os.path.join('temp', 'merged_output')),
+    ('exports_metadata', os.path.join('exports', 'metadata')),
+    ('exports_logs', os.path.join('exports', 'logs')),
+]
+
+def _is_within_base(path: str) -> bool:
+    base = os.path.realpath(BASE_DIR)
+    target = os.path.realpath(path)
+    return target == base or target.startswith(base + os.sep)
+
+def _resolve_root_dir(value: str = '') -> str:
+    candidate = (value or '').strip()
+    if not candidate:
+        candidate = BASE_DIR
+    candidate = os.path.abspath(os.path.normpath(candidate))
+    if not _is_within_base(candidate):
+        raise ValueError('Root folder must be inside this project directory.')
+    return candidate
+
+def _folder_layout(root_dir: str) -> dict:
+    return {
+        key: os.path.join(root_dir, rel)
+        for key, rel in FOLDER_LAYOUT
+    }
+
+def _folder_tree_text(root_dir: str) -> str:
+    lines = [root_dir + os.sep]
+    branches = []
+    for _, rel in FOLDER_LAYOUT:
+        parts = rel.split(os.sep)
+        cur = []
+        for p in parts:
+            cur.append(p)
+            branches.append(tuple(cur))
+    uniq = sorted(set(branches))
+    for idx, parts in enumerate(uniq):
+        prefix = '└─ ' if idx == len(uniq) - 1 else '├─ '
+        lines.append(prefix + '/'.join(parts) + '/')
+    return '\n'.join(lines)
+
 # Global job store  { job_id: { events: [], done: bool, ... } }
 JOBS: dict = {}
 
@@ -205,6 +255,16 @@ def settings_page():
         if k in settings:
             try: settings[k] = int(settings[k])
             except: pass
+
+    try:
+        root_dir = _resolve_root_dir(settings.get('root_dir', ''))
+    except Exception:
+        root_dir = BASE_DIR
+    defaults = _folder_layout(root_dir)
+    settings.setdefault('root_dir', root_dir)
+    settings.setdefault('dir_ig', defaults['instagram_downloads'])
+    settings.setdefault('dir_yt', defaults['youtube_downloads'])
+    settings['folder_tree'] = _folder_tree_text(root_dir)
 
     # Cookie status
     from modules.account_manager import ensure_default_profiles_exist, get_account_status
@@ -1226,6 +1286,28 @@ def api_pick_folder():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/utils/open-folder', methods=['POST'])
+def api_open_folder():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    folder = (data.get('path') or '').strip()
+    if not folder:
+        return jsonify({'error': 'No folder path provided'}), 400
+    folder = os.path.abspath(os.path.normpath(folder))
+    if not os.path.isdir(folder):
+        return jsonify({'error': 'Folder not found'}), 404
+
+    try:
+        if sys.platform.startswith('win'):
+            subprocess.Popen(['explorer', folder])
+        elif sys.platform == 'darwin':
+            subprocess.Popen(['open', folder])
+        else:
+            subprocess.Popen(['xdg-open', folder])
+        return jsonify({'ok': True, 'opened_path': folder})
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
 
 @app.route('/api/utils/scan-folder')
 def api_scan_folder():
@@ -1661,10 +1743,66 @@ def _save_setting(key, value):
 @app.route('/api/settings/directories/save', methods=['POST'])
 def api_directories_save():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
-    data = request.get_json()
+    data = request.get_json() or {}
+    root_raw = data.get('root_dir', '').strip()
+    if root_raw:
+        try:
+            root_dir = _resolve_root_dir(root_raw)
+        except Exception as exc:
+            return jsonify({'error': str(exc)}), 400
+        _save_setting('root_dir', root_dir)
     _save_setting('dir_ig', data.get('dir_ig', '').strip())
     _save_setting('dir_yt', data.get('dir_yt', '').strip())
     return jsonify({'ok': True})
+
+@app.route('/api/settings/root/setup', methods=['POST'])
+def api_settings_root_setup():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    try:
+        root_dir = _resolve_root_dir((data.get('root_dir') or '').strip())
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    layout = _folder_layout(root_dir)
+    created, existed = [], []
+    for p in layout.values():
+        if os.path.isdir(p):
+            existed.append(p)
+        else:
+            os.makedirs(p, exist_ok=True)
+            created.append(p)
+
+    _save_setting('root_dir', root_dir)
+    _save_setting('dir_ig', layout['instagram_downloads'])
+    _save_setting('dir_yt', layout['youtube_downloads'])
+
+    return jsonify({
+        'ok': True,
+        'root_dir': root_dir,
+        'created_paths': created,
+        'existing_paths': existed,
+        'effective_dirs': {
+            'dir_ig': layout['instagram_downloads'],
+            'dir_yt': layout['youtube_downloads'],
+            'watermarks': layout['watermarks'],
+            'cookies': layout['instagram_cookies'],
+            'temp_uploads': layout['temp_uploads'],
+            'instagram_extractions': layout['instagram_extractions'],
+            'youtube_audio_mp3': layout['youtube_audio_mp3'],
+        },
+        'tree': _folder_tree_text(root_dir),
+    })
+
+@app.route('/api/settings/root/tree')
+def api_settings_root_tree():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    cfg = _get_settings_dict()
+    try:
+        root_dir = _resolve_root_dir(cfg.get('root_dir', ''))
+    except Exception:
+        root_dir = BASE_DIR
+    return jsonify({'ok': True, 'root_dir': root_dir, 'tree': _folder_tree_text(root_dir)})
 
 @app.route('/api/settings/cookies/save', methods=['POST'])
 def api_cookies_save():
