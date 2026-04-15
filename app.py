@@ -4,7 +4,7 @@ Password: nikethan
 """
 import os, json, uuid, threading, subprocess, shutil, sys, tkinter as tk
 from tkinter import filedialog
-from datetime import datetime
+from datetime import datetime, timedelta
 import datetime as _dt_module
 from flask import (Flask, render_template, redirect, url_for,
                    request, session, flash, g, jsonify, Response,
@@ -2832,6 +2832,175 @@ def api_poster_reset(acc_id):
     db.execute('UPDATE poster_accounts SET posts_in_window=0, window_start=NULL, status="idle", note="Manual reset" WHERE id=?', (acc_id,))
     db.commit()
     return jsonify({'ok': True})
+
+
+def _classify_connection_response(error_text: str) -> dict:
+    txt = (error_text or '').lower()
+    classification = 'error'
+    is_ip_ban = 0
+    is_rate_limited = 0
+
+    if any(k in txt for k in ['bad password', 'incorrect password', 'login_required', 'invalid user']):
+        classification = 'invalid_credentials'
+    elif any(k in txt for k in ['challenge', 'checkpoint', 'two_factor']):
+        classification = 'challenge'
+    elif any(k in txt for k in ['429', 'too many requests', 'please wait a few minutes']):
+        classification = 'ip_ban'
+        is_ip_ban = 1
+        is_rate_limited = 1
+    elif any(k in txt for k in ['ip', 'temporarily blocked', 'sentry_block']):
+        classification = 'ip_ban'
+        is_ip_ban = 1
+    return {
+        'classification': classification,
+        'is_ip_ban': is_ip_ban,
+        'is_rate_limited': is_rate_limited,
+    }
+
+
+def _latest_connection_test(db, acc_id: int):
+    return db.execute(
+        '''SELECT id, account_id, outcome, status_code, summary, raw_response, is_ip_ban, is_rate_limited, tested_at
+           FROM poster_connection_tests
+           WHERE account_id=?
+           ORDER BY id DESC LIMIT 1''',
+        (acc_id,)
+    ).fetchone()
+
+
+@app.route('/api/poster/accounts/<int:acc_id>/connection-test', methods=['POST'])
+def api_poster_connection_test(acc_id):
+    """On-demand auth/connectivity test with throttle: max 2 attempts / 2 hours per account."""
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    if acc_id not in range(1, 6):
+        return jsonify({'error': 'Invalid account slot'}), 400
+
+    db = get_db()
+    account = db.execute(
+        'SELECT id, label, username, password FROM poster_accounts WHERE id=?',
+        (acc_id,)
+    ).fetchone()
+    if not account:
+        return jsonify({'error': 'Account not found'}), 404
+
+    username = (account['username'] or '').strip()
+    password = (account['password'] or '').strip()
+    if not username or not password:
+        return jsonify({'error': 'Username/password not configured for this account'}), 400
+
+    window_start = (datetime.utcnow() - timedelta(hours=2)).isoformat()
+    used = db.execute(
+        '''SELECT COUNT(*) AS c FROM poster_connection_tests
+           WHERE account_id=? AND tested_at >= ?''',
+        (acc_id, window_start)
+    ).fetchone()
+    attempts_used = int((used['c'] if used else 0) or 0)
+    remaining = max(0, 2 - attempts_used)
+    if attempts_used >= 2:
+        oldest = db.execute(
+            '''SELECT tested_at FROM poster_connection_tests
+               WHERE account_id=? AND tested_at >= ?
+               ORDER BY tested_at ASC LIMIT 1''',
+            (acc_id, window_start)
+        ).fetchone()
+        retry_at = None
+        retry_mins = 120
+        if oldest and oldest['tested_at']:
+            try:
+                retry_at_dt = datetime.fromisoformat(oldest['tested_at']) + timedelta(hours=2)
+                retry_at = retry_at_dt.isoformat()
+                retry_mins = max(1, int((retry_at_dt - datetime.utcnow()).total_seconds() // 60))
+            except Exception:
+                pass
+        last = _latest_connection_test(db, acc_id)
+        return jsonify({
+            'ok': False,
+            'throttled': True,
+            'error': f'Limit reached: 2 tests per 2 hours. Try again in ~{retry_mins} minute(s).',
+            'limit': {'max_attempts': 2, 'window_minutes': 120, 'attempts_used': attempts_used, 'attempts_remaining': remaining},
+            'retry_at': retry_at,
+            'last_result': dict(last) if last else None,
+        }), 429
+
+    try:
+        from instagrapi import Client
+    except Exception:
+        return jsonify({'error': 'instagrapi not installed. Run: pip install instagrapi'}), 500
+
+    outcome = 'error'
+    status_code = None
+    summary = ''
+    raw_response = ''
+    is_ip_ban = 0
+    is_rate_limited = 0
+    ok = False
+    try:
+        client = Client()
+        client.login(username, password)
+        outcome = 'success'
+        summary = f'Login test passed for @{username}. Connection looks good.'
+        raw_response = 'login_ok'
+        ok = True
+        try:
+            client.logout()
+        except Exception:
+            pass
+    except Exception as e:
+        raw_response = str(e)[:2000]
+        status_code = getattr(e, 'status_code', None)
+        flags = _classify_connection_response(raw_response)
+        outcome = flags['classification']
+        is_ip_ban = flags['is_ip_ban']
+        is_rate_limited = flags['is_rate_limited']
+        summary = 'Connection test failed.'
+        if outcome == 'invalid_credentials':
+            summary = 'Invalid username or password.'
+        elif outcome == 'challenge':
+            summary = 'Instagram challenge/checkpoint required for this login.'
+        elif outcome == 'ip_ban':
+            summary = 'Possible IP block/rate-limit detected from Instagram response.'
+
+    db.execute(
+        '''INSERT INTO poster_connection_tests
+           (account_id, outcome, status_code, summary, raw_response, is_ip_ban, is_rate_limited)
+           VALUES (?,?,?,?,?,?,?)''',
+        (acc_id, outcome, status_code, summary, raw_response, is_ip_ban, is_rate_limited)
+    )
+    db.commit()
+    last = _latest_connection_test(db, acc_id)
+    attempts_used += 1
+    return jsonify({
+        'ok': ok,
+        'throttled': False,
+        'account_id': acc_id,
+        'result': dict(last) if last else None,
+        'limit': {'max_attempts': 2, 'window_minutes': 120, 'attempts_used': attempts_used, 'attempts_remaining': max(0, 2 - attempts_used)},
+    }), (200 if ok else 400)
+
+
+@app.route('/api/poster/accounts/<int:acc_id>/connection-test', methods=['GET'])
+def api_get_poster_connection_test(acc_id):
+    """Get latest connection test console payload for one account."""
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    if acc_id not in range(1, 6):
+        return jsonify({'error': 'Invalid account slot'}), 400
+
+    db = get_db()
+    last = _latest_connection_test(db, acc_id)
+    window_start = (datetime.utcnow() - timedelta(hours=2)).isoformat()
+    used = db.execute(
+        '''SELECT COUNT(*) AS c FROM poster_connection_tests
+           WHERE account_id=? AND tested_at >= ?''',
+        (acc_id, window_start)
+    ).fetchone()
+    attempts_used = int((used['c'] if used else 0) or 0)
+    return jsonify({
+        'ok': True,
+        'result': dict(last) if last else None,
+        'limit': {'max_attempts': 2, 'window_minutes': 120, 'attempts_used': attempts_used, 'attempts_remaining': max(0, 2 - attempts_used)},
+    })
 
 
 # Legacy routes kept for backward compat

@@ -114,6 +114,22 @@
         <button class="btn btn-ghost btn-sm" onclick="resetCooling({{ a.id }})" title="Reset cooling window">🔄 Reset Window</button>
       </div>
 
+      <!-- Mini connection console -->
+      <div style="padding:12px;background:rgba(8,12,22,.75);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;">
+          <div style="font-size:12px;font-weight:600;">Connection Test Console</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="test-limit-{{ a.id }}" style="font-size:11px;color:var(--text-muted);">2 tests / 2h</span>
+            <button class="btn btn-ghost btn-sm" onclick="runConnectionTest({{ a.id }})">🧪 Test Connection</button>
+          </div>
+        </div>
+        <div id="test-summary-{{ a.id }}" style="font-size:12px;color:var(--text-muted);margin-top:8px;">No test run yet.</div>
+        <details style="margin-top:6px;">
+          <summary style="cursor:pointer;color:var(--text-muted);font-size:11px;">Show provider response</summary>
+          <pre id="test-raw-{{ a.id }}" style="margin-top:6px;white-space:pre-wrap;word-break:break-word;max-height:120px;overflow:auto;padding:8px;border-radius:6px;background:rgba(0,0,0,.22);border:1px solid var(--border);font-size:11px;color:#c9d4ff;">—</pre>
+        </details>
+      </div>
+
       <!-- Save button -->
       <button class="btn btn-primary" onclick="saveAccount({{ a.id }})">💾 Save Account {{ a.id }}</button>
     </div>
@@ -280,10 +296,57 @@ async function refreshStatus() {
   } catch(e) { console.warn('Status refresh error', e); }
 }
 
+function renderConnectionConsole(id, payload) {
+  const limit = payload?.limit || {};
+  const result = payload?.result || payload?.last_result || null;
+  const limitEl = document.getElementById('test-limit-'+id);
+  const sumEl   = document.getElementById('test-summary-'+id);
+  const rawEl   = document.getElementById('test-raw-'+id);
+  if (limitEl) {
+    const used = Number(limit.attempts_used || 0);
+    limitEl.textContent = `${Math.max(0, 2-used)} test(s) left in current 2h window`;
+  }
+  if (!result) {
+    if (sumEl) sumEl.textContent = payload?.error || 'No test run yet.';
+    if (rawEl) rawEl.textContent = '—';
+    return;
+  }
+  const time = (result.tested_at || '').replace('T',' ').slice(0, 19) || 'unknown time';
+  const banText = result.is_ip_ban ? ' | ⚠ Possible IP ban/rate-limit' : '';
+  const statusCode = result.status_code ? ` | code ${result.status_code}` : '';
+  if (sumEl) sumEl.textContent = `[${time}] ${result.summary || result.outcome || 'Result available'}${statusCode}${banText}`;
+  if (rawEl) rawEl.textContent = (result.raw_response || 'No raw provider response');
+}
+
+async function loadConnectionConsole(id) {
+  try {
+    const resp = await fetch(`/api/poster/accounts/${id}/connection-test`);
+    const data = await resp.json();
+    renderConnectionConsole(id, data || {});
+  } catch (e) {
+    renderConnectionConsole(id, {error: 'Unable to load console'});
+  }
+}
+
+async function runConnectionTest(id) {
+  const resp = await postJSON(`/api/poster/accounts/${id}/connection-test`, {});
+  renderConnectionConsole(id, resp || {});
+  if (resp?.ok) {
+    showToast(`Account ${id}: connection test passed`, 'success');
+  } else if (resp?.throttled) {
+    showToast(resp.error || 'Test throttled', 'warn');
+  } else {
+    showToast(resp?.result?.summary || resp?.error || `Account ${id}: test failed`, 'error');
+  }
+}
+
 // Auto-refresh every 15s
 setInterval(refreshStatus, 15000);
 refreshStatus();
 loadLog();
+{% for a in accounts %}
+loadConnectionConsole({{ a.id }});
+{% endfor %}
 
 // ── Activity Log ──────────────────────────────────────────────
 async function loadLog() {

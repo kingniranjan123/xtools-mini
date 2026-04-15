@@ -98,6 +98,21 @@ CREATE TABLE IF NOT EXISTS poster_log (
   logged_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS poster_connection_tests (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id       INTEGER NOT NULL,
+  outcome          TEXT DEFAULT 'error',      -- success|invalid_credentials|ip_ban|challenge|error
+  status_code      INTEGER,
+  summary          TEXT DEFAULT '',
+  raw_response     TEXT DEFAULT '',
+  is_ip_ban        INTEGER DEFAULT 0,
+  is_rate_limited  INTEGER DEFAULT 0,
+  tested_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS ix_conn_tests_account_time
+  ON poster_connection_tests(account_id, tested_at DESC);
+
 CREATE TABLE IF NOT EXISTS post_queue (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   platform       TEXT NOT NULL,    -- 'youtube' | 'instagram'
