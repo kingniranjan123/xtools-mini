@@ -31,28 +31,8 @@
           <div id="wm-folder-badge" style="display:none;margin-top:8px;padding:6px 10px;background:rgba(0,200,120,0.08);border:1px solid rgba(0,200,120,0.25);border-radius:var(--radius-sm);font-size:12px;color:#00c878;font-weight:600;"></div>
         </div>
 
-        <!-- Pre-scanned download folders -->
-        {% if folders %}
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Or choose from downloaded folders:</div>
-          {% for folder in folders %}
-          <div class="folder-card {% if loop.first %}selected{% endif %}" id="folder-{{ loop.index }}" onclick="selectFolder(this, '{{ folder.path }}', '{{ folder.name }}')">
-            <div class="folder-icon">📁</div>
-            <div class="folder-info">
-              <div class="folder-name">{{ folder.name }}</div>
-              <div class="folder-meta">{{ folder.count }} video{{ 's' if folder.count != 1 }} · {{ folder.size_mb }} MB</div>
-            </div>
-            {% if loop.first %}<span class="badge badge-pink">Selected</span>{% endif %}
-          </div>
-          {% endfor %}
-        {% else %}
-          <div style="text-align:center; padding:20px; color:var(--text-muted);">
-            <div style="font-size:28px; margin-bottom:8px;">📭</div>
-            <p>No download folders yet — pick a custom folder above, or download reels first.</p>
-            <a href="{{ url_for('download_page') }}" class="btn btn-primary btn-sm" style="margin-top:12px;">Download Reels First</a>
-          </div>
-        {% endif %}
-        <input type="hidden" id="selected-folder" value="{{ folders[0].path if folders else '' }}" />
-        <input type="hidden" id="selected-folder-name" value="{{ folders[0].name if folders else '' }}" />
+        <input type="hidden" id="selected-folder" value="" />
+        <input type="hidden" id="selected-folder-name" value="" />
       </div>
     </div>
 
@@ -174,7 +154,7 @@
           ◎ Apply Watermark to Folder
         </button>
         <div class="form-hint" style="text-align:center; margin-top:8px;">
-          Will process all .mp4 files in <strong id="folder-display">{{ folders[0].name if folders else 'No folder' }}</strong>
+          Will process all .mp4 files in <strong id="folder-display">No folder selected</strong>
         </div>
       </div>
     </div>
@@ -238,17 +218,12 @@ async function scanWMFolder(folderPath) {
     if (j.count !== undefined) {
       badge.style.color = j.count > 0 ? '#00c878' : '#ff6b6b';
       badge.textContent = j.count > 0
-        ? '✅ Found ' + j.count + ' video file' + (j.count !== 1 ? 's' : '') + ' in "' + folderPath.split(/[\\/]/).pop() + '"'
+        ? '✅ Selected folder contains ' + j.count + ' video file' + (j.count !== 1 ? 's' : '')
         : '⚠️ No video files found in selected folder';
-      if (j.count > 0) {
-        document.getElementById('selected-folder').value = folderPath;
-        document.getElementById('selected-folder-name').value = folderPath.split(/[\\/]/).pop();
-        selectedFolderPath = folderPath;
-        document.querySelectorAll('.folder-card').forEach(c => {
-          c.classList.remove('selected');
-          c.querySelector('.badge')?.remove();
-        });
-      }
+      document.getElementById('selected-folder').value = folderPath;
+      document.getElementById('selected-folder-name').value = folderPath.split(/[\\/]/).pop();
+      selectedFolderPath = folderPath;
+      document.getElementById('folder-display').textContent = folderPath.split(/[\\/]/).pop();
     } else {
       badge.style.color = '#ff6b6b';
       badge.textContent = '❌ ' + (j.error || 'Could not scan folder');

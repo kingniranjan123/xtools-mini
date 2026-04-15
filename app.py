@@ -165,18 +165,6 @@ def metadata_page():
 def watermark_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
     folders = []
-    if os.path.isdir(DOWNLOADS_DIR):
-        for name in os.listdir(DOWNLOADS_DIR):
-            fpath = os.path.join(DOWNLOADS_DIR, name)
-            if os.path.isdir(fpath) and name != 'watermarks':
-                mp4s = [f for f in os.listdir(fpath) if f.endswith('.mp4')]
-                size = sum(os.path.getsize(os.path.join(fpath, f)) for f in mp4s) if mp4s else 0
-                folders.append({
-                    'name':    name,
-                    'path':    fpath,
-                    'count':   len(mp4s),
-                    'size_mb': f'{size / 1024**2:.1f}',
-                })
     return render_template('watermark.html', folders=folders, settings=_get_settings_dict())
 
 @app.route('/split/equal')
@@ -1962,9 +1950,12 @@ def api_split_trailer():
     clips    = json.loads(request.form.get('clips', '[]'))
     concat   = request.form.get('concat', '0') == '1'
     use_cuda = request.form.get('use_cuda', '0') == '1'
+    output_format = (request.form.get('output_format', 'original') or 'original').strip().lower()
 
     if not video:  return jsonify({'error': 'No video'}), 400
     if not clips:  return jsonify({'error': 'No clips defined'}), 400
+    if output_format not in ('original', 'instagram'):
+        return jsonify({'error': 'Invalid output_format. Use original or instagram'}), 400
 
     tmp_dir = os.path.join(BASE_DIR, 'tmp_uploads')
     os.makedirs(tmp_dir, exist_ok=True)
@@ -1982,6 +1973,7 @@ def api_split_trailer():
             out_dir=out_dir,
             concat=concat,
             use_cuda=use_cuda and CUDA_INFO['available'],
+            output_format=output_format,
             progress_cb=lambda line, pct=None: _emit(job, line, pct),
         )
         _finish(job, f'Extracted {len(files)} clip(s)',

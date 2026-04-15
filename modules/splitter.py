@@ -131,6 +131,7 @@ def split_equal(input_path: str, n: int, out_dir: str,
 
 def split_trailer(input_path: str, clips: list, out_dir: str,
                   concat: bool = False, use_cuda: bool = False,
+                  output_format: str = 'original',
                   progress_cb=None) -> list:
     """
     Extract multiple from/to clips.
@@ -156,7 +157,9 @@ def split_trailer(input_path: str, clips: list, out_dir: str,
         cmd = ['ffmpeg', '-y'] + _hwaccel_args(use_cuda) + [
             '-ss', start, '-to', end,
             '-i', input_path
-        ] + _codec_args(use_cuda) + ['-c:a', 'aac', out_path]
+        ] + ([
+            '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1'
+        ] if output_format == 'instagram' else []) + _codec_args(use_cuda) + ['-c:a', 'aac', out_path]
 
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

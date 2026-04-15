@@ -108,11 +108,9 @@
         </div>
       </div>
       <div class="card-body">
-        <div id="yt-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
-        <div id="yt-tag-input-row" style="display:flex;gap:6px;margin-top:8px;">
-          <input class="form-input" id="yt-tag-add" type="text" placeholder="Add tag..." style="flex:1;" onkeydown="if(event.key==='Enter') addTagYT()">
-          <button class="btn btn-ghost btn-sm" onclick="addTagYT()">+ Add</button>
-        </div>
+        <textarea id="yt-tags-input" class="form-textarea mono" rows="4" style="font-size:12px;"
+          placeholder="Paste tags separated by commas or one tag per line"></textarea>
+        <div class="form-hint" style="margin-top:8px;">Simple tag editor: paste, edit, and copy. No AI code blocks, no object rendering.</div>
       </div>
     </div>
 
@@ -354,8 +352,36 @@ function copyEl(id) {
   const el=document.getElementById(id);
   navigator.clipboard.writeText(el.innerText||el.textContent).then(()=>showToast('Copied!','success'));
 }
+function escapeHtml(v) {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function cleanAIText(v) {
+  if (v === null || v === undefined) return '';
+  let t = typeof v === 'string' ? v : (typeof v === 'object' ? (v.text || v.tag || v.title || JSON.stringify(v)) : String(v));
+  t = t.replace(/showToast\([^\n]*\)/g, '');
+  t = t.replace(/on(mouseover|mouseout|click)\s*=\s*\"[^\"]*\"/gi, '');
+  t = t.replace(/style\s*=\s*\"[^\"]*\"/gi, '');
+  t = t.replace(/<[^>]+>/g, '');
+  return t.replace(/\s{2,}/g, ' ').trim();
+}
+function normalizeTagList(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(cleanAIText).filter(Boolean);
+}
+function parseTagsInput(text) {
+  const raw = (text || '').trim();
+  if (!raw) return [];
+  const parts = raw.includes(',') ? raw.split(',') : raw.split('\n');
+  return parts.map(cleanAIText).filter(Boolean);
+}
 function tagPill(tag, color='rgba(130,80,255,.12)', border='rgba(130,80,255,.25)') {
-  return `<span onclick="navigator.clipboard.writeText('${tag.replace(/'/g,"\\'")}').then(()=>showToast('Copied!','success'))" style="background:${color};border:1px solid ${border};padding:3px 9px;border-radius:3px;font-size:11px;cursor:pointer;transition:opacity .15s;" title="Click to copy">${tag}</span>`;
+  const cleaned = cleanAIText(tag);
+  return `<span onclick='navigator.clipboard.writeText(${JSON.stringify(cleaned)}).then(()=>showToast("Copied!","success"))' style="background:${color};border:1px solid ${border};padding:3px 9px;border-radius:3px;font-size:11px;cursor:pointer;transition:opacity .15s;" title="Click to copy">${escapeHtml(cleaned)}</span>`;
 }
 
 // ── YouTube Generator ─────────────────────────────────────────
@@ -378,84 +404,85 @@ async function generateYoutube() {
 function renderYTResults(d) {
   // Titles
   const titlesEl = document.getElementById('yt-titles');
-  titlesEl.innerHTML = (d.titles||[]).map((t,i) => `
-    <div onclick="navigator.clipboard.writeText(${JSON.stringify(t.text)}).then(()=>showToast('Title copied!','success'))"
-         style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .15s;"
-         onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='var(--border)'">
-      <span style="font-size:10px;color:var(--text-muted);min-width:22px;">#${i+1}</span>
-      <span style="flex:1;font-size:13px;font-weight:600;">${t.text}</span>
-      <span style="font-size:10px;background:rgba(130,80,255,.12);color:#8250ff;padding:2px 7px;border-radius:3px;white-space:nowrap;">${t.type||''}</span>
-      ${t.score?`<span style="font-size:11px;font-weight:700;color:#8250ff;">${t.score}</span>`:''}
-      <span style="font-size:10px;color:var(--text-muted);">📋</span>
-    </div>
-  `).join('');
+  const ytTitles = Array.isArray(d.titles) ? d.titles : [];
+  titlesEl.innerHTML = ytTitles.map((t, i) => {
+    const obj = (typeof t === 'object' && t !== null) ? t : { text: t };
+    const text = cleanAIText(obj.text || obj.title || '');
+    const type = cleanAIText(obj.type || '');
+    const score = obj.score ? `<span style="font-size:11px;font-weight:700;color:#8250ff;">${escapeHtml(obj.score)}</span>` : '';
+    return `
+      <div onclick='navigator.clipboard.writeText(${JSON.stringify(text)}).then(()=>showToast("Title copied!","success"))'
+           style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .15s;"
+           onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='var(--border)'">
+        <span style="font-size:10px;color:var(--text-muted);min-width:22px;">#${i+1}</span>
+        <span style="flex:1;font-size:13px;font-weight:600;">${escapeHtml(text)}</span>
+        <span style="font-size:10px;background:rgba(130,80,255,.12);color:#8250ff;padding:2px 7px;border-radius:3px;white-space:nowrap;">${escapeHtml(type)}</span>
+        ${score}
+        <span style="font-size:10px;color:var(--text-muted);">📋</span>
+      </div>
+    `;
+  }).join('');
 
   // Category badge
   document.getElementById('yt-category-badge').textContent = d.category || '';
 
   // Description
-  document.getElementById('yt-description').value = d.description || '';
+  document.getElementById('yt-description').value = cleanAIText(d.description || '');
 
   // Chapters
-  const chapters = (d.chapters||[]).map(c=>`${c.time}  ${c.title}`).join('\n');
+  const chapters = (Array.isArray(d.chapters) ? d.chapters : []).map(c => `${cleanAIText(c?.time || '')}  ${cleanAIText(c?.title || c || '')}`.trim()).filter(Boolean).join('\n');
   document.getElementById('yt-chapters').value = chapters;
 
   // SEO Keywords
-  document.getElementById('yt-seo-keywords').innerHTML = (d.seo_keywords||[]).map(k=>
+  document.getElementById('yt-seo-keywords').innerHTML = normalizeTagList(d.seo_keywords||[]).map(k=>
     tagPill(k, 'rgba(78,158,255,.1)', 'rgba(78,158,255,.3)')
   ).join('');
 
   // Tags
-  _ytTagList = [...(d.tags||[])];
+  _ytTagList = normalizeTagList(d.tags||[]);
   renderYTTags();
 
   // Hooks
   document.getElementById('yt-hooks').innerHTML = (d.hook_lines||[]).map(h=>
     `<div onclick="navigator.clipboard.writeText(${JSON.stringify(h)}).then(()=>showToast('Copied!','success'))"
           style="padding:10px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;line-height:1.5;"
-          onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='var(--border)'">⚡ ${h}</div>`
+          onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='var(--border)'">⚡ ${escapeHtml(cleanAIText(h))}</div>`
   ).join('');
 
   // Thumbnail headlines
   document.getElementById('yt-thumbnails').innerHTML = (d.thumbnail_headlines||[]).map(h=>
     `<div onclick="navigator.clipboard.writeText(${JSON.stringify(h)}).then(()=>showToast('Copied!','success'))"
           style="padding:10px 14px;background:linear-gradient(135deg,rgba(130,80,255,.1),rgba(94,58,219,.05));border:1px solid rgba(130,80,255,.2);border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;"
-          onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='rgba(130,80,255,.2)'">${h}</div>`
+          onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='rgba(130,80,255,.2)'">${escapeHtml(cleanAIText(h))}</div>`
   ).join('');
 
   // Best time + CTA + Tips
   document.getElementById('yt-best-time').textContent = d.best_posting_time || '—';
   document.getElementById('yt-cta').textContent = d.end_screen_cta || '—';
   document.getElementById('yt-tips').innerHTML = (d.content_tips||[]).map(t=>
-    `<div style="padding:8px 12px;background:var(--bg-card-2);border-left:3px solid #8250ff;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;">💡 ${t}</div>`
+    `<div style="padding:8px 12px;background:var(--bg-card-2);border-left:3px solid #8250ff;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;">💡 ${escapeHtml(cleanAIText(t))}</div>`
   ).join('');
 
   document.getElementById('yt-ai-results').style.display = 'block';
 }
 
 function renderYTTags() {
-  document.getElementById('yt-tags').innerHTML = _ytTagList.map((tag,i) =>
-    `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(130,80,255,.1);border:1px solid rgba(130,80,255,.25);padding:3px 9px;border-radius:3px;font-size:11px;">
-      ${tag}
-      <span onclick="_ytTagList.splice(${i},1);renderYTTags();" style="cursor:pointer;color:var(--text-muted);margin-left:2px;" title="Remove">×</span>
-    </span>`
-  ).join('');
-}
-function addTagYT() {
-  const inp = document.getElementById('yt-tag-add');
-  const val = inp.value.trim(); if(!val) return;
-  if(!_ytTagList.includes(val)) _ytTagList.push(val);
-  inp.value = ''; renderYTTags();
+  const el = document.getElementById('yt-tags-input');
+  if (!el) return;
+  el.value = _ytTagList.join(', ');
 }
 function copyTagsYT() {
+  _ytTagList = parseTagsInput(document.getElementById('yt-tags-input').value);
+  document.getElementById('yt-tags-input').value = _ytTagList.join(', ');
   navigator.clipboard.writeText(_ytTagList.join(', ')).then(()=>showToast('Tags copied!','success'));
 }
 async function expandTagsYT() {
+  _ytTagList = parseTagsInput(document.getElementById('yt-tags-input').value);
   if(!_ytTagList.length){ showToast('No tags to expand','warn'); return; }
   showToast('Expanding tags with AI…','info');
   const d = await postJSON('/api/ai/expand-tags', {tags: _ytTagList});
   if(d.error){ showToast(d.error,'error'); return; }
-  if(d.all_tags) { _ytTagList = d.all_tags; renderYTTags(); showToast('Tags expanded!','success'); }
+  if(d.all_tags) { _ytTagList = normalizeTagList(d.all_tags); renderYTTags(); showToast('Tags expanded!','success'); }
 }
 
 // ── Instagram Generator ───────────────────────────────────────
@@ -483,12 +510,12 @@ function renderIGResults(d) {
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:${toneColors[c.tone]||'var(--bg-card-2)'};">
         <div>
           <span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);">Option ${i+1} · ${c.tone||''}  </span>
-          <span style="font-size:11px;font-style:italic;color:var(--text-muted);">"${c.hook||''}"</span>
+          <span style="font-size:11px;font-style:italic;color:var(--text-muted);">"${escapeHtml(cleanAIText(c.hook||''))}"</span>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="copyEl('ig-caption-${i}')">📋 Copy</button>
       </div>
       <div style="padding:14px;">
-        <div id="ig-caption-${i}" style="font-size:12px;white-space:pre-wrap;line-height:1.7;">${c.text||''}</div>
+        <div id="ig-caption-${i}" style="font-size:12px;white-space:pre-wrap;line-height:1.7;">${escapeHtml(cleanAIText(c.text||''))}</div>
       </div>
     </div>
   `).join('');
@@ -499,14 +526,14 @@ function renderIGResults(d) {
 
   // Script outline
   document.getElementById('ig-script').innerHTML=(d.reel_script_outline||[]).map(s=>
-    `<div style="padding:8px 12px;background:var(--bg-card-2);border-left:3px solid rgba(255,60,172,.4);border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;">${s}</div>`
+    `<div style="padding:8px 12px;background:var(--bg-card-2);border-left:3px solid rgba(255,60,172,.4);border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;">${escapeHtml(cleanAIText(s))}</div>`
   ).join('');
 
   // Story sequence
   document.getElementById('ig-stories').innerHTML=(d.story_sequence||[]).map((s,i)=>
     `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 12px;background:var(--bg-card-2);border-radius:var(--radius-sm);border:1px solid var(--border);font-size:12px;">
       <span style="width:22px;height:22px;border-radius:50%;background:rgba(255,60,172,.15);color:#ff3cac;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</span>
-      ${s}
+      ${escapeHtml(cleanAIText(s))}
     </div>`
   ).join('');
 
@@ -523,7 +550,7 @@ function renderIGResults(d) {
   document.getElementById('ig-ctas').innerHTML=(d.cta_options||[]).map(c=>
     `<div onclick="navigator.clipboard.writeText(${JSON.stringify(c)}).then(()=>showToast('CTA copied!','success'))"
           style="padding:10px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;"
-          onmouseover="this.style.borderColor='rgba(255,60,172,.4)'" onmouseout="this.style.borderColor='var(--border)'">${c}</div>`
+          onmouseover="this.style.borderColor='rgba(255,60,172,.4)'" onmouseout="this.style.borderColor='var(--border)'">${escapeHtml(cleanAIText(c))}</div>`
   ).join('');
 
   document.getElementById('ig-ai-results').style.display='block';
