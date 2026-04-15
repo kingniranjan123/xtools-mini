@@ -762,7 +762,9 @@ def api_save_keys():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     data = request.get_json() or {}
     db = get_db()
-    for k in ['yt_api_key', 'home_channel', 'openrouter_api_key', 'content_niche', 'openrouter_model']:
+    allowed = ['yt_api_key', 'home_channel', 'openrouter_api_key', 'content_niche',
+               'openrouter_model', 'ai_language', 'ai_model']
+    for k in allowed:
         if k in data:
             db.execute('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (k, data[k]))
     db.commit()
@@ -1030,10 +1032,11 @@ def api_ai_youtube():
     cfg     = _get_settings_dict()
     api_key = cfg.get('openrouter_api_key', '').strip()
     if not api_key: return jsonify({'error': 'OpenRouter API key not configured. Go to Settings → API Keys.'}), 400
-    niche = cfg.get('content_niche', '')
+    niche    = cfg.get('content_niche', '')
+    language = cfg.get('ai_language', 'multi')
     try:
         from modules.ai_generator import generate_youtube_content
-        result = generate_youtube_content(topic, api_key, niche, is_short)
+        result = generate_youtube_content(topic, api_key, niche, is_short, language=language)
         return jsonify(result)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
@@ -1052,10 +1055,11 @@ def api_ai_instagram():
     cfg     = _get_settings_dict()
     api_key = cfg.get('openrouter_api_key', '').strip()
     if not api_key: return jsonify({'error': 'OpenRouter API key not configured. Go to Settings → API Keys.'}), 400
-    niche = cfg.get('content_niche', '')
+    niche    = cfg.get('content_niche', '')
+    language = cfg.get('ai_language', 'multi')
     try:
         from modules.ai_generator import generate_instagram_content
-        result = generate_instagram_content(topic, api_key, niche, content_type)
+        result = generate_instagram_content(topic, api_key, niche, content_type, language=language)
         return jsonify(result)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
@@ -1233,6 +1237,24 @@ def api_pick_folder():
         return jsonify({'folder': out})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/utils/scan-folder')
+def api_scan_folder():
+    """Count video files in a given folder path (for watermark / bulk ops)."""
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    folder = (request.args.get('path') or '').strip()
+    if not folder or not os.path.isdir(folder):
+        return jsonify({'error': 'Invalid or missing folder path', 'count': 0, 'files': []}), 400
+    video_exts = {'.mp4', '.mov', '.mkv', '.webm', '.m4v', '.avi'}
+    files = [
+        f for f in os.listdir(folder)
+        if os.path.isfile(os.path.join(folder, f))
+        and os.path.splitext(f)[1].lower() in video_exts
+    ]
+    files.sort()
+    return jsonify({'count': len(files), 'files': files, 'folder': folder})
+
 
 @app.route('/api/utils/pick-file')
 def api_pick_file():
@@ -1438,15 +1460,52 @@ def api_metadata_stream(reel_id):
     """Secure video stream endpoint for metadata preview modal."""
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     db  = get_db()
-    row = db.execute('SELECT file_path FROM reels WHERE id=?', (reel_id,)).fetchone()
+    row = db.execute('SELECT file_path, title FROM reels WHERE id=?', (reel_id,)).fetchone()
     if not row:
         return jsonify({'error': 'Reel not found'}), 404
 
     fpath = (row['file_path'] or '').strip()
-    if not fpath:
-        return jsonify({'error': 'No file path set for this reel'}), 404
-    if not os.path.isfile(fpath):
-        return jsonify({'error': f'Video file missing: {fpath}'}), 404
+
+    # Primary path missing — try fallback: scan configured download folders
+    if not fpath or not os.path.isfile(fpath):
+        filename = os.path.basename(fpath) if fpath else ''
+        found = None
+        # Scan all known output folders for a matching filename
+        cfg = _get_settings_dict()
+        search_roots = []
+        try:
+            from modules.downloader import OUTPUT_DIRS
+            search_roots = list(OUTPUT_DIRS.values())
+        except Exception:
+            pass
+        # Also scan default BASE_DIR sub-folders
+        for sub in ['downloads', 'output', 'reels', 'tmp_uploads']:
+            p = os.path.join(BASE_DIR, sub)
+            if os.path.isdir(p):
+                search_roots.append(p)
+        for root in search_roots:
+            if not root or not os.path.isdir(root):
+                continue
+            for dirpath, _, files in os.walk(root):
+                for fn in files:
+                    if filename and fn == filename:
+                        found = os.path.join(dirpath, fn)
+                        break
+                    # Fallback: match reel_id in filename
+                    if reel_id in fn and fn.lower().endswith(('.mp4','.mov','.mkv','.webm','.m4v')):
+                        found = os.path.join(dirpath, fn)
+                        break
+                if found:
+                    break
+            if found:
+                break
+        if found:
+            # Update DB so next request succeeds without scanning
+            db.execute('UPDATE reels SET file_path=? WHERE id=?', (found, reel_id))
+            db.commit()
+            fpath = found
+        else:
+            return jsonify({'error': f'Video file not found on disk. Stored path: {fpath}'}), 404
 
     ext = os.path.splitext(fpath)[1].lower()
     if ext not in ('.mp4', '.mov', '.mkv', '.webm', '.m4v'):
@@ -1865,9 +1924,10 @@ def api_ig_list_delete():
 @app.route('/api/split/equal', methods=['POST'])
 def api_split_equal():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
-    video    = request.files.get('video')
-    n        = int(request.form.get('n', 30))
-    use_cuda = request.form.get('use_cuda', '0') == '1'
+    video         = request.files.get('video')
+    n             = int(request.form.get('n', 30))
+    use_cuda      = request.form.get('use_cuda', '0') == '1'
+    output_format = request.form.get('output_format', 'original')  # 'original' | 'instagram'
 
     if not video: return jsonify({'error': 'No video'}), 400
 
@@ -1887,6 +1947,7 @@ def api_split_equal():
             n=n,
             out_dir=out_dir,
             use_cuda=use_cuda and CUDA_INFO['available'],
+            output_format=output_format,
             progress_cb=lambda line, pct=None: _emit(job, line, pct),
         )
         _finish(job, f'Created {len(files)} segments', files=[{'name': os.path.basename(f)} for f in files])
@@ -2014,6 +2075,7 @@ def api_youtube_reel_convert():
     quality      = data.get('quality', '1080')
     title_pos_pct = float(data.get('title_pos_pct', 20.0))
     part_pos_pct  = float(data.get('part_pos_pct', 82.0))
+    output_size   = data.get('output_size', 'instagram')  # 'instagram' | 'original'
 
     if not url:
         return jsonify({'error': 'No YouTube URL provided'}), 400
@@ -2070,6 +2132,7 @@ def api_youtube_reel_convert():
             show_watermark  = show_wm,
             title_pos_pct   = title_pos_pct,
             part_pos_pct    = part_pos_pct,
+            output_size     = output_size,
             clip_start_sec  = clip_start,
             clip_end_sec    = clip_end,
             progress_cb     = lambda line: _emit(job, line),
@@ -2109,6 +2172,7 @@ def api_youtube_reel_convert_local():
     clip_end     = float(data.get('clip_end', 0))
     title_pos_pct = float(data.get('title_pos_pct', 20.0))
     part_pos_pct  = float(data.get('part_pos_pct', 82.0))
+    output_size   = data.get('output_size', 'instagram')  # 'instagram' | 'original'
 
     job_id = str(uuid.uuid4())
     job    = _make_job(job_id)
@@ -2123,6 +2187,7 @@ def api_youtube_reel_convert_local():
             part_duration_sec=part_secs,
             show_title=show_title, show_part_label=show_part, show_watermark=show_wm,
             title_pos_pct=title_pos_pct, part_pos_pct=part_pos_pct,
+            output_size=output_size,
             clip_start_sec=clip_start, clip_end_sec=clip_end,
             progress_cb=lambda line: _emit(job, line),
         )

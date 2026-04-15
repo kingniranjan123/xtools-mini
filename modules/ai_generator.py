@@ -156,16 +156,32 @@ Always respond with ONLY valid JSON. No markdown prose outside the JSON block.""
 
 def generate_youtube_content(topic: str, api_key: str,
                               channel_niche: str = '',
-                              is_short: bool = False) -> dict:
+                              is_short: bool = False,
+                              language: str = 'multi') -> dict:
     """
     Generate comprehensive YouTube content package from a one-line topic.
+    language: 'multi' = mix Indian languages+English | specific language name = generate in that language
     Returns dict with titles, description, tags with weightage, trending tags, hooks.
     """
-    type_label = 'YouTube Short (<=60 seconds, vertical)' if is_short else 'standard YouTube video'
+    type_label    = 'YouTube Short (<=60 seconds, vertical)' if is_short else 'standard YouTube video'
     niche_context = f'Channel niche: {channel_niche}. ' if channel_niche else ''
 
+    if language and language != 'multi':
+        lang_instruction = f'IMPORTANT: Generate ALL text content (titles, description, hooks, tags) entirely in {language}.'
+    else:
+        lang_instruction = (
+            'LANGUAGE MIX: Generate content as follows — '
+            'Titles: English (60%) + Hindi/Tamil/Telugu alternating (40%). '
+            'Description: Natural Indian-English with Tamil/Hindi/Malayalam phrases mixed in. '
+            'Tags: English only (for SEO). '
+            'Hook lines: Mix of English and regional (Tamil yaar, Hindi bhai etc). '
+            'This maximises reach across India.'
+        )
+
     prompt = f"""
-{niche_context}Generate a YouTube content package for this video topic (in Indian-English style):
+{niche_context}{lang_instruction}
+
+Generate a YouTube content package for this video topic:
 "{topic}"
 
 Video type: {type_label}
@@ -234,15 +250,27 @@ Always respond with ONLY valid JSON. No markdown prose outside the JSON block.""
 
 def generate_instagram_content(topic: str, api_key: str,
                                 account_niche: str = '',
-                                content_type: str = 'reel') -> dict:
+                                content_type: str = 'reel',
+                                language: str = 'multi') -> dict:
     """
     Generate comprehensive Instagram content package from a one-line topic.
+    language: 'multi' = Indian mix | specific language = generate in that language
     content_type: 'reel', 'post', or 'story'
     """
     niche_context = f'Account niche: {account_niche}. ' if account_niche else ''
 
+    if language and language != 'multi':
+        lang_instruction = f'IMPORTANT: Write ALL captions and text entirely in {language}.'
+    else:
+        lang_instruction = (
+            'LANGUAGE: Write captions in natural Indian-English, freely mixing Tamil/Hindi/Malayalam '
+            'expressions where they fit. Use expressions like "yaar", "ekdum viral", "must follow", '
+            '"bilkul free hai", "full paisa vasool". This resonates with Indian audiences.'
+        )
+
     prompt = f"""
-{niche_context}Generate a complete Instagram content package for this topic:
+{niche_context}{lang_instruction}
+Generate a complete Instagram content package for this topic:
 "{topic}"
 
 Content type: Instagram {content_type.title()}

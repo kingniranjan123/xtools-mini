@@ -307,9 +307,23 @@
             <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
           </div>
         </div>
-        <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);font-size:11px;color:var(--text-muted);">
+        <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);font-size:11px;color:var(--text-muted);margin-bottom:14px;">
           <strong>Output format:</strong> 9:16 · 1080×1920 · H.264 · AAC · Cinemascope bars preserved<br>
           Parts saved as: <code>videoname_part01.mp4</code>, <code>_part02.mp4</code>…
+        </div>
+        <!-- Output Size toggle -->
+        <div style="margin-bottom:4px;">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:8px;">Output Size</div>
+          <div style="display:flex;gap:8px;">
+            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg-card-2);border:2px solid rgba(255,60,172,.4);border-radius:var(--radius-sm);cursor:pointer;" id="sz-ig-lbl">
+              <input type="radio" name="reel_output_size" id="sz-instagram" value="instagram" checked style="accent-color:var(--accent);">
+              <div><div style="font-weight:700;font-size:12px;">📱 Instagram 9:16</div><div style="font-size:10px;color:var(--text-muted);">Letterbox · no crop</div></div>
+            </label>
+            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg-card-2);border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;" id="sz-orig-lbl">
+              <input type="radio" name="reel_output_size" id="sz-original" value="original" style="accent-color:var(--accent);">
+              <div><div style="font-weight:700;font-size:12px;">📐 Original Size</div><div style="font-size:10px;color:var(--text-muted);">Keep source dims</div></div>
+            </label>
+          </div>
         </div>
       </div>
     </div>
@@ -527,10 +541,14 @@ async function startReelConvert() {
   const titlePos  = parseInt(document.getElementById('title-pos-pct')?.value) || 20;
   const partPos   = parseInt(document.getElementById('part-pos-pct')?.value) || 82;
 
+  const outputSizeEl = document.querySelector('input[name="reel_output_size"]:checked');
+  const outputSize = outputSizeEl ? outputSizeEl.value : 'instagram';
+
   let payload = {title, watermark: wm, part_duration: partDur,
                   show_title: showTitle, show_part_label: showPart, show_watermark: showWm,
                   title_pos_pct: titlePos, part_pos_pct: partPos,
-                  clip_start: clipStart, clip_end: clipEnd, output_dir: outDir, quality};
+                  clip_start: clipStart, clip_end: clipEnd, output_dir: outDir, quality,
+                  output_size: outputSize};
 
   let endpoint;
   if(_reelSource === 'yt') {

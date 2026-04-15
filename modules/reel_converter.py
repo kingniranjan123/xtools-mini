@@ -81,48 +81,80 @@ def probe_video(path: str) -> dict:
 
 
 
-# ── FFmpeg filter builder ─────────────────────────────────────────
+def _wrap_title(text: str, canvas_w: int, font_size: int, max_lines: int = 3) -> list:
+    """
+    Split text into lines that fit within canvas_w pixels.
+    Returns list of line strings (max max_lines lines, last truncated with '…' if needed).
+    Approximation: mono font char ≈ font_size * 0.55 wide.
+    """
+    import textwrap
+    chars_per_line = max(10, int(canvas_w * 0.82 / (font_size * 0.55)))
+    lines = textwrap.wrap(text, width=chars_per_line)
+    if not lines:
+        return [text]
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        if len(lines[-1]) > chars_per_line - 1:
+            lines[-1] = lines[-1][:chars_per_line - 1] + '…'
+        else:
+            lines[-1] = lines[-1] + '…'
+    return lines
+
 
 def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: str,
                   show_title: bool, show_part_label: bool, show_watermark: bool,
-                  title_pos_pct: float = 20.0, part_pos_pct: float = 82.0) -> str:
+                  title_pos_pct: float = 20.0, part_pos_pct: float = 82.0,
+                  output_size: str = 'instagram') -> str:
     """
     Build the -vf filter chain for one part.
+    output_size: 'instagram' (9:16 1080×1920 letterbox) | 'original' (keep source dims)
     """
     is_portrait = in_h > in_w
 
-    if is_portrait:
-        # Already portrait: scale to fit within 1080×1920
-        scale_pad = (
-            f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=decrease,"
-            f"pad={REEL_W}:{REEL_H}:(ow-iw)/2:(oh-ih)/2:black"
-        )
+    if output_size == 'original':
+        # Skip scale/pad — output same dimensions as input; set canvas for text
+        canvas_w = in_w
+        canvas_h = in_h
+        filters  = []
     else:
-        # Landscape / cinemascope: scale width to 1080, pad height to 1920
-        scale_pad = (
-            f"scale={REEL_W}:-2,"
-            f"pad={REEL_W}:{REEL_H}:(ow-iw)/2:(oh-ih)/2:black"
-        )
-
-    filters = [scale_pad]
+        # Instagram 9:16 letterbox
+        if is_portrait:
+            scale_pad = (
+                f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=decrease,"
+                f"pad={REEL_W}:{REEL_H}:(ow-iw)/2:(oh-ih)/2:black"
+            )
+        else:
+            scale_pad = (
+                f"scale={REEL_W}:-2,"
+                f"pad={REEL_W}:{REEL_H}:(ow-iw)/2:(oh-ih)/2:black"
+            )
+        canvas_w = REEL_W
+        canvas_h = REEL_H
+        filters  = [scale_pad]
 
     font_file = _resolve_font()
     font_attr = f"fontfile='{font_file}':" if font_file else ''
 
-    # Title: Custom centered placement
+    # Title: word-wrapped, centered placement
     if show_title and title.strip():
-        safe_title = title.replace("'", "\\'").replace(":", "\\:")
-        text = f"{safe_title} - Part {part_num}"
-        y_pos = f"h*{title_pos_pct/100.0:.2f}"
-        filters.append(
-            f"drawtext=text='{text}':"
-            f"{font_attr}"
-            f"fontcolor=white:fontsize=52:"
-            f"x=(w-text_w)/2:y={y_pos}:"
-            f"shadowcolor=black@0.85:shadowx=2:shadowy=2"
-        )
+        full_title = f"{title.strip()} - Part {part_num}"
+        title_font_size = 48
+        lines = _wrap_title(full_title, canvas_w, title_font_size, max_lines=3)
+        line_height = int(title_font_size * 1.35)
+        base_y_px = int(canvas_h * title_pos_pct / 100.0)
 
-    # Part label: Custom centered bottom placement
+        for i, line in enumerate(lines):
+            safe_line = line.replace("'", "\\'").replace(":", "\\:")
+            y_px = base_y_px + i * line_height
+            filters.append(
+                f"drawtext=text='{safe_line}':"
+                f"{font_attr}"
+                f"fontcolor=white:fontsize={title_font_size}:"
+                f"x=(w-text_w)/2:y={y_px}:"
+                f"shadowcolor=black@0.85:shadowx=2:shadowy=2"
+            )
+
+    # Part label: custom centered bottom placement
     if show_part_label:
         part_label = f"Part -{part_num}"
         y_pos = f"h*{part_pos_pct/100.0:.2f}"
@@ -145,7 +177,8 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
             f"shadowcolor=black@0.5:shadowx=1:shadowy=1"
         )
 
-    return ','.join(filters)
+    # If no filters at all, pass through unchanged
+    return ','.join(filters) if filters else 'copy'
 
 
 # ── Single-part encode ────────────────────────────────────────────
@@ -200,6 +233,7 @@ def convert_to_reels(
     show_watermark: bool = True,
     title_pos_pct: float = 20.0,
     part_pos_pct: float = 82.0,
+    output_size: str  = 'instagram',   # 'instagram' | 'original'
     # Optional: clip a specific range before splitting
     clip_start_sec: float = 0.0,
     clip_end_sec:   float = 0.0,   # 0 = full video
@@ -207,6 +241,7 @@ def convert_to_reels(
 ) -> dict:
     """
     Convert an MP4 video into Instagram Reel parts.
+    output_size: 'instagram' (9:16 letterbox) | 'original' (keep source dims)
     Returns { parts: [path, ...], errors: [...] }
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -255,7 +290,7 @@ def convert_to_reels(
 
         vf = build_filters(in_w, in_h, part_num, title, watermark,
                            show_title, show_part_label, show_watermark,
-                           title_pos_pct, part_pos_pct)
+                           title_pos_pct, part_pos_pct, output_size=output_size)
 
         if progress_cb:
             progress_cb(f'🎬 Encoding Part {part_num}/{num_parts} → {out_name}')

@@ -77,6 +77,27 @@
           </div>
         </div>
 
+        <!-- Output Format toggle -->
+        <div style="margin-bottom:14px;">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:8px;">Output Format</div>
+          <div style="display:flex;gap:8px;flex-direction:column;">
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:var(--bg-card-2);border:2px solid rgba(255,60,172,.35);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .15s;" id="fmt-original-lbl">
+              <input type="radio" name="output_format" id="fmt-original" value="original" checked style="accent-color:var(--accent);margin-top:2px;">
+              <div>
+                <div style="font-weight:700;font-size:13px;">📐 Original Size</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Keep source video dimensions unchanged</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:var(--bg-card-2);border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .15s;" id="fmt-instagram-lbl">
+              <input type="radio" name="output_format" id="fmt-instagram" value="instagram" style="accent-color:var(--accent);margin-top:2px;" onchange="updateFormatUI()">
+              <div>
+                <div style="font-weight:700;font-size:13px;">📱 Instagram Reels 9:16</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Letterbox to 1080×1920 — 100% content, no cropping</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
         <button class="btn btn-primary btn-full btn-lg" id="eq-split-btn" onclick="startEqualSplit()" disabled>
           ⊟ Split Video
         </button>
@@ -175,6 +196,22 @@ function previewSplit() {
     `ffmpeg ${hw}-i "input.mp4" \\\n  -c:v ${codec} -segment_time ${n} \\\n  -f segment -reset_timestamps 1 \\\n  "part_%03d.mp4"`;
 }
 
+
+function updateFormatUI() {
+  const isIG = document.getElementById('fmt-instagram')?.checked;
+  const origLbl = document.getElementById('fmt-original-lbl');
+  const igLbl   = document.getElementById('fmt-instagram-lbl');
+  if (origLbl) origLbl.style.borderColor = isIG ? 'var(--border)' : 'rgba(255,60,172,.35)';
+  if (igLbl)   igLbl.style.borderColor   = isIG ? 'rgba(255,60,172,.35)' : 'var(--border)';
+  previewSplit();
+}
+
+// Also wire the original radio to call updateFormatUI on change
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('fmt-original')?.addEventListener('change', updateFormatUI);
+  document.getElementById('fmt-instagram')?.addEventListener('change', updateFormatUI);
+});
+
 function formatTime(s) {
   if (s < 60) return s + 's';
   const m = Math.floor(s / 60);
@@ -191,6 +228,8 @@ async function startEqualSplit() {
   fd.append('video', eqFile);
   fd.append('n', n);
   fd.append('use_cuda', document.getElementById('eq-cuda').checked ? '1' : '0');
+  const fmt = document.querySelector('input[name="output_format"]:checked');
+  fd.append('output_format', fmt ? fmt.value : 'original');
 
   document.getElementById('eq-split-btn').disabled = true;
   document.getElementById('eq-split-btn').textContent = 'Splitting…';

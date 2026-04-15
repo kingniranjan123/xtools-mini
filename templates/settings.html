@@ -136,11 +136,64 @@
       <div class="form-hint">Tells the AI what your channel is about for more targeted suggestions.</div>
     </div>
     <div class="form-group" style="margin-top:16px;">
-      <label class="form-label">🧠 Preferred OpenRouter Model (optional)</label>
-      <input class="form-input mono" id="openrouter-model" type="text"
-        placeholder="e.g. google/gemini-2.0-flash-001"
-        value="{{ settings.openrouter_model or '' }}">
-      <div class="form-hint">Leave blank to use automatic fallback models.</div>
+      <label class="form-label">🧠 AI Model (Primary)</label>
+      <select class="form-input" id="openrouter-model" style="cursor:pointer;">
+        <optgroup label="⭐ Recommended">
+          <option value="google/gemini-2.5-pro" {% if (settings.openrouter_model or 'google/gemini-2.5-pro') == 'google/gemini-2.5-pro' %}selected{% endif %}>Gemini 2.5 Pro — Best multilingual, free tier ⭐</option>
+          <option value="google/gemini-flash-1.5" {% if settings.openrouter_model == 'google/gemini-flash-1.5' %}selected{% endif %}>Gemini Flash 1.5 — Fast &amp; cheap</option>
+          <option value="google/gemini-2.0-flash-001" {% if settings.openrouter_model == 'google/gemini-2.0-flash-001' %}selected{% endif %}>Gemini 2.0 Flash</option>
+        </optgroup>
+        <optgroup label="Anthropic">
+          <option value="anthropic/claude-3.5-sonnet" {% if settings.openrouter_model == 'anthropic/claude-3.5-sonnet' %}selected{% endif %}>Claude 3.5 Sonnet</option>
+          <option value="anthropic/claude-3-haiku" {% if settings.openrouter_model == 'anthropic/claude-3-haiku' %}selected{% endif %}>Claude 3 Haiku — Very fast</option>
+        </optgroup>
+        <optgroup label="OpenAI">
+          <option value="openai/gpt-4o" {% if settings.openrouter_model == 'openai/gpt-4o' %}selected{% endif %}>GPT-4o</option>
+          <option value="openai/gpt-4o-mini" {% if settings.openrouter_model == 'openai/gpt-4o-mini' %}selected{% endif %}>GPT-4o Mini — Budget</option>
+        </optgroup>
+        <optgroup label="Meta / Open Source">
+          <option value="meta-llama/llama-3.1-70b-instruct" {% if settings.openrouter_model == 'meta-llama/llama-3.1-70b-instruct' %}selected{% endif %}>Llama 3.1 70B</option>
+          <option value="mistralai/mistral-7b-instruct" {% if settings.openrouter_model == 'mistralai/mistral-7b-instruct' %}selected{% endif %}>Mistral 7B — Lightweight</option>
+        </optgroup>
+      </select>
+      <div class="form-hint">Gemini 2.5 Pro recommended — best multilingual support for Indian languages.</div>
+    </div>
+    <div class="form-group" style="margin-top:16px;">
+      <label class="form-label">🌐 Content Generation Language</label>
+      <select class="form-input" id="ai-language" style="cursor:pointer;">
+        <option value="multi" {% if not settings.ai_language or settings.ai_language == 'multi' %}selected{% endif %}>🌍 Multi-Language (Auto Mix — Recommended)</option>
+        <optgroup label="🇮🇳 Indian Languages">
+          <option value="Tamil" {% if settings.ai_language == 'Tamil' %}selected{% endif %}>Tamil தமிழ்</option>
+          <option value="Hindi" {% if settings.ai_language == 'Hindi' %}selected{% endif %}>Hindi हिंदी</option>
+          <option value="Malayalam" {% if settings.ai_language == 'Malayalam' %}selected{% endif %}>Malayalam മലയാളം</option>
+          <option value="Telugu" {% if settings.ai_language == 'Telugu' %}selected{% endif %}>Telugu తెలుగు</option>
+          <option value="Kannada" {% if settings.ai_language == 'Kannada' %}selected{% endif %}>Kannada ಕನ್ನಡ</option>
+          <option value="Bengali" {% if settings.ai_language == 'Bengali' %}selected{% endif %}>Bengali বাংলা</option>
+          <option value="Marathi" {% if settings.ai_language == 'Marathi' %}selected{% endif %}>Marathi मराठी</option>
+          <option value="Punjabi" {% if settings.ai_language == 'Punjabi' %}selected{% endif %}>Punjabi ਪੰਜਾਬੀ</option>
+        </optgroup>
+        <optgroup label="🌐 Global Languages">
+          <option value="English" {% if settings.ai_language == 'English' %}selected{% endif %}>English</option>
+          <option value="French" {% if settings.ai_language == 'French' %}selected{% endif %}>French Français</option>
+          <option value="Spanish" {% if settings.ai_language == 'Spanish' %}selected{% endif %}>Spanish Español</option>
+          <option value="Portuguese" {% if settings.ai_language == 'Portuguese' %}selected{% endif %}>Portuguese Português</option>
+          <option value="Arabic" {% if settings.ai_language == 'Arabic' %}selected{% endif %}>Arabic العربية</option>
+          <option value="Indonesian" {% if settings.ai_language == 'Indonesian' %}selected{% endif %}>Indonesian Bahasa</option>
+          <option value="Turkish" {% if settings.ai_language == 'Turkish' %}selected{% endif %}>Turkish Türkçe</option>
+          <option value="German" {% if settings.ai_language == 'German' %}selected{% endif %}>German Deutsch</option>
+          <option value="Japanese" {% if settings.ai_language == 'Japanese' %}selected{% endif %}>Japanese 日本語</option>
+          <option value="Korean" {% if settings.ai_language == 'Korean' %}selected{% endif %}>Korean 한국어</option>
+          <option value="Thai" {% if settings.ai_language == 'Thai' %}selected{% endif %}>Thai ภาษาไทย</option>
+          <option value="Swahili" {% if settings.ai_language == 'Swahili' %}selected{% endif %}>Swahili</option>
+          <option value="Vietnamese" {% if settings.ai_language == 'Vietnamese' %}selected{% endif %}>Vietnamese Tiếng Việt</option>
+          <option value="Italian" {% if settings.ai_language == 'Italian' %}selected{% endif %}>Italian Italiano</option>
+          <option value="Russian" {% if settings.ai_language == 'Russian' %}selected{% endif %}>Russian Русский</option>
+          <option value="Dutch" {% if settings.ai_language == 'Dutch' %}selected{% endif %}>Dutch Nederlands</option>
+          <option value="Persian" {% if settings.ai_language == 'Persian' %}selected{% endif %}>Persian فارسی</option>
+          <option value="Urdu" {% if settings.ai_language == 'Urdu' %}selected{% endif %}>Urdu اردو</option>
+        </optgroup>
+      </select>
+      <div class="form-hint">Multi-Language generates content mixing top Indian languages + English for maximum reach. Select a specific language to generate everything in that language only.</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
       <button class="btn btn-primary" style="background:linear-gradient(135deg,#8250ff,#5e3adb);" onclick="saveOpenRouterKey()">✨ Save AI Settings</button>
@@ -860,10 +913,17 @@ async function saveApiKeys() {
 }
 
 async function saveOpenRouterKey() {
-  const key   = document.getElementById('openrouter-api-key').value.trim();
-  const niche = document.getElementById('content-niche').value.trim();
-  const model = document.getElementById('openrouter-model')?.value.trim() || '';
-  const resp  = await postJSON('/api/settings/keys/save', { openrouter_api_key: key, content_niche: niche, openrouter_model: model });
+  const key      = document.getElementById('openrouter-api-key').value.trim();
+  const niche    = document.getElementById('content-niche').value.trim();
+  const model    = document.getElementById('openrouter-model')?.value || 'google/gemini-2.5-pro';
+  const language = document.getElementById('ai-language')?.value || 'multi';
+  const resp = await postJSON('/api/settings/keys/save', {
+    openrouter_api_key: key,
+    content_niche: niche,
+    openrouter_model: model,
+    ai_language: language,
+    ai_model: model
+  });
   if (resp.ok) { showToast('AI settings saved!', 'success'); setTimeout(() => location.reload(), 900); }
   else showToast(resp.error || 'Failed', 'error');
 }

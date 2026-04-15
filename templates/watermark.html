@@ -20,7 +20,20 @@
         <div class="card-title">📂 Step 1 — Select Folder</div>
       </div>
       <div class="card-body">
+        <!-- Custom folder picker -->
+        <div style="margin-bottom:14px; padding:12px; background:rgba(255,60,172,0.04); border:1px solid rgba(255,60,172,0.2); border-radius:var(--radius-sm);">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:8px;">📂 Pick Any Folder</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input class="form-input mono" id="custom-wm-folder" type="text" placeholder="Paste folder path or use Browse…" style="flex:1;font-size:12px;"
+                   oninput="onWMFolderInput()">
+            <button class="btn btn-secondary btn-sm" onclick="browseWMFolder()" style="white-space:nowrap;">📁 Browse…</button>
+          </div>
+          <div id="wm-folder-badge" style="display:none;margin-top:8px;padding:6px 10px;background:rgba(0,200,120,0.08);border:1px solid rgba(0,200,120,0.25);border-radius:var(--radius-sm);font-size:12px;color:#00c878;font-weight:600;"></div>
+        </div>
+
+        <!-- Pre-scanned download folders -->
         {% if folders %}
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Or choose from downloaded folders:</div>
           {% for folder in folders %}
           <div class="folder-card {% if loop.first %}selected{% endif %}" id="folder-{{ loop.index }}" onclick="selectFolder(this, '{{ folder.path }}', '{{ folder.name }}')">
             <div class="folder-icon">📁</div>
@@ -32,9 +45,9 @@
           </div>
           {% endfor %}
         {% else %}
-          <div style="text-align:center; padding:30px; color:var(--text-muted);">
+          <div style="text-align:center; padding:20px; color:var(--text-muted);">
             <div style="font-size:28px; margin-bottom:8px;">📭</div>
-            <p>No download folders yet.</p>
+            <p>No download folders yet — pick a custom folder above, or download reels first.</p>
             <a href="{{ url_for('download_page') }}" class="btn btn-primary btn-sm" style="margin-top:12px;">Download Reels First</a>
           </div>
         {% endif %}
@@ -193,6 +206,58 @@
 let selectedFolderPath = document.getElementById('selected-folder')?.value;
 let wmImagePath = null;
 let wmMode = 'upload'; // 'upload' | 'instagram'
+
+async function browseWMFolder() {
+  try {
+    const r = await fetch('/api/utils/pick-folder');
+    const j = await r.json();
+    if (j.folder) {
+      document.getElementById('custom-wm-folder').value = j.folder;
+      await scanWMFolder(j.folder);
+    } else if (j.error) { showToast(j.error, 'error'); }
+  } catch(e) { showToast('Folder picker failed: ' + e, 'error'); }
+}
+
+let _wmFolderTimer = null;
+function onWMFolderInput() {
+  clearTimeout(_wmFolderTimer);
+  _wmFolderTimer = setTimeout(async () => {
+    const p = document.getElementById('custom-wm-folder').value.trim();
+    if (p) await scanWMFolder(p);
+  }, 600);
+}
+
+async function scanWMFolder(folderPath) {
+  const badge = document.getElementById('wm-folder-badge');
+  badge.style.display = 'block';
+  badge.style.color = 'var(--text-muted)';
+  badge.textContent = '⏳ Scanning…';
+  try {
+    const r = await fetch('/api/utils/scan-folder?path=' + encodeURIComponent(folderPath));
+    const j = await r.json();
+    if (j.count !== undefined) {
+      badge.style.color = j.count > 0 ? '#00c878' : '#ff6b6b';
+      badge.textContent = j.count > 0
+        ? '✅ Found ' + j.count + ' video file' + (j.count !== 1 ? 's' : '') + ' in "' + folderPath.split(/[\\/]/).pop() + '"'
+        : '⚠️ No video files found in selected folder';
+      if (j.count > 0) {
+        document.getElementById('selected-folder').value = folderPath;
+        document.getElementById('selected-folder-name').value = folderPath.split(/[\\/]/).pop();
+        selectedFolderPath = folderPath;
+        document.querySelectorAll('.folder-card').forEach(c => {
+          c.classList.remove('selected');
+          c.querySelector('.badge')?.remove();
+        });
+      }
+    } else {
+      badge.style.color = '#ff6b6b';
+      badge.textContent = '❌ ' + (j.error || 'Could not scan folder');
+    }
+  } catch(e) {
+    badge.style.color = '#ff6b6b';
+    badge.textContent = '❌ Scan failed: ' + e;
+  }
+}
 
 function selectFolder(card, path, name) {
   document.querySelectorAll('.folder-card').forEach(c => {

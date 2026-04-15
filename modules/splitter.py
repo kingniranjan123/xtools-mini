@@ -33,9 +33,11 @@ def _hwaccel_args(use_cuda: bool) -> list:
 # ── Equal split ───────────────────────────────────────────────
 
 def split_equal(input_path: str, n: int, out_dir: str,
-                use_cuda: bool = False, progress_cb=None) -> list:
+                use_cuda: bool = False, output_format: str = 'original',
+                progress_cb=None) -> list:
     """
     Split input_path into segments of exactly n seconds.
+    output_format: 'original' (keep source dims) | 'instagram' (letterbox to 1080x1920)
     Returns list of output file paths.
     """
     os.makedirs(out_dir, exist_ok=True)
@@ -69,12 +71,11 @@ def split_equal(input_path: str, n: int, out_dir: str,
     for line in proc.stdout:
         line = line.rstrip()
         if progress_cb and line:
-            # Estimate progress from segment number in log
             import re
             m = re.search(r'part_(\d+)\.mp4', line)
             if m:
                 seg = int(m.group(1))
-                pct = int(seg / max(n_segments, 1) * 95)
+                pct = int(seg / max(n_segments, 1) * (80 if output_format == 'instagram' else 95))
                 progress_cb(line, pct)
             else:
                 progress_cb(line)
@@ -84,6 +85,43 @@ def split_equal(input_path: str, n: int, out_dir: str,
         raise RuntimeError(f'ffmpeg exited with code {proc.returncode}')
 
     files = sorted(glob.glob(os.path.join(out_dir, 'part_*.mp4')))
+
+    # Instagram 9:16 re-encode: letterbox each segment into 1080×1920 (no crop)
+    if output_format == 'instagram' and files:
+        if progress_cb:
+            progress_cb('Re-encoding to Instagram 9:16 letterbox format…', 80)
+        ig_dir = os.path.join(out_dir, 'instagram')
+        os.makedirs(ig_dir, exist_ok=True)
+        converted = []
+        total = len(files)
+        for i, seg_path in enumerate(files):
+            base   = os.path.basename(seg_path)
+            ig_out = os.path.join(ig_dir, base)
+            vf = (
+                "scale=1080:1920:force_original_aspect_ratio=decrease,"
+                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,"
+                "setsar=1"
+            )
+            ig_cmd = [
+                'ffmpeg', '-y',
+                '-i', seg_path,
+                '-vf', vf,
+            ] + _codec_args(use_cuda) + [
+                '-c:a', 'aac', '-b:a', '192k',
+                ig_out
+            ]
+            sub = subprocess.Popen(
+                ig_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding='utf-8', errors='replace', bufsize=1
+            )
+            sub.communicate()
+            if sub.returncode == 0:
+                converted.append(ig_out)
+                if progress_cb:
+                    pct = 80 + int((i + 1) / total * 18)
+                    progress_cb(f'Instagram format: {base}', pct)
+        files = converted if converted else files
+
     if progress_cb:
         progress_cb(f'✓ Created {len(files)} segments', 100)
     return files
