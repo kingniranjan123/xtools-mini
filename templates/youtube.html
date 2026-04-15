@@ -295,7 +295,7 @@
 
           <div style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
             <div style="font-size:13px;font-weight:600;">🖼 Bottom Overlay Image (single file)</div>
-            <div style="font-size:11px;color:var(--text-muted);margin:4px 0 8px;">Bottom compartment is fixed to the lower third of 9:16. At 100% the full image is contained without side trimming. Use Zoom to punch in up to 200%.</div>
+            <div style="font-size:11px;color:var(--text-muted);margin:4px 0 8px;">Bottom compartment is fixed to the lower third of 9:16. At 100% the image is fitted as-is into that container (no extra conversion/crop). Use Zoom to punch in up to 200%.</div>
             <input class="form-input" id="overlay-image-file" type="file" accept="image/*" style="font-size:12px;">
             <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
               <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Fill</span>
@@ -374,7 +374,7 @@
           </div>
           <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:6px;text-align:center;min-height:46px;">
             <div style="height:84px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:4px;">
-              <img id="mock-overlay-image" alt="overlay preview" style="display:none;width:96%;height:100%;object-fit:contain;object-position:center center;margin:0 auto;">
+              <img id="mock-overlay-image" alt="overlay preview" style="display:none;width:100%;height:100%;object-fit:contain;object-position:center center;margin:0 auto;">
             </div>
             <div style="font-size:10px;color:#fff;font-weight:700;" id="mock-part">Part -1</div>
           </div>

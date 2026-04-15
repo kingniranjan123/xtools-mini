@@ -104,6 +104,11 @@
               <div class="form-hint">Minutes between each</div>
             </div>
           </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label" style="font-size:10px;">Session Cookie TTL (hours)</label>
+            <input class="form-input" id="session_ttl_hours-{{ a.id }}" type="number" value="{{ a.session_ttl_hours or 24 }}" min="1" max="168">
+            <div class="form-hint">Default 24h. Local IG session cookies auto-expire after this and reconnect on next test/post.</div>
+          </div>
         </div>
       </div>
 
@@ -195,6 +200,7 @@ async function saveAccount(id) {
     max_posts_batch:  getNum('max_posts_batch', 10),
     cool_minutes:     getNum('cool_minutes', 120),
     interval_minutes: getNum('interval_minutes', 15),
+    session_ttl_hours:getNum('session_ttl_hours', 24),
     enabled:          enabled,
   };
   const resp = await postJSON(`/api/poster/accounts/${id}/save`, payload);

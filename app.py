@@ -5,6 +5,7 @@ Password: nikethan
 import os, json, uuid, threading, subprocess, shutil, sys, tkinter as tk
 from tkinter import filedialog
 from datetime import datetime, timedelta
+from datetime import timezone
 import datetime as _dt_module
 from flask import (Flask, render_template, redirect, url_for,
                    request, session, flash, g, jsonify, Response,
@@ -2770,13 +2771,19 @@ def api_poster_account_save(acc_id):
     db   = get_db()
 
     allowed = ['label', 'username', 'folder_path', 'caption', 'tags',
-               'max_posts_batch', 'cool_minutes', 'interval_minutes', 'enabled']
+               'max_posts_batch', 'cool_minutes', 'interval_minutes', 'enabled', 'session_ttl_hours']
     sets  = []
     vals  = []
     for k in allowed:
         if k in data:
+            v = data[k]
+            if k == 'session_ttl_hours':
+                try:
+                    v = max(1, min(168, int(v)))
+                except Exception:
+                    v = 24
             sets.append(f'{k}=?')
-            vals.append(data[k])
+            vals.append(v)
 
     # Only update password if user actually typed a new one
     raw_pass = data.get('password', '')
@@ -2807,7 +2814,10 @@ def api_poster_status():
             try:
                 from datetime import datetime, timedelta
                 ws = datetime.fromisoformat(a['window_start'])
-                elapsed  = (datetime.utcnow() - ws).total_seconds() / 60
+                now_utc = datetime.now(timezone.utc)
+                if ws.tzinfo is None:
+                    ws = ws.replace(tzinfo=timezone.utc)
+                elapsed  = (now_utc - ws).total_seconds() / 60
                 remaining = max(0, (a['cool_minutes'] or 120) - elapsed)
                 a['cooling_remaining_mins'] = int(remaining)
             except Exception:
@@ -2882,7 +2892,7 @@ def api_poster_connection_test(acc_id):
 
     db = get_db()
     account = db.execute(
-        'SELECT id, label, username, password FROM poster_accounts WHERE id=?',
+        'SELECT id, label, username, password, session_ttl_hours, session_established_at FROM poster_accounts WHERE id=?',
         (acc_id,)
     ).fetchone()
     if not account:
@@ -2893,7 +2903,8 @@ def api_poster_connection_test(acc_id):
     if not username or not password:
         return jsonify({'error': 'Username/password not configured for this account'}), 400
 
-    window_start = (datetime.utcnow() - timedelta(hours=2)).isoformat()
+    now_utc = datetime.now(timezone.utc)
+    window_start = (now_utc - timedelta(hours=2)).isoformat()
     used = db.execute(
         '''SELECT COUNT(*) AS c FROM poster_connection_tests
            WHERE account_id=? AND tested_at >= ?''',
@@ -2914,7 +2925,9 @@ def api_poster_connection_test(acc_id):
             try:
                 retry_at_dt = datetime.fromisoformat(oldest['tested_at']) + timedelta(hours=2)
                 retry_at = retry_at_dt.isoformat()
-                retry_mins = max(1, int((retry_at_dt - datetime.utcnow()).total_seconds() // 60))
+                if retry_at_dt.tzinfo is None:
+                    retry_at_dt = retry_at_dt.replace(tzinfo=timezone.utc)
+                retry_mins = max(1, int((retry_at_dt - now_utc).total_seconds() // 60))
             except Exception:
                 pass
         last = _latest_connection_test(db, acc_id)
@@ -2927,11 +2940,6 @@ def api_poster_connection_test(acc_id):
             'last_result': dict(last) if last else None,
         }), 429
 
-    try:
-        from instagrapi import Client
-    except Exception:
-        return jsonify({'error': 'instagrapi not installed. Run: pip install instagrapi'}), 500
-
     outcome = 'error'
     status_code = None
     summary = ''
@@ -2940,16 +2948,12 @@ def api_poster_connection_test(acc_id):
     is_rate_limited = 0
     ok = False
     try:
-        client = Client()
-        client.login(username, password)
+        from modules.poster import test_login_with_local_session
+        payload = test_login_with_local_session(dict(account))
         outcome = 'success'
-        summary = f'Login test passed for @{username}. Connection looks good.'
-        raw_response = 'login_ok'
+        summary = payload.get('summary') or f'Login test passed for @{username}. Connection looks good.'
+        raw_response = payload.get('raw_response') or 'login_ok'
         ok = True
-        try:
-            client.logout()
-        except Exception:
-            pass
     except Exception as e:
         raw_response = str(e)[:2000]
         status_code = getattr(e, 'status_code', None)
@@ -2993,7 +2997,7 @@ def api_get_poster_connection_test(acc_id):
 
     db = get_db()
     last = _latest_connection_test(db, acc_id)
-    window_start = (datetime.utcnow() - timedelta(hours=2)).isoformat()
+    window_start = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
     used = db.execute(
         '''SELECT COUNT(*) AS c FROM poster_connection_tests
            WHERE account_id=? AND tested_at >= ?''',

@@ -25,7 +25,7 @@ import glob
 import sqlite3
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 try:
     from instagrapi import Client
@@ -36,6 +36,8 @@ except ImportError:
 TICK_SECONDS = 30          # how often the daemon checks state
 VIDEO_EXTS   = ('.mp4', '.mov', '.m4v', '.avi', '.mkv')
 DB_PATH      = os.path.join(os.path.dirname(__file__), '..', 'reels_db.sqlite')
+SESSION_DIR  = os.path.join(os.path.dirname(__file__), '..', 'downloads', 'instagram', 'poster_sessions')
+DEFAULT_SESSION_TTL_HOURS = 24
 
 
 # ── DB helpers (thread-safe direct sqlite3, not Flask g) ─────────
@@ -108,7 +110,58 @@ def _next_video(folder_path, account_id):
 _clients = {}   # account_id → Client
 
 
-def _get_client(account):
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _session_file(account_id: int) -> str:
+    os.makedirs(SESSION_DIR, exist_ok=True)
+    return os.path.join(SESSION_DIR, f'ig_session_{account_id}.json')
+
+
+def _ttl_hours(account: dict) -> int:
+    try:
+        ttl = int(account.get('session_ttl_hours') or DEFAULT_SESSION_TTL_HOURS)
+    except Exception:
+        ttl = DEFAULT_SESSION_TTL_HOURS
+    return max(1, min(168, ttl))
+
+
+def _session_is_expired(account: dict) -> bool:
+    established = (account.get('session_established_at') or '').strip()
+    if not established:
+        return True
+    try:
+        dt = datetime.fromisoformat(established)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return True
+    return (_now_utc() - dt) >= timedelta(hours=_ttl_hours(account))
+
+
+def _validate_session(client) -> bool:
+    """Minimal API call to verify session is still active."""
+    try:
+        client.get_timeline_feed()
+        return True
+    except Exception:
+        return False
+
+
+def _persist_session_and_mark(account_id: int, client):
+    sfile = _session_file(account_id)
+    client.dump_settings(sfile)
+    _update_account(account_id, session_established_at=_now_utc().isoformat())
+
+
+def _delete_session_file(account_id: int):
+    sfile = _session_file(account_id)
+    if os.path.isfile(sfile):
+        os.remove(sfile)
+
+
+def _get_client(account, force_fresh: bool = False):
     acc_id   = account['id']
     username = (account['username'] or '').strip()
     password = (account['password'] or '').strip()
@@ -122,29 +175,85 @@ def _get_client(account):
         raise RuntimeError('instagrapi not installed. Run: pip install instagrapi')
 
     client = Client()
-    # Session file path to persist login
-    session_file = os.path.join(os.path.dirname(__file__), '..', f'ig_session_{acc_id}.json')
+    session_file = _session_file(acc_id)
+    session_expired = _session_is_expired(account)
+    refreshed_login = False
     try:
+        if force_fresh or session_expired:
+            _delete_session_file(acc_id)
         if os.path.isfile(session_file):
             client.load_settings(session_file)
-            client.login(username, password)
+            if not _validate_session(client):
+                client.login(username, password)
+                _persist_session_and_mark(acc_id, client)
+                refreshed_login = True
         else:
             client.login(username, password)
-            client.dump_settings(session_file)
+            _persist_session_and_mark(acc_id, client)
+            refreshed_login = True
     except Exception as e:
         # Clear bad session and retry fresh
-        if os.path.isfile(session_file):
-            os.remove(session_file)
+        _delete_session_file(acc_id)
         client = Client()
         client.login(username, password)
-        client.dump_settings(session_file)
+        _persist_session_and_mark(acc_id, client)
+        refreshed_login = True
 
+    setattr(client, '_nikethan_refreshed_login', refreshed_login)
     _clients[acc_id] = client
     return client
 
 
 def _evict_client(account_id):
     _clients.pop(account_id, None)
+
+
+def test_login_with_local_session(account: dict) -> dict:
+    """
+    Connection test that prefers local saved session and auto-recovers by re-login.
+    Returns diagnostic payload for API responses.
+    """
+    acc_id = int(account['id'])
+    username = (account.get('username') or '').strip()
+    if not username:
+        raise ValueError('Username is not configured.')
+
+    used_cached_session = False
+    refreshed_login = False
+    ttl = _ttl_hours(account)
+    session_expired = _session_is_expired(account)
+    sfile = _session_file(acc_id)
+
+    _evict_client(acc_id)
+    if session_expired:
+        _delete_session_file(acc_id)
+
+    try:
+        client = _get_client(account, force_fresh=False)
+        _clients[acc_id] = client
+        refreshed_login = bool(getattr(client, '_nikethan_refreshed_login', False))
+        used_cached_session = (not refreshed_login) and os.path.isfile(sfile) and not session_expired
+    except Exception:
+        client = _get_client(account, force_fresh=True)
+        _clients[acc_id] = client
+        refreshed_login = True
+        used_cached_session = False
+
+    return {
+        'summary': f'Connected as @{username}. ' + ('Reused local session.' if used_cached_session else 'Session refreshed by login.'),
+        'raw_response': (
+            f'session_file={sfile}; ttl_hours={ttl}; '
+            f'used_cached_session={used_cached_session}; refreshed_login={refreshed_login}'
+        ),
+        'session': {
+            'session_file': sfile,
+            'ttl_hours': ttl,
+            'used_cached_session': used_cached_session,
+            'refreshed_login': refreshed_login,
+            'session_expired_before_test': session_expired,
+            'session_established_at': _now_utc().isoformat(),
+        }
+    }
 
 
 # ── Posting logic for one account ────────────────────────────────

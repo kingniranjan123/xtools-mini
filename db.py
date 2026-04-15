@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS poster_accounts (
   max_posts_batch  INTEGER DEFAULT 10,     -- posts before cooling starts
   cool_minutes     INTEGER DEFAULT 120,    -- cooling period in minutes (2 hrs)
   interval_minutes INTEGER DEFAULT 15,     -- gap between individual posts (mins)
+  session_ttl_hours INTEGER DEFAULT 24,    -- how long local IG session cookies stay valid
+  session_established_at DATETIME,         -- when local session was last refreshed
   enabled          INTEGER DEFAULT 0,      -- 0=disabled, 1=enabled
   posts_in_window  INTEGER DEFAULT 0,      -- posts made in current window
   window_start     DATETIME,              -- when current window started
@@ -145,5 +147,11 @@ def get_db():
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.executescript(SCHEMA)
+    # Lightweight schema migrations for existing installs.
+    cols = {r[1] for r in conn.execute("PRAGMA table_info('poster_accounts')").fetchall()}
+    if 'session_ttl_hours' not in cols:
+        conn.execute('ALTER TABLE poster_accounts ADD COLUMN session_ttl_hours INTEGER DEFAULT 24')
+    if 'session_established_at' not in cols:
+        conn.execute('ALTER TABLE poster_accounts ADD COLUMN session_established_at DATETIME')
     conn.commit()
     conn.close()
