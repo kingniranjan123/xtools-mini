@@ -73,6 +73,8 @@ def _download_single(url, quality, cookies_file, downloads_dir, custom_dir, prog
     reel_id = raw_info.get('id', 'unknown')
     out_template = os.path.join(out_dir, '%(title).150s.%(ext)s')
 
+    files_before = set(os.listdir(out_dir))
+
     dl_cmd = ytdlp + [
         '--format', fmt,
         '--output', out_template,
@@ -106,19 +108,23 @@ def _download_single(url, quality, cookies_file, downloads_dir, custom_dir, prog
     if proc.returncode != 0:
         raise RuntimeError(f'yt-dlp exited with code {proc.returncode}')
 
-    # Find the downloaded file
-    mp4_path = None
-    for fname in os.listdir(out_dir):
-        if fname.startswith(reel_id) and fname.endswith('.mp4'):
-            mp4_path = os.path.join(out_dir, fname)
-            break
+    files_after = set(os.listdir(out_dir))
+    new_files = files_after - files_before
 
-    # Find thumbnail
-    thumbnail = None
-    for fname in os.listdir(out_dir):
-        if fname.startswith(reel_id) and fname.endswith('.jpg'):
-            thumbnail = os.path.join(out_dir, fname)
-            break
+    # Find downloaded video and thumbnail robustly.
+    # Older builds used reel_id-prefixed names; newer templates are title-based.
+    mp4_path = _find_downloaded_video(
+        out_dir=out_dir,
+        reel_id=reel_id,
+        raw_info=raw_info,
+        new_files=new_files
+    )
+    thumbnail = _find_downloaded_thumbnail(
+        out_dir=out_dir,
+        reel_id=reel_id,
+        raw_info=raw_info,
+        new_files=new_files
+    )
 
     meta = extract_metadata_from_info(raw_info)
     meta['file_path'] = mp4_path
@@ -126,3 +132,66 @@ def _download_single(url, quality, cookies_file, downloads_dir, custom_dir, prog
     meta['account']   = account
     meta['status']    = 'ok'
     return meta
+
+
+def _find_downloaded_video(out_dir, reel_id, raw_info, new_files):
+    """Best-effort resolver for downloaded video path across naming formats."""
+    allowed_video_exts = ('.mp4', '.mov', '.mkv', '.webm', '.m4v')
+
+    # 1) Prefer newly created files from this download invocation.
+    new_video_candidates = [
+        os.path.join(out_dir, fn) for fn in new_files
+        if fn.lower().endswith(allowed_video_exts)
+    ]
+    new_video_candidates = [p for p in new_video_candidates if os.path.isfile(p)]
+    if new_video_candidates:
+        return max(new_video_candidates, key=os.path.getmtime)
+
+    # 2) Match explicit final filename from yt-dlp metadata if available.
+    requested = raw_info.get('requested_downloads') or []
+    for item in requested:
+        fp = item.get('_filename') or item.get('filepath')
+        if fp and os.path.isfile(fp) and fp.lower().endswith(allowed_video_exts):
+            return fp
+
+    # 3) Backward compatibility: previously stored as reel_id-prefixed .mp4 files.
+    for fname in os.listdir(out_dir):
+        if fname.startswith(reel_id) and fname.lower().endswith('.mp4'):
+            return os.path.join(out_dir, fname)
+
+    # 4) Last-chance fallback: newest video file in the output folder.
+    all_videos = [
+        os.path.join(out_dir, fn) for fn in os.listdir(out_dir)
+        if fn.lower().endswith(allowed_video_exts)
+    ]
+    all_videos = [p for p in all_videos if os.path.isfile(p)]
+    if all_videos:
+        return max(all_videos, key=os.path.getmtime)
+    return None
+
+
+def _find_downloaded_thumbnail(out_dir, reel_id, raw_info, new_files):
+    """Best-effort resolver for downloaded thumbnail path."""
+    # 1) Prefer newly created jpg thumbnails from this invocation.
+    new_thumbs = [
+        os.path.join(out_dir, fn) for fn in new_files
+        if fn.lower().endswith('.jpg')
+    ]
+    new_thumbs = [p for p in new_thumbs if os.path.isfile(p)]
+    if new_thumbs:
+        return max(new_thumbs, key=os.path.getmtime)
+
+    # 2) Backward compatibility: reel_id-prefixed jpg files.
+    for fname in os.listdir(out_dir):
+        if fname.startswith(reel_id) and fname.lower().endswith('.jpg'):
+            return os.path.join(out_dir, fname)
+
+    # 3) Last-chance fallback: newest jpg in folder.
+    all_jpgs = [
+        os.path.join(out_dir, fn) for fn in os.listdir(out_dir)
+        if fn.lower().endswith('.jpg')
+    ]
+    all_jpgs = [p for p in all_jpgs if os.path.isfile(p)]
+    if all_jpgs:
+        return max(all_jpgs, key=os.path.getmtime)
+    return None

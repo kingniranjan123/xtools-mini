@@ -202,10 +202,13 @@ def encode_part(input_path: str, output_path: str,
             '-filter_complex',
             (
                 f"[0:v]{base_expr}[base];"
-                f"[1:v]format=rgba,"
-                f"scale='min(iw,W-80)':'min(ih,H*0.22)':force_original_aspect_ratio=decrease,"
-                f"scale='trunc(iw*{zoom:.3f}/2)*2':'trunc(ih*{zoom:.3f}/2)*2'[ov];"
-                f"[base][ov]overlay=x='(W-w)/2':y='H*0.74 + ((H*0.26)-h)/2':shortest=1[vout]"
+                f"[1:v]format=rgba[ovsrc];"
+                f"[ovsrc][base]scale2ref="
+                f"w='min(iw,main_w-80)':"
+                f"h='min(ih,main_h*0.22)':"
+                f"force_original_aspect_ratio=decrease[ovfit][base2];"
+                f"[ovfit]scale='trunc(iw*{zoom:.3f}/2)*2':'trunc(ih*{zoom:.3f}/2)*2'[ov];"
+                f"[base2][ov]overlay=x='(W-w)/2':y='H*0.74 + ((H*0.26)-h)/2':shortest=1[vout]"
             ),
             '-map', '[vout]', '-map', '0:a?'
         ]
