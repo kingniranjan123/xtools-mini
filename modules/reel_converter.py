@@ -208,15 +208,17 @@ def encode_part(input_path: str, output_path: str,
                 progress_cb=None) -> bool:
     overlay = (overlay_image_path or '').strip()
     comp_pct = max(1.0, min(100.0, float(overlay_image_comp_pct or 100.0)))
+    zoom = max(1.0, min(2.0, float(overlay_image_zoom or 1.0)))
     cmd = [FFMPEG, '-y', '-ss', str(start_sec), '-t', str(duration_sec), '-i', input_path]
     if overlay and os.path.isfile(overlay):
         base_expr = vf if vf and vf != 'copy' else 'null'
         base_bottom_px = max(2, int(bottom_compartment_px or 0))
         if output_size == 'instagram' and base_bottom_px <= 0:
-            base_bottom_px = int(REEL_H * 0.34)
+            base_bottom_px = int(REEL_H / 3.0)
         if output_size != 'instagram' and base_bottom_px <= 0:
             base_bottom_px = int(REEL_H * 0.16)
         overlay_target_h = max(2, int(base_bottom_px * (comp_pct / 100.0)))
+        overlay_target_w = int(REEL_W * 0.96) if output_size == 'instagram' else int(REEL_W * 0.92)
         if output_size == 'instagram':
             overlay_y = f"'H-{base_bottom_px}+(({base_bottom_px}-h)/2)'"
         else:
@@ -228,10 +230,11 @@ def encode_part(input_path: str, output_path: str,
                 f"[0:v]{base_expr}[base];"
                 f"[1:v]format=rgba[ovsrc];"
                 f"[ovsrc][base]scale2ref="
-                f"w='main_w*0.96':"
-                f"h='{overlay_target_h}':"
-                f"force_original_aspect_ratio=increase[ovfit][base2];"
-                f"[ovfit]crop=w='iw':h='{overlay_target_h}':x='(iw-ow)/2':y='(ih-oh)/2'[ov];"
+                f"w='{overlay_target_w}*{zoom:.4f}':"
+                f"h='{overlay_target_h}*{zoom:.4f}':"
+                f"force_original_aspect_ratio=decrease[ovfit][base2];"
+                f"[ovfit]crop=w='min(iw,{overlay_target_w})':h='min(ih,{overlay_target_h})':"
+                f"x='(iw-ow)/2':y='(ih-oh)/2'[ov];"
                 f"[base2][ov]overlay=x='(W-w)/2':y={overlay_y}:shortest=1[vout]"
             ),
             '-map', '[vout]', '-map', '0:a?'
@@ -311,9 +314,8 @@ def convert_to_reels(
     if progress_cb:
         progress_cb(f'  Resolution: {in_w}×{in_h}, Duration: {total:.1f}s')
     if output_size == 'instagram':
-        scale_ratio = min(REEL_W / max(1, in_w), REEL_H / max(1, in_h))
-        content_h = max(1.0, in_h * scale_ratio)
-        bottom_compartment_px = max(0, int((REEL_H - content_h) / 2.0))
+        # Fixed lower-third compartment for image overlays in 9:16 output.
+        bottom_compartment_px = int(REEL_H / 3.0)
     else:
         bottom_compartment_px = max(0, int(in_h * 0.18))
 
