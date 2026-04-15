@@ -4,21 +4,66 @@
 {% block breadcrumb %}Analytics{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1 class="page-title"><span class="grad-text">Channel Analytics</span></h1>
-  <p class="page-subtitle">VidIQ-grade stats for any public YouTube or Instagram channel. Compare up to 10 channels side-by-side.</p>
-</div>
+<style>
+/* ── Skeleton pulse ── */
+@keyframes skeleton-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.skeleton { background:var(--bg-card-2); border-radius:4px; animation:skeleton-pulse 1.5s ease-in-out infinite; }
+
+/* ── Split layout ── */
+.analytics-split {
+  display: grid;
+  grid-template-columns: 370px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media(max-width:1060px){ .analytics-split{ grid-template-columns:1fr; } }
+
+/* ── Deep dive panel ── */
+.dd-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-height: 420px;
+  position: sticky;
+  top: 20px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+.ddp-empty {
+  display:flex; flex-direction:column; align-items:center;
+  justify-content:center; min-height:420px;
+  color:var(--text-muted); text-align:center; padding:32px;
+}
+
+/* ── Time window tabs ── */
+.tw-tab {
+  padding:5px 11px; border-radius:var(--radius-sm);
+  font-size:11px; font-weight:600; cursor:pointer;
+  border:none; background:transparent; color:var(--text-muted);
+  transition:all .15s;
+}
+.tw-tab.active {
+  background:var(--bg-card); color:var(--text);
+  border:1px solid var(--border);
+}
+
+/* ── Monetisation bar ── */
+.mono-track { height:6px; background:var(--bg-card-2); border-radius:3px; overflow:hidden; margin:6px 0 3px; }
+.mono-fill  { height:100%; border-radius:3px; background:linear-gradient(90deg,var(--grad-from),var(--grad-via)); transition:width .8s ease; }
+
+/* ── Video rows ── */
+.vrow { border-bottom:1px solid var(--border); cursor:pointer; transition:background .12s; }
+.vrow:hover, .vrow.selected { background:var(--bg-hover); }
+</style>
 
 <!-- ════════ Platform Tabs ════════ -->
 <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:24px;">
-  <button class="btn btn-sm active" id="tab-yt-btn" onclick="switchPlatformTab('yt')" style="background:var(--bg-card);border:1px solid var(--border);">🎬 YouTube</button>
-  <button class="btn btn-sm btn-ghost" id="tab-ig-btn" onclick="switchPlatformTab('ig')">📸 Instagram</button>
+  <button class="btn btn-sm active" id="tab-yt-btn"    onclick="switchPlatformTab('yt')"    style="background:var(--bg-card);border:1px solid var(--border);">🎬 YouTube</button>
+  <button class="btn btn-sm btn-ghost" id="tab-ig-btn"    onclick="switchPlatformTab('ig')">📸 Instagram</button>
   <button class="btn btn-sm btn-ghost" id="tab-trend-btn" onclick="switchPlatformTab('trend')">🔥 Trending</button>
 </div>
 
-<!-- ════════════════════════════════════════════
-     YOUTUBE TAB
-════════════════════════════════════════════ -->
+<!-- ════════ YOUTUBE TAB ════════ -->
 <div id="tab-yt">
 
   <!-- Input Panel -->
@@ -32,68 +77,64 @@
       {% endif %}
     </div>
     <div class="card-body">
-      <div style="display:flex; gap:4px; background:var(--bg-card-2); padding:4px; border-radius:var(--radius-sm); width:fit-content; margin-bottom:16px;">
+      <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:16px;">
         <button class="btn btn-sm active" id="mode-single-btn" onclick="switchMode('single')" style="background:var(--bg-card);border:1px solid var(--border);">Single Channel</button>
         <button class="btn btn-sm btn-ghost" id="mode-multi-btn" onclick="switchMode('multi')">Multi-Channel Compare</button>
       </div>
-
-      <!-- Single mode -->
       <div id="mode-single">
-        <div class="form-group">
-          <label class="form-label">Channel URL or @Handle</label>
-          <input class="form-input mono" id="yt-input" type="text" placeholder="@mkbhd  or  youtube.com/@mkbhd  or  UCBcRF...">
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <div class="form-group" style="flex:1;margin:0;">
+            <label class="form-label">Channel URL or @Handle</label>
+            <input class="form-input mono" id="yt-input" type="text" placeholder="@mkbhd  or  youtube.com/@mkbhd  or  UCBcRF...">
+          </div>
+          <button class="btn btn-primary" id="yt-analyze-btn" onclick="analyzeYouTube()" {% if not yt_api_configured %}disabled{% endif %}>📊 Deep Analyse</button>
         </div>
-        <button class="btn btn-primary" id="yt-analyze-btn" onclick="analyzeYouTube()" {% if not yt_api_configured %}disabled{% endif %}>📊 Deep Analyse</button>
       </div>
-
-      <!-- Multi-channel mode -->
       <div id="mode-multi" style="display:none;">
         <div class="form-group">
           <label class="form-label">Channel Handles (one per line, max 10)</label>
           <textarea class="form-textarea mono" id="yt-multi-input" rows="5" placeholder="@mkbhd&#10;@LinusTechTips&#10;@Veritasium&#10;@kurzgesagt"></textarea>
-          <div class="form-hint">Enter up to 10 channel handles. Results will appear in a side-by-side comparison table.</div>
+          <div class="form-hint">Enter up to 10 channel handles. Results appear as a side-by-side comparison table.</div>
         </div>
         <button class="btn btn-primary" id="yt-multi-btn" onclick="analyzeMulti()" {% if not yt_api_configured %}disabled{% endif %}>📊 Compare All Channels</button>
       </div>
     </div>
   </div>
 
-  <!-- ── Multi-Channel Comparison Table ── -->
-  <div id="multi-results" style="display:none; margin-bottom:24px;">
+  <!-- Multi-Channel Results -->
+  <div id="multi-results" style="display:none;margin-bottom:24px;">
     <div class="card">
       <div class="card-header">
         <div class="card-title">📊 Multi-Channel Comparison</div>
         <span class="badge badge-blue" id="multi-count-badge">0 channels</span>
       </div>
-      <div class="card-body" style="padding:0; overflow-x:auto;">
+      <div class="card-body" style="padding:0;overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px;">
-          <thead>
-            <tr style="border-bottom:1px solid var(--border);background:var(--bg-card-2);color:var(--text-muted);text-align:left;">
-              <th style="padding:10px 12px;">Channel</th>
-              <th style="padding:10px 12px;text-align:right;">Subscribers</th>
-              <th style="padding:10px 12px;text-align:right;">Total Views</th>
-              <th style="padding:10px 12px;text-align:right;">Videos</th>
-              <th style="padding:10px 12px;text-align:right;">Avg Views</th>
-              <th style="padding:10px 12px;text-align:right;">Avg Engagement</th>
-              <th style="padding:10px 12px;text-align:right;">View Velocity</th>
-              <th style="padding:10px 12px;text-align:right;">Uploads/Wk</th>
-              <th style="padding:10px 12px;text-align:right;">Avg Duration</th>
-              <th style="padding:10px 12px;text-align:right;">Avg Tags</th>
-              <th style="padding:10px 12px;">Best Day</th>
-              <th style="padding:10px 12px;">Best Hour</th>
-            </tr>
-          </thead>
+          <thead><tr style="border-bottom:1px solid var(--border);background:var(--bg-card-2);color:var(--text-muted);text-align:left;">
+            <th style="padding:10px 12px;">Channel</th>
+            <th style="padding:10px 12px;text-align:right;">Subscribers</th>
+            <th style="padding:10px 12px;text-align:right;">Total Views</th>
+            <th style="padding:10px 12px;text-align:right;">Videos</th>
+            <th style="padding:10px 12px;text-align:right;">Avg Views</th>
+            <th style="padding:10px 12px;text-align:right;">Avg Engagement</th>
+            <th style="padding:10px 12px;text-align:right;">View Velocity</th>
+            <th style="padding:10px 12px;text-align:right;">Uploads/Wk</th>
+            <th style="padding:10px 12px;text-align:right;">Avg Duration</th>
+            <th style="padding:10px 12px;text-align:right;">Avg Tags</th>
+            <th style="padding:10px 12px;">Best Day</th>
+            <th style="padding:10px 12px;">Best Hour</th>
+          </tr></thead>
           <tbody id="multi-tbody"></tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- ── Single Channel Deep Dashboard ── -->
+  <!-- ── Single Channel Dashboard ── -->
   <div id="yt-results" style="display:none;">
 
-    <!-- 1. Channel Header KPIs -->
-    <div class="card" style="margin-bottom:16px;" id="yt-channel-card">
+    <!-- Channel Header (full width) -->
+    <div class="card" style="margin-bottom:16px;">
       <div class="card-body">
         <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:20px;">
           <img id="yt-thumb" src="" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--border);">
@@ -101,13 +142,27 @@
             <div id="yt-title" style="font-size:20px;font-weight:700;"></div>
             <div id="yt-meta" style="font-size:12px;color:var(--text-muted);margin-top:4px;"></div>
           </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <button class="btn btn-secondary btn-sm" id="refresh-btn" onclick="refreshChannel()" style="margin-bottom:4px;">🔄 Refresh Stats</button>
+            <div id="last-fetch-time" style="font-size:10px;color:var(--text-muted);"></div>
+          </div>
           <div id="yt-own-badge" style="display:none;">
             <span class="badge badge-green">🏠 Home Channel · 7-Day History</span>
           </div>
         </div>
-        <!-- KPI Grid -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;">
-          {% set kpis = [
+        <!-- Time window + KPI grid -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:11px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Channel Overview</div>
+          <div style="display:flex;gap:3px;background:var(--bg-card-2);padding:3px;border-radius:var(--radius-sm);">
+            <button class="tw-tab active" id="tw-all"  onclick="setTimeWindow('all')">All Time</button>
+            <button class="tw-tab"         id="tw-365"  onclick="setTimeWindow('365')">1 Year</button>
+            <button class="tw-tab"         id="tw-90"   onclick="setTimeWindow('90')">90 Days</button>
+            <button class="tw-tab"         id="tw-28"   onclick="setTimeWindow('28')">28 Days</button>
+            <button class="tw-tab"         id="tw-7"    onclick="setTimeWindow('7')">7 Days</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;">
+          {% for id,label,icon in [
             ('yt-kpi-subs','Subscribers','👥'),
             ('yt-kpi-views','Total Views','👁'),
             ('yt-kpi-videos','Videos','📹'),
@@ -117,7 +172,6 @@
             ('yt-kpi-avgviews','Avg Views','▶'),
             ('yt-kpi-eng','Avg Engagement','💬'),
           ] %}
-          {% for id,label,icon in kpis %}
           <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
             <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">{{ icon }} {{ label }}</div>
             <div class="grad-text" style="font-size:18px;font-weight:800;" id="{{ id }}">—</div>
@@ -127,115 +181,243 @@
       </div>
     </div>
 
-    <!-- 2. Content Analysis Cards -->
-    <div class="section-heading">Content Analysis</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px;">
-      {% set ca_kpis = [
-        ('yt-ca-velocity','Avg Views/Day','🚀','view_velocity'),
-        ('yt-ca-dur','Avg Duration','⏱','duration'),
-        ('yt-ca-title','Avg Title Len','🔤','title_len'),
-        ('yt-ca-tags','Avg Tags/Video','🏷','tags'),
-        ('yt-ca-gap','Upload Cadence','📅','gap'),
-        ('yt-ca-like','Like Ratio','👍','like'),
-        ('yt-ca-comment','Comment Ratio','💬','comment'),
-        ('yt-ca-desc','Avg Desc Len','📝','desc'),
-      ] %}
-      {% for id,label,icon,_ in ca_kpis %}
-      <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
-        <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">{{ icon }} {{ label }}</div>
-        <div style="font-size:18px;font-weight:700;color:var(--text);" id="{{ id }}">—</div>
-      </div>
-      {% endfor %}
-    </div>
+    <!-- SPLIT: Left panel | Right deep-dive panel -->
+    <div class="analytics-split" style="margin-bottom:20px;">
 
-    <!-- 3. Best Posting Time -->
-    <div class="card" style="margin-bottom:20px;">
-      <div class="card-header">
-        <div class="card-title">🕐 Optimal Posting Time</div>
-        <span class="badge badge-green">Based on view performance</span>
-      </div>
-      <div class="card-body">
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
-          <div style="background:linear-gradient(135deg,rgba(255,60,172,.15),rgba(255,107,53,.1));padding:18px 26px;border-radius:var(--radius);border:1px solid rgba(255,60,172,.3);text-align:center;min-width:120px;">
-            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">BEST DAY</div>
-            <div class="grad-text" style="font-size:30px;font-weight:900;" id="yt-best-day">—</div>
+      <!-- ── LEFT: Stats & Charts ── -->
+      <div>
+        <!-- Monetisation Progress -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div class="card-title">💰 Monetisation Progress</div>
+            <span class="badge badge-gray" style="font-size:10px;">YouTube Partner Program</span>
           </div>
-          <div style="background:linear-gradient(135deg,rgba(255,107,53,.15),rgba(255,170,0,.1));padding:18px 26px;border-radius:var(--radius);border:1px solid rgba(255,107,53,.3);text-align:center;min-width:180px;">
-            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">BEST HOUR (UTC)</div>
-            <div class="grad-text" style="font-size:22px;font-weight:900;" id="yt-best-hour">—</div>
+          <div class="card-body">
+            <div style="display:flex;justify-content:space-between;font-size:12px;">
+              <span style="color:var(--text-muted);">👥 Subscribers</span>
+              <span id="mono-subs-text" style="font-weight:700;">0 / 1,000</span>
+            </div>
+            <div class="mono-track"><div class="mono-fill" id="mono-subs-bar" style="width:0%"></div></div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;" id="mono-subs-pct">0%</div>
+            <div style="border-top:1px solid var(--border);padding-top:10px;font-size:11px;color:var(--text-muted);line-height:1.7;">
+              ⏱ <strong>Watch Hours (4,000 hrs)</strong> and<br>
+              📱 <strong>Shorts Views (10M)</strong> require<br>
+              <span style="color:var(--accent);">YouTube Analytics API (OAuth2)</span> — channel owner only.
+            </div>
           </div>
         </div>
-        <!-- Day/Hour Heatmap -->
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Average Views Heatmap — all 7 days × 24 hours (UTC)</div>
-        <div id="yt-heatmap" style="overflow-x:auto;"></div>
-        <!-- Monthly Pattern -->
-        <div style="font-size:11px;color:var(--text-muted);margin:16px 0 8px;">Monthly Upload Pattern</div>
-        <div id="yt-monthly" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
-      </div>
-    </div>
 
-    <!-- 4. Top Performers (3 tabs) -->
-    <div class="card" style="margin-bottom:20px;">
-      <div class="card-header">
-        <div class="card-title">🏆 Top Performers</div>
-        <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:3px;border-radius:var(--radius-sm);">
-          <button class="btn btn-sm active" id="perf-views-btn" onclick="switchPerfTab('views')" style="background:var(--bg-card);border:1px solid var(--border);font-size:11px;">Most Viewed</button>
-          <button class="btn btn-sm btn-ghost" id="perf-eng-btn" onclick="switchPerfTab('eng')" style="font-size:11px;">Most Engaging</button>
-          <button class="btn btn-sm btn-ghost" id="perf-vel-btn" onclick="switchPerfTab('vel')" style="font-size:11px;">Fastest Growing</button>
-          <button class="btn btn-sm btn-ghost" id="perf-breakout-btn" onclick="switchPerfTab('breakout')" style="font-size:11px;">Breakouts 🔥</button>
+        <!-- Content Analysis -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><div class="card-title">📊 Content Analysis</div></div>
+          <div class="card-body" style="padding-top:8px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              {% for id,label,icon in [
+                ('yt-ca-velocity','Avg Views/Day','🚀'),
+                ('yt-ca-dur','Avg Duration','⏱'),
+                ('yt-ca-title','Avg Title Len','🔤'),
+                ('yt-ca-tags','Avg Tags','🏷'),
+                ('yt-ca-gap','Upload Cadence','📅'),
+                ('yt-ca-like','Like Ratio','👍'),
+                ('yt-ca-comment','Comment Ratio','💬'),
+                ('yt-ca-desc','Avg Desc Len','📝'),
+              ] %}
+              <div style="background:var(--bg-card-2);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">{{ icon }} {{ label }}</div>
+                <div style="font-size:15px;font-weight:700;" id="{{ id }}">—</div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="card-body" style="padding:0;">
-        <div id="perf-table-views"></div>
-        <div id="perf-table-eng" style="display:none;"></div>
-        <div id="perf-table-vel" style="display:none;"></div>
-        <div id="perf-table-breakout" style="display:none;"></div>
-      </div>
-    </div>
 
-    <!-- 5. All Videos Table -->
+        <!-- Chart: Top 10 by Views -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><div class="card-title">📈 Top 10 Videos by Views</div></div>
+          <div class="card-body">
+            <div style="position:relative;height:280px;"><canvas id="chartTopViews"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Chart: Engagement Distribution -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><div class="card-title">💬 Engagement Rate — Top 10</div></div>
+          <div class="card-body">
+            <div style="position:relative;height:200px;"><canvas id="chartEngagement"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Chart: Monthly Upload Pattern -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><div class="card-title">📅 Monthly Upload Pattern</div></div>
+          <div class="card-body">
+            <div style="position:relative;height:200px;"><canvas id="chartMonthly"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Optimal Posting Heatmap -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div class="card-title">🕐 Optimal Posting Time</div>
+            <span class="badge badge-green">Based on view performance</span>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+              <div style="background:linear-gradient(135deg,rgba(255,60,172,.15),rgba(255,107,53,.1));padding:14px 20px;border-radius:var(--radius);border:1px solid rgba(255,60,172,.3);text-align:center;">
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">BEST DAY</div>
+                <div class="grad-text" style="font-size:28px;font-weight:900;" id="yt-best-day">—</div>
+              </div>
+              <div style="background:linear-gradient(135deg,rgba(255,107,53,.15),rgba(255,170,0,.1));padding:14px 20px;border-radius:var(--radius);border:1px solid rgba(255,107,53,.3);text-align:center;">
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">BEST HOUR (UTC)</div>
+                <div class="grad-text" style="font-size:20px;font-weight:900;" id="yt-best-hour">—</div>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Average Views Heatmap — 7 days × 24 hours (UTC)</div>
+            <div id="yt-heatmap" style="overflow-x:auto;"></div>
+          </div>
+        </div>
+
+        <!-- 7-Day Snapshot History -->
+        <div id="yt-history-section" style="display:none;">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+              <div class="card-title">📜 7-Day Snapshot History</div>
+              <span class="badge badge-gray">Stored locally</span>
+            </div>
+            <div class="card-body">
+              <div style="position:relative;height:200px;margin-bottom:16px;"><canvas id="chartSnapshots"></canvas></div>
+              <div id="yt-history-cards" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /LEFT -->
+
+      <!-- ── RIGHT: Deep Dive Panel ── -->
+      <div class="dd-panel" id="dd-panel">
+
+        <!-- Empty state -->
+        <div class="ddp-empty" id="dd-empty">
+          <div style="font-size:48px;margin-bottom:12px;">📊</div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:8px;">Select a video for deep analytics</div>
+          <div style="font-size:12px;">Scroll down to the videos table and click any row or 🔍 button</div>
+        </div>
+
+        <!-- Loading skeleton -->
+        <div id="dd-loading" style="display:none;padding:28px;">
+          <div style="text-align:center;margin-bottom:20px;">
+            <div style="font-size:32px;animation:skeleton-pulse 1s infinite;">⏳</div>
+            <div style="font-weight:600;margin-top:8px;">Fetching video analytics…</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">YouTube Data API · up to 12s</div>
+          </div>
+          <div class="skeleton" style="height:160px;border-radius:var(--radius-sm);margin-bottom:12px;"></div>
+          <div class="skeleton" style="height:14px;width:80%;margin-bottom:8px;"></div>
+          <div class="skeleton" style="height:14px;width:60%;margin-bottom:8px;"></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px;">
+            <div class="skeleton" style="height:60px;border-radius:var(--radius-sm);"></div>
+            <div class="skeleton" style="height:60px;border-radius:var(--radius-sm);"></div>
+            <div class="skeleton" style="height:60px;border-radius:var(--radius-sm);"></div>
+          </div>
+        </div>
+
+        <!-- Error state -->
+        <div id="dd-error" style="display:none;padding:28px;text-align:center;">
+          <div style="font-size:36px;margin-bottom:12px;">⚠️</div>
+          <div style="font-weight:600;margin-bottom:8px;" id="dd-error-msg">Failed to load video analytics</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Check your API key or try again</div>
+          <button class="btn btn-secondary btn-sm" onclick="showDDState('dd-empty')">← Back</button>
+        </div>
+
+        <!-- Content -->
+        <div id="dd-content" style="display:none;padding:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <span id="dd-grade-badge" class="badge" style="font-size:14px;padding:4px 12px;">—</span>
+              <span id="dd-short-badge" style="display:none;" class="badge badge-orange">📱 Short</span>
+              <span id="dd-long-badge" class="badge badge-blue">🎬 Long-form</span>
+            </div>
+            <button onclick="closeDivePanel()" style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;line-height:1;">✕</button>
+          </div>
+
+          <img id="dd-thumb" src="" style="width:100%;border-radius:var(--radius-sm);margin-bottom:14px;aspect-ratio:16/9;object-fit:cover;background:var(--bg-card-2);">
+          <div id="dd-title" style="font-size:14px;font-weight:700;line-height:1.4;margin-bottom:6px;"></div>
+          <div id="dd-channel" style="font-size:11px;color:var(--text-muted);margin-bottom:12px;"></div>
+          <a id="dd-link" href="" target="_blank" class="btn btn-primary btn-sm" style="margin-bottom:16px;display:inline-block;">▶ Watch on YouTube</a>
+
+          <!-- Stats grid -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+            {% for id,label,icon in [
+              ('dd-views','Views','👁'),('dd-likes','Likes','👍'),('dd-comments','Comments','💬'),
+              ('dd-eng','Engagement','📈'),('dd-dur','Duration','⏱'),('dd-vel','Views/Day','🚀'),
+              ('dd-pub','Published','📅'),('dd-days','Days Live','⌛'),('dd-tagcount','Tags','🏷'),
+            ] %}
+            <div style="background:var(--bg-card-2);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+              <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">{{ icon }} {{ label }}</div>
+              <div style="font-size:13px;font-weight:700;" id="{{ id }}">—</div>
+            </div>
+            {% endfor %}
+          </div>
+
+          <!-- vs Channel Avg chart -->
+          <div id="dd-vs-section" style="display:none;margin-bottom:16px;">
+            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">vs Channel Average</div>
+            <div style="position:relative;height:160px;"><canvas id="chartVsAvg"></canvas></div>
+          </div>
+
+          <!-- Keywords -->
+          <div style="margin-bottom:14px;">
+            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">Description Keywords</div>
+            <div id="dd-keywords" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+          </div>
+
+          <!-- Tags -->
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">All Tags</div>
+            <div id="dd-tags-full" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+          </div>
+        </div><!-- /dd-content -->
+
+      </div><!-- /RIGHT -->
+    </div><!-- /analytics-split -->
+
+    <!-- BOTTOM: All Videos Table -->
     <div class="card" style="margin-bottom:20px;">
       <div class="card-header">
         <div class="card-title">📹 All Analysed Videos</div>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="badge badge-gray" id="yt-video-total">0 videos</span>
-          <span style="font-size:11px;color:var(--text-muted);">Click any row for deep analysis</span>
+          <div style="display:flex;gap:3px;background:var(--bg-card-2);padding:3px;border-radius:var(--radius-sm);">
+            <button class="tw-tab active" id="sort-views-btn"   onclick="setSortMode('views')">Most Viewed</button>
+            <button class="tw-tab"         id="sort-eng-btn"     onclick="setSortMode('engagement_rate')">Engaging</button>
+            <button class="tw-tab"         id="sort-vel-btn"     onclick="setSortMode('view_velocity')">Fastest</button>
+            <button class="tw-tab"         id="sort-newest-btn"  onclick="setSortMode('newest')">🆕 Newest</button>
+          </div>
+          <span style="font-size:11px;color:var(--text-muted);">Click row for deep dive →</span>
         </div>
       </div>
       <div class="card-body" style="padding:0;overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:800px;">
-          <thead>
-            <tr style="border-bottom:1px solid var(--border);color:var(--text-muted);text-align:left;background:var(--bg-card-2);">
-              <th style="padding:8px 10px;">#</th>
-              <th style="padding:8px 10px;">Title</th>
-              <th style="padding:8px 10px;text-align:right;">Views</th>
-              <th style="padding:8px 10px;text-align:right;">Likes</th>
-              <th style="padding:8px 10px;text-align:right;">Comments</th>
-              <th style="padding:8px 10px;text-align:right;">Engagement</th>
-              <th style="padding:8px 10px;text-align:right;">Duration</th>
-              <th style="padding:8px 10px;text-align:right;">Velocity</th>
-              <th style="padding:8px 10px;text-align:right;">Tags</th>
-              <th style="padding:8px 10px;">Published</th>
-              <th style="padding:8px 10px;"></th>
-            </tr>
-          </thead>
+          <thead><tr style="border-bottom:1px solid var(--border);color:var(--text-muted);text-align:left;background:var(--bg-card-2);">
+            <th style="padding:8px 10px;">#</th>
+            <th style="padding:8px 10px;">Title</th>
+            <th style="padding:8px 10px;text-align:right;">Views</th>
+            <th style="padding:8px 10px;text-align:right;">Likes</th>
+            <th style="padding:8px 10px;text-align:right;">Comments</th>
+            <th style="padding:8px 10px;text-align:right;">Engagement</th>
+            <th style="padding:8px 10px;text-align:right;">Duration</th>
+            <th style="padding:8px 10px;text-align:right;">Velocity</th>
+            <th style="padding:8px 10px;text-align:right;">Tags</th>
+            <th style="padding:8px 10px;">Published</th>
+            <th style="padding:8px 10px;"></th>
+          </tr></thead>
           <tbody id="yt-video-tbody"></tbody>
         </table>
       </div>
     </div>
 
-    <!-- 6. Historical Snapshots (own channel only) -->
-    <div id="yt-history-section" style="display:none;">
-      <div class="section-heading">📜 Historical Snapshots (7-Day GDG Buffer)</div>
-      <div id="yt-history-cards" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;"></div>
-    </div>
-
   </div><!-- /yt-results -->
 </div><!-- /tab-yt -->
 
-<!-- ════════════════════════════════════════════
-     TRENDING TAB
-════════════════════════════════════════════ -->
+<!-- ════════ TRENDING TAB ════════ -->
 <div id="tab-trend" style="display:none;">
   <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
@@ -264,27 +446,24 @@
             <option value="10">🎵 Music</option>
             <option value="20">🎮 Gaming</option>
             <option value="24">🎭 Entertainment</option>
-            <option value="25">📰 News & Politics</option>
+            <option value="25">📰 News &amp; Politics</option>
             <option value="17">⚽ Sports</option>
-            <option value="28">🔬 Science & Tech</option>
+            <option value="28">🔬 Science &amp; Tech</option>
             <option value="27">📚 Education</option>
-            <option value="22">👤 People & Blogs</option>
-            <option value="26">💄 How-to & Style</option>
+            <option value="22">👤 People &amp; Blogs</option>
+            <option value="26">💄 How-to &amp; Style</option>
           </select>
         </div>
       </div>
-      <!-- Day / Week / Month sub-tabs -->
       <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-top:16px;">
-        <button class="btn btn-sm active" id="win-day-btn" onclick="loadTrending('day')" style="background:var(--bg-card);border:1px solid var(--border);">📅 Today</button>
-        <button class="btn btn-sm btn-ghost" id="win-week-btn" onclick="loadTrending('week')">📆 This Week</button>
+        <button class="btn btn-sm active" id="win-day-btn"   onclick="loadTrending('day')"   style="background:var(--bg-card);border:1px solid var(--border);">📅 Today</button>
+        <button class="btn btn-sm btn-ghost" id="win-week-btn"  onclick="loadTrending('week')">📆 This Week</button>
         <button class="btn btn-sm btn-ghost" id="win-month-btn" onclick="loadTrending('month')">🗓 This Month</button>
       </div>
     </div>
   </div>
-
-  <!-- Trending Results -->
   <div id="trending-results" style="display:none;">
-    <div style="display:flex;gap:12px;margin-bottom:12px;">
+    <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
       <div style="background:rgba(255,60,172,.08);border:1px solid rgba(255,60,172,.2);padding:10px 16px;border-radius:var(--radius-sm);font-size:12px;">
         📱 <strong id="trend-shorts-count">0</strong> Shorts
       </div>
@@ -295,8 +474,6 @@
         Region: <strong id="trend-region-label">US</strong> · Window: <strong id="trend-window-label">Today</strong>
       </div>
     </div>
-
-    <!-- Shorts section -->
     <div class="card" style="margin-bottom:20px;">
       <div class="card-header">
         <div class="card-title">📱 Trending Shorts (≤3 min)</div>
@@ -318,11 +495,9 @@
         </table>
       </div>
     </div>
-
-    <!-- Long-form section -->
     <div class="card">
       <div class="card-header">
-        <div class="card-title">🎬 Trending Long-Form Videos (&gt;3 min)</div>
+        <div class="card-title">🎬 Trending Long-Form (&gt;3 min)</div>
         <span class="badge badge-blue" id="trend-long-badge">0</span>
       </div>
       <div class="card-body" style="padding:0;overflow-x:auto;">
@@ -342,65 +517,9 @@
       </div>
     </div>
   </div>
-</div>
+</div><!-- /tab-trend -->
 
-<!-- ════════ VIDEO DEEP-DIVE MODAL ════════ -->
-<div id="video-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;">
-  <div style="max-width:860px;margin:0 auto;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;position:relative;">
-    <button onclick="closeVideoModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;">&times;</button>
-    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:20px;">
-      <img id="vm-thumb" src="" style="width:200px;border-radius:var(--radius-sm);flex-shrink:0;">
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
-          <span id="vm-grade-badge" class="badge" style="font-size:16px;padding:4px 12px;">A+</span>
-          <span id="vm-short-badge" style="display:none;" class="badge badge-orange">📱 Short</span>
-          <span id="vm-long-badge" class="badge badge-blue">🎬 Long-form</span>
-        </div>
-        <div id="vm-title" style="font-size:18px;font-weight:700;line-height:1.3;margin-bottom:6px;"></div>
-        <div id="vm-channel" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <a id="vm-link" href="" target="_blank" class="btn btn-primary btn-sm">▶ Watch on YouTube</a>
-          <div id="vm-tags-row" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Deep stats grid -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:20px;">
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">👁 Views</div><div class="grad-text" style="font-size:16px;font-weight:800;" id="vm-views">—</div></div>
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">👍 Likes</div><div class="grad-text" style="font-size:16px;font-weight:800;" id="vm-likes">—</div></div>
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">💬 Comments</div><div class="grad-text" style="font-size:16px;font-weight:800;" id="vm-comments">—</div></div>
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">📈 Engagement</div><div class="grad-text" style="font-size:16px;font-weight:800;" id="vm-eng">—</div></div>
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">⏱ Duration</div><div style="font-size:16px;font-weight:700;" id="vm-dur">—</div></div>
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">🚀 Views/Day</div><div style="font-size:16px;font-weight:700;" id="vm-vel">—</div></div>
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">📅 Published</div><div style="font-size:13px;font-weight:700;" id="vm-pub">—</div></div>
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">📅 Days Live</div><div style="font-size:16px;font-weight:700;" id="vm-days">—</div></div>
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">👍 Like Ratio</div><div style="font-size:16px;font-weight:700;" id="vm-likeratio">—</div></div>
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">🏷 Tags Used</div><div style="font-size:16px;font-weight:700;" id="vm-tagcount">—</div></div>
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">🕐 Posted At</div><div style="font-size:13px;font-weight:700;" id="vm-hour">—</div></div>
-      <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="font-size:10px;color:var(--text-muted);">📝 Desc Len</div><div style="font-size:16px;font-weight:700;" id="vm-desclen">—</div></div>
-    </div>
-
-    <!-- vs Channel Avg (if available) -->
-    <div id="vm-vs-section" style="display:none;margin-bottom:20px;">
-      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">vs Channel Average</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;" id="vm-vs-row"></div>
-    </div>
-
-    <!-- Top desc keywords -->
-    <div style="margin-bottom:20px;">
-      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">Description Keywords</div>
-      <div id="vm-keywords" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
-    </div>
-
-    <!-- Tags full list -->
-    <div>
-      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">All Tags</div>
-      <div id="vm-tags-full" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
-    </div>
-  </div>
-</div>
-
+<!-- ════════ INSTAGRAM TAB ════════ -->
 <div id="tab-ig" style="display:none;">
   <div class="card" style="margin-bottom:20px;">
     <div class="card-header"><div class="card-title">📸 Analyse Instagram Profile</div></div>
@@ -415,8 +534,7 @@
       <button class="btn btn-primary" id="ig-analyze-btn" onclick="analyzeInstagram()">📊 Analyse Profile</button>
     </div>
   </div>
-
-  <div id="ig-results" style="display:none; margin-top:20px;">
+  <div id="ig-results" style="display:none;margin-top:20px;">
     <div class="card" style="margin-bottom:16px;">
       <div class="card-body">
         <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
@@ -427,22 +545,12 @@
           </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-top:16px;">
+          {% for id,label,icon in [('ig-followers','Followers','👥'),('ig-following','Following','👣'),('ig-avg-eng','Avg Engagement','💬'),('ig-avg-likes','Avg Likes','❤')] %}
           <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
-            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">👥 Followers</div>
-            <div class="grad-text" style="font-size:18px;font-weight:800;" id="ig-followers">—</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">{{ icon }} {{ label }}</div>
+            <div class="grad-text" style="font-size:18px;font-weight:800;" id="{{ id }}">—</div>
           </div>
-          <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
-            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">👣 Following</div>
-            <div class="grad-text" style="font-size:18px;font-weight:800;" id="ig-following">—</div>
-          </div>
-          <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
-            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">💬 Avg Engagement</div>
-            <div class="grad-text" style="font-size:18px;font-weight:800;" id="ig-avg-eng">—</div>
-          </div>
-          <div style="background:var(--bg-card-2);padding:14px;border-radius:var(--radius-sm);border:1px solid var(--border);">
-            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">❤ Avg Likes</div>
-            <div class="grad-text" style="font-size:18px;font-weight:800;" id="ig-avg-likes">—</div>
-          </div>
+          {% endfor %}
         </div>
       </div>
     </div>
@@ -463,13 +571,16 @@
       </div>
     </div>
   </div>
-</div>
+</div><!-- /tab-ig -->
 
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// ── Utilities ────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+//  Utilities
+// ══════════════════════════════════════════════════════════════
 function fmt(n) {
   if (n == null) return '—';
   if (n >= 1e9) return (n/1e9).toFixed(1)+'B';
@@ -478,61 +589,206 @@ function fmt(n) {
   return String(n);
 }
 function fmtDate(iso) { return iso ? iso.slice(0,10) : '—'; }
-function setEl(id, val) { const e = document.getElementById(id); if(e) e.textContent = val ?? '—'; }
+function setEl(id, val) { const e=document.getElementById(id); if(e) e.textContent=val??'—'; }
 
-// ── Tab switches ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+//  Chart.js global defaults (match app dark theme)
+// ══════════════════════════════════════════════════════════════
+Chart.defaults.color          = '#8b919a';
+Chart.defaults.borderColor    = 'rgba(255,255,255,0.06)';
+Chart.defaults.font.family    = 'Inter, sans-serif';
+Chart.defaults.font.size      = 11;
+Chart.defaults.plugins.legend.labels.boxWidth = 12;
+
+// ══════════════════════════════════════════════════════════════
+//  Global state
+// ══════════════════════════════════════════════════════════════
+let _allVideos   = [];
+let _channelAvg  = null;
+let _timeWindow  = 'all';
+let _sortMode    = 'views';
+let _chartTopViews=null, _chartEng=null, _chartMonthly=null, _chartSnap=null, _chartVsAvg=null;
+let _ddAbortCtrl = null;
+let _ddCache     = {};   // videoId → data
+
+// ══════════════════════════════════════════════════════════════
+//  Platform + mode tabs
+// ══════════════════════════════════════════════════════════════
 function switchPlatformTab(t) {
   ['yt','ig','trend'].forEach(id => {
     const el=document.getElementById('tab-'+id);
     if(el) el.style.display = id===t?'block':'none';
     const b=document.getElementById('tab-'+id+'-btn');
     if(b){
-      b.classList.toggle('active', id===t);
+      b.classList.toggle('active',id===t);
       b.style.background = id===t?'var(--bg-card)':'transparent';
-      b.style.border = id===t?'1px solid var(--border)':'none';
+      b.style.border     = id===t?'1px solid var(--border)':'none';
     }
   });
-  if(t==='trend' && !document.getElementById('trending-results').style.display.includes('block')){
-    loadTrending('day');
-  }
+  if(t==='trend' && document.getElementById('trending-results').style.display!=='block') loadTrending('day');
 }
+
 function switchMode(m) {
-  ['single','multi'].forEach(id => {
-    document.getElementById('mode-'+id).style.display = id===m?'block':'none';
-    const b = document.getElementById('mode-'+id+'-btn');
-    b.classList.toggle('active', id===m);
-    b.style.background = id===m?'var(--bg-card)':'transparent';
-    b.style.border = id===m?'1px solid var(--border)':'none';
+  ['single','multi'].forEach(id=>{
+    document.getElementById('mode-'+id).style.display=id===m?'block':'none';
+    const b=document.getElementById('mode-'+id+'-btn');
+    b.classList.toggle('active',id===m);
+    b.style.background=id===m?'var(--bg-card)':'transparent';
+    b.style.border    =id===m?'1px solid var(--border)':'none';
   });
   if(m==='multi') document.getElementById('yt-results').style.display='none';
   else document.getElementById('multi-results').style.display='none';
 }
-function switchPerfTab(t) {
-  ['views','eng','vel','breakout'].forEach(id => {
-    document.getElementById('perf-table-'+id).style.display = id===t?'block':'none';
-    const b = document.getElementById('perf-'+id+'-btn');
-    b.classList.toggle('active', id===t);
-    b.style.background = id===t?'var(--bg-card)':'transparent';
-    b.style.border = id===t?'1px solid var(--border)':'none';
+
+// ══════════════════════════════════════════════════════════════
+//  Time window filter
+// ══════════════════════════════════════════════════════════════
+function setTimeWindow(w) {
+  _timeWindow = w;
+  ['all','365','90','28','7'].forEach(id=>{
+    const b=document.getElementById('tw-'+id);
+    if(b) b.classList.toggle('active',id===w);
+  });
+  renderVideoTable();
+  _recomputeKPIs();
+}
+
+function _getFiltered() {
+  if(_timeWindow==='all'||!_allVideos.length) return _allVideos;
+  const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-parseInt(_timeWindow));
+  return _allVideos.filter(v=>!v.published_at||new Date(v.published_at)>=cutoff);
+}
+
+function _recomputeKPIs() {
+  const vids=_getFiltered(); if(!vids.length) return;
+  const n=vids.length;
+  setEl('yt-kpi-avgviews', fmt(Math.round(vids.reduce((a,v)=>a+v.views,0)/n)));
+  setEl('yt-kpi-eng',     (vids.reduce((a,v)=>a+v.engagement_rate,0)/n).toFixed(3)+'%');
+  setEl('yt-ca-velocity', fmt(Math.round(vids.reduce((a,v)=>a+v.view_velocity,0)/n))+'/day');
+  setEl('yt-video-total', vids.length+' videos');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Sort
+// ══════════════════════════════════════════════════════════════
+function setSortMode(mode) {
+  _sortMode=mode;
+  ['views','engagement_rate','view_velocity','newest'].forEach(m=>{
+    const key = m==='engagement_rate'?'eng': m==='view_velocity'?'vel': m==='newest'?'newest':'views';
+    const b=document.getElementById('sort-'+key+'-btn');
+    if(b) b.classList.toggle('active',m===mode);
+  });
+  renderVideoTable();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Charts
+// ══════════════════════════════════════════════════════════════
+function _destroyChart(c) { if(c) { try{ c.destroy(); }catch(e){} } return null; }
+
+function buildChartTopViews(videos) {
+  const ctx=document.getElementById('chartTopViews'); if(!ctx) return;
+  _chartTopViews=_destroyChart(_chartTopViews);
+  const top=[...videos].sort((a,b)=>b.views-a.views).slice(0,10).reverse();
+  _chartTopViews=new Chart(ctx,{
+    type:'bar',
+    data:{ labels:top.map(v=>v.title.length>28?v.title.slice(0,28)+'…':v.title),
+      datasets:[{label:'Views',data:top.map(v=>v.views),
+        backgroundColor:top.map((_,i)=>`hsla(${330-i*8},90%,60%,0.75)`),borderRadius:4}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmt(c.raw)+' views'}}},
+      scales:{x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{callback:v=>fmt(v)}},
+              y:{grid:{display:false},ticks:{font:{size:10}}}} }
   });
 }
 
-// ── Heatmap builder ──────────────────────────────────────────
+function buildChartEngagement(videos) {
+  const ctx=document.getElementById('chartEngagement'); if(!ctx) return;
+  _chartEng=_destroyChart(_chartEng);
+  const top=[...videos].sort((a,b)=>b.engagement_rate-a.engagement_rate).slice(0,10).reverse();
+  _chartEng=new Chart(ctx,{
+    type:'bar',
+    data:{ labels:top.map(v=>v.title.length>28?v.title.slice(0,28)+'…':v.title),
+      datasets:[{label:'Engagement %',data:top.map(v=>v.engagement_rate),
+        backgroundColor:top.map(v=>v.engagement_rate>=5?'rgba(0,212,136,0.7)':'rgba(78,158,255,0.7)'),borderRadius:4}]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},
+      scales:{x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{callback:v=>v+'%'}},
+              y:{grid:{display:false},ticks:{font:{size:10}}}} }
+  });
+}
+
+function buildChartMonthly(monthly) {
+  const ctx=document.getElementById('chartMonthly'); if(!ctx||!monthly) return;
+  _chartMonthly=_destroyChart(_chartMonthly);
+  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  _chartMonthly=new Chart(ctx,{
+    type:'bar',
+    data:{ labels:MONTHS, datasets:[{label:'Uploads',data:MONTHS.map(m=>monthly[m]||0),
+      backgroundColor:'rgba(255,107,53,0.65)',borderColor:'rgba(255,107,53,1)',borderWidth:1,borderRadius:4}]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{stepSize:1}},x:{grid:{display:false}}} }
+  });
+}
+
+function buildChartSnapshots(snaps) {
+  const ctx=document.getElementById('chartSnapshots'); if(!ctx||!snaps.length) return;
+  _chartSnap=_destroyChart(_chartSnap);
+  const labels   = snaps.map(s=>s.captured_at.slice(0,10));
+  const avgViews = snaps.map(s=>s.data?.content_analysis?.avg_views||0);
+  const engRate  = snaps.map(s=>s.data?.content_analysis?.avg_engagement_rate||0);
+  _chartSnap=new Chart(ctx,{
+    type:'line',
+    data:{ labels, datasets:[
+      {label:'Avg Views',data:avgViews,borderColor:'rgba(255,60,172,1)',
+       backgroundColor:'rgba(255,60,172,0.1)',fill:true,tension:0.4,yAxisID:'y'},
+      {label:'Engagement %',data:engRate,borderColor:'rgba(0,212,136,1)',
+       backgroundColor:'rgba(0,212,136,0.05)',fill:true,tension:0.4,yAxisID:'y2'},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:true,position:'top'}},
+      scales:{y:{position:'left',grid:{color:'rgba(255,255,255,0.05)'},ticks:{callback:v=>fmt(v)}},
+              y2:{position:'right',grid:{display:false},ticks:{callback:v=>v+'%'}},
+              x:{grid:{display:false}}} }
+  });
+}
+
+function buildChartVsAvg(vsChannel) {
+  const ctx=document.getElementById('chartVsAvg'); if(!ctx||!vsChannel) return;
+  _chartVsAvg=_destroyChart(_chartVsAvg);
+  const LBL={views_vs_avg:'Views',likes_vs_avg:'Likes',comments_vs_avg:'Comments',eng_vs_avg:'Engagement',velocity_vs_avg:'Velocity'};
+  const entries=Object.entries(vsChannel).filter(([,v])=>v!=null);
+  if(!entries.length) return;
+  _chartVsAvg=new Chart(ctx,{
+    type:'bar',
+    data:{ labels:entries.map(([k])=>LBL[k]||k),
+      datasets:[{label:'% vs Channel Avg',data:entries.map(([,v])=>v),
+        backgroundColor:entries.map(([,v])=>v>=0?'rgba(0,212,136,0.75)':'rgba(255,65,65,0.75)'),borderRadius:4}]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>(c.raw>=0?'+':'')+c.raw+'% vs avg'}}},
+      scales:{y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{callback:v=>v+'%'}},x:{grid:{display:false}}} }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Heatmap
+// ══════════════════════════════════════════════════════════════
 function buildHeatmap(containerId, heatmap, dayOrder) {
-  const el = document.getElementById(containerId);
-  if(!el) return;
-  let max = 0;
-  for(const d of dayOrder) for(let h=0;h<24;h++) max=Math.max(max, heatmap[d]?.[h]||0);
-  let html=`<table style="border-collapse:collapse;min-width:700px;font-size:10px;">`;
+  const el=document.getElementById(containerId); if(!el) return;
+  let max=0;
+  for(const d of dayOrder) for(let h=0;h<24;h++) max=Math.max(max,heatmap[d]?.[h]||0);
+  let html=`<table style="border-collapse:collapse;min-width:650px;font-size:10px;">`;
   html+=`<tr><th style="padding:3px 6px;color:var(--text-muted);white-space:nowrap;">UTC</th>`;
-  for(let h=0;h<24;h++) html+=`<th style="padding:2px 3px;color:var(--text-muted);text-align:center;min-width:24px;">${h}</th>`;
+  for(let h=0;h<24;h++) html+=`<th style="padding:2px 3px;color:var(--text-muted);text-align:center;min-width:22px;">${h}</th>`;
   html+=`</tr>`;
-  for(const d of dayOrder) {
+  for(const d of dayOrder){
     html+=`<tr><td style="padding:3px 6px;color:var(--text-secondary);font-weight:600;white-space:nowrap;">${d}</td>`;
     for(let h=0;h<24;h++){
       const v=heatmap[d]?.[h]||0;
       const alpha=max>0?(0.05+v/max*0.88).toFixed(2):'0.05';
-      const tc=v/max>0.55?'#fff':'var(--text-muted)';
+      const tc=max>0&&v/max>0.55?'#fff':'var(--text-muted)';
       html+=`<td title="${d} ${h}:00 — ${fmt(v)}" style="padding:4px 2px;text-align:center;border-radius:2px;background:rgba(255,60,172,${alpha});color:${tc};">${v>0?fmt(v):''}</td>`;
     }
     html+=`</tr>`;
@@ -541,177 +797,268 @@ function buildHeatmap(containerId, heatmap, dayOrder) {
   el.innerHTML=html;
 }
 
-// ── Monthly Pattern ──────────────────────────────────────────
-const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function buildMonthly(containerId, monthly) {
-  const el=document.getElementById(containerId);
-  if(!el||!monthly) return;
-  const max=Math.max(...Object.values(monthly),1);
-  el.innerHTML=MONTHS.map(m=>{
-    const v=monthly[m]||0;
-    const h=Math.max(8,v/max*60);
-    return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-      <div style="font-size:10px;color:var(--text-muted);">${v}</div>
-      <div style="width:24px;height:${h}px;background:linear-gradient(180deg,var(--grad-from),var(--grad-via));border-radius:3px;opacity:${v>0?1:0.2};"></div>
-      <div style="font-size:10px;color:var(--text-muted);">${m}</div>
-    </div>`;
-  }).join('');
-}
-
-// ── Video table builder ──────────────────────────────────────
-function buildVideoTable(containerId, videos, rankKey='views') {
-  const el=document.getElementById(containerId);
-  if(!el) return;
-  const sorted=[...videos].sort((a,b)=>(b[rankKey]||0)-(a[rankKey]||0)).slice(0,20);
-  el.innerHTML=`<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:760px;">
-    <thead><tr style="border-bottom:1px solid var(--border);color:var(--text-muted);background:var(--bg-card-2);">
-      <th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Title</th>
-      <th style="padding:8px 10px;text-align:right;">Views</th>
-      <th style="padding:8px 10px;text-align:right;">Engagement</th>
-      <th style="padding:8px 10px;text-align:right;">Duration</th>
-      <th style="padding:8px 10px;text-align:right;">Velocity/Day</th>
-      <th style="padding:8px 10px;">Published</th>
-    </tr></thead><tbody>
-    ${sorted.map((v,i)=>`
-      <tr style="border-bottom:1px solid var(--border);">
-        <td style="padding:8px 10px;color:var(--text-muted);">${i+1}</td>
-        <td style="padding:8px 10px;max-width:280px;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <img src="${v.thumbnail||''}" style="width:38px;height:26px;object-fit:cover;border-radius:2px;flex-shrink:0;">
-            <a href="https://youtube.com/watch?v=${v.id}" target="_blank" style="color:var(--text);text-decoration:none;font-size:11px;line-height:1.4;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">${v.title}</a>
-          </div>
-        </td>
-        <td style="padding:8px 10px;text-align:right;font-family:var(--font-mono);">${fmt(v.views)}</td>
-        <td style="padding:8px 10px;text-align:right;color:${v.engagement_rate>5?'var(--accent-green)':'var(--text-secondary)'};">${v.engagement_rate}%</td>
-        <td style="padding:8px 10px;text-align:right;font-family:var(--font-mono);">${v.duration_fmt||'—'}</td>
-        <td style="padding:8px 10px;text-align:right;font-family:var(--font-mono);">${fmt(v.view_velocity)}</td>
-        <td style="padding:8px 10px;color:var(--text-muted);">${fmtDate(v.published_at)}</td>
-      </tr>
-    `).join('')}
-    </tbody></table></div>`;
-}
-
-// ── Render full single-channel dashboard ─────────────────────
+// ══════════════════════════════════════════════════════════════
+//  Render full channel dashboard
+// ══════════════════════════════════════════════════════════════
 function renderYTDashboard(d) {
-  const ch=d.channel, ca=d.content_analysis, bt=d.best_times, tp=d.top_performers;
+  const ch=d.channel, ca=d.content_analysis, bt=d.best_times;
+  _allVideos  = d.videos||[];
+  _channelAvg = ca;
+  _timeWindow = 'all';
+  ['all','365','90','28','7'].forEach(id=>{ const b=document.getElementById('tw-'+id); if(b) b.classList.toggle('active',id==='all'); });
 
-  document.getElementById('yt-thumb').src=ch.thumbnail||'';
+  // Channel header
+  document.getElementById('yt-thumb').src = ch.thumbnail||'';
   setEl('yt-title', ch.title);
-  setEl('yt-meta', `${ch.country} · Joined ${fmtDate(ch.published_at)} · ${ch.channel_age_days} days old`);
+  setEl('yt-meta', `${ch.country||'—'} · Joined ${fmtDate(ch.published_at)} · ${ch.channel_age_days} days old`);
+  document.getElementById('last-fetch-time').textContent = 'Fetched: '+new Date().toLocaleTimeString();
 
   // KPIs
-  setEl('yt-kpi-subs', ch.hidden_subscribers?'Hidden':fmt(ch.subscribers));
-  setEl('yt-kpi-views', fmt(ch.total_views));
-  setEl('yt-kpi-videos', fmt(ch.video_count));
-  setEl('yt-kpi-age', ch.channel_age_days+' days');
-  setEl('yt-kpi-upwk', ch.uploads_per_week+'/wk');
+  setEl('yt-kpi-subs',    ch.hidden_subscribers?'Hidden':fmt(ch.subscribers));
+  setEl('yt-kpi-views',   fmt(ch.total_views));
+  setEl('yt-kpi-videos',  fmt(ch.video_count));
+  setEl('yt-kpi-age',     ch.channel_age_days+' days');
+  setEl('yt-kpi-upwk',    ch.uploads_per_week+'/wk');
   setEl('yt-kpi-viewsub', ch.views_per_subscriber);
-  setEl('yt-kpi-avgviews', fmt(ca.avg_views));
-  setEl('yt-kpi-eng', ca.avg_engagement_rate+'%');
+  setEl('yt-kpi-avgviews',fmt(ca.avg_views));
+  setEl('yt-kpi-eng',     ca.avg_engagement_rate+'%');
 
-  // Content Analysis
+  // Content analysis
   setEl('yt-ca-velocity', fmt(ca.avg_view_velocity)+'/day');
-  setEl('yt-ca-dur', ca.avg_duration_fmt);
-  setEl('yt-ca-title', ca.avg_title_length+' chars');
-  setEl('yt-ca-tags', ca.avg_tag_count+' tags');
-  setEl('yt-ca-gap', ca.avg_upload_gap_days!=null ? ca.avg_upload_gap_days+' days' : '—');
-  setEl('yt-ca-like', ca.avg_like_ratio+'%');
-  setEl('yt-ca-comment', ca.avg_comment_ratio+'%');
-  setEl('yt-ca-desc', ca.avg_description_length+' chars');
+  setEl('yt-ca-dur',      ca.avg_duration_fmt);
+  setEl('yt-ca-title',    ca.avg_title_length+' chars');
+  setEl('yt-ca-tags',     ca.avg_tag_count+' tags');
+  setEl('yt-ca-gap',      ca.avg_upload_gap_days!=null?ca.avg_upload_gap_days+' days':'—');
+  setEl('yt-ca-like',     ca.avg_like_ratio+'%');
+  setEl('yt-ca-comment',  ca.avg_comment_ratio+'%');
+  setEl('yt-ca-desc',     ca.avg_description_length+' chars');
 
-  // Best times
-  setEl('yt-best-day', bt.best_day);
+  // Monetisation progress
+  if(!ch.hidden_subscribers){
+    const pct=Math.min(100,Math.round(ch.subscribers/10));  // /1000*100
+    document.getElementById('mono-subs-bar').style.width=pct+'%';
+    setEl('mono-subs-text', fmt(ch.subscribers)+' / 1,000');
+    setEl('mono-subs-pct',  pct+'% toward YPP'+(ch.subscribers>=1000?' ✅ REACHED!':''));
+  }
+
+  // Posting heatmap
+  setEl('yt-best-day',  bt.best_day);
   setEl('yt-best-hour', bt.best_hour_label);
   buildHeatmap('yt-heatmap', bt.heatmap, bt.day_order);
-  buildMonthly('yt-monthly', bt.monthly_pattern);
 
-  // Top performers
-  buildVideoTable('perf-table-views', tp.by_views, 'views');
-  buildVideoTable('perf-table-eng', tp.by_engagement, 'engagement_rate');
-  buildVideoTable('perf-table-vel', tp.by_velocity, 'view_velocity');
-  buildVideoTable('perf-table-breakout', tp.breakouts, 'view_velocity');
+  // Charts
+  buildChartTopViews(_allVideos);
+  buildChartEngagement(_allVideos);
+  buildChartMonthly(bt.monthly_pattern);
 
-  // All videos — uses renderAllVideosTable for Deep Dive buttons
-  renderAllVideosTable(d.videos, d.content_analysis);
+  // Video table
+  renderVideoTable();
 
-  // Own channel badge + history
-  if(d.is_own_channel) {
+  // Own channel
+  if(d.is_own_channel){
     document.getElementById('yt-own-badge').style.display='block';
-    loadHistory(d.channel.id);
+    loadHistory(ch.id);
   }
 
   document.getElementById('yt-results').style.display='block';
+  showDDState('dd-empty');
+  document.getElementById('yt-results').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-// ── Load Snapshot History ────────────────────────────────────
-async function loadHistory(channelId) {
-  const resp = await fetch('/api/analytics/snapshots/'+channelId);
-  const json = await resp.json();
-  const snaps = json.snapshots||[];
-  if(!snaps.length) return;
-  const section=document.getElementById('yt-history-section');
-  section.style.display='block';
-  const cards=document.getElementById('yt-history-cards');
-  cards.innerHTML=snaps.map(s=>`
-    <div style="background:var(--bg-card-2);padding:14px 18px;border-radius:var(--radius-sm);border:1px solid var(--border);min-width:180px;">
-      <div style="font-size:10px;color:var(--text-muted);">Slot ${s.slot} ${s.slot===snaps[0].slot?'<span style=\"background:var(--accent);color:#000;padding:1px 5px;border-radius:3px;font-size:9px;\">LATEST</span>':''}</div>
-      <div style="font-size:12px;font-weight:600;margin-top:4px;">${s.channel_title}</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${s.captured_at.slice(0,16).replace('T',' ')} UTC</div>
-      ${s.data?.content_analysis?`<div style="margin-top:8px;font-size:11px;">
-        <span style="color:var(--text-muted);">Avg Views:</span> <strong>${fmt(s.data.content_analysis.avg_views)}</strong><br>
-        <span style="color:var(--text-muted);">Engagement:</span> <strong>${s.data.content_analysis.avg_engagement_rate}%</strong>
-      </div>`:''}
-    </div>
-  `).join('');
+// ══════════════════════════════════════════════════════════════
+//  Video table
+// ══════════════════════════════════════════════════════════════
+function renderVideoTable() {
+  const vids=_getFiltered();
+  let sorted;
+  if(_sortMode==='newest') sorted=[...vids].sort((a,b)=>new Date(b.published_at||0)-new Date(a.published_at||0));
+  else sorted=[...vids].sort((a,b)=>(b[_sortMode]||0)-(a[_sortMode]||0));
+  setEl('yt-video-total', vids.length+' videos');
+  document.getElementById('yt-video-tbody').innerHTML=sorted.map((v,i)=>`
+    <tr class="vrow" id="vrow-${v.id}" onclick="openDeepDive('${v.id}')">
+      <td style="padding:7px 10px;color:var(--text-muted);">${i+1}</td>
+      <td style="padding:7px 10px;max-width:260px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <img src="${v.thumbnail||''}" style="width:36px;height:24px;object-fit:cover;border-radius:2px;flex-shrink:0;">
+          <a href="https://youtube.com/watch?v=${v.id}" target="_blank"
+             style="color:var(--text);text-decoration:none;font-size:11px;"
+             onclick="event.stopPropagation()"
+             onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">${v.title}</a>
+        </div>
+      </td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.views)}</td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.likes)}</td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.comments)}</td>
+      <td style="padding:7px 10px;text-align:right;color:${v.engagement_rate>=5?'var(--accent-green)':'var(--text-secondary)'};">${v.engagement_rate}%</td>
+      <td style="padding:7px 10px;text-align:right;">${v.duration_fmt||'—'}</td>
+      <td style="padding:7px 10px;text-align:right;">${fmt(v.view_velocity)}</td>
+      <td style="padding:7px 10px;text-align:right;">${v.tag_count}</td>
+      <td style="padding:7px 10px;color:var(--text-muted);">${fmtDate(v.published_at)}</td>
+      <td style="padding:7px 10px;">
+        <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px;"
+                onclick="openDeepDive('${v.id}');event.stopPropagation()">🔍 Dive</button>
+      </td>
+    </tr>`).join('');
 }
 
-// ── Analyse Single YouTube Channel ───────────────────────────
+// ══════════════════════════════════════════════════════════════
+//  Deep Dive Panel — FIXED: AbortController + 12s timeout
+// ══════════════════════════════════════════════════════════════
+function showDDState(state) {
+  ['dd-empty','dd-loading','dd-content','dd-error'].forEach(id=>{
+    document.getElementById(id).style.display=id===state?'block':'none';
+  });
+}
+
+async function openDeepDive(videoId) {
+  // Highlight row
+  document.querySelectorAll('.vrow').forEach(r=>r.classList.remove('selected'));
+  const row=document.getElementById('vrow-'+videoId);
+  if(row) row.classList.add('selected');
+
+  // Mobile: scroll to panel
+  if(window.innerWidth<1060) document.getElementById('dd-panel').scrollIntoView({behavior:'smooth',block:'start'});
+
+  // Use cache to avoid repeat API calls
+  if(_ddCache[videoId]){ renderDiveContent(_ddCache[videoId]); return; }
+
+  // Cancel previous in-flight request
+  if(_ddAbortCtrl){ _ddAbortCtrl.abort(); }
+  _ddAbortCtrl = new AbortController();
+  showDDState('dd-loading');
+
+  // 12-second timeout
+  const timer = setTimeout(()=>{ if(_ddAbortCtrl) _ddAbortCtrl.abort(); }, 12000);
+
+  try {
+    const resp = await fetch('/api/analytics/video', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({video: videoId, channel_avg: _channelAvg}),
+      signal: _ddAbortCtrl.signal,
+    });
+    clearTimeout(timer);
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const data = await resp.json();
+    if(data.error) throw new Error(data.error);
+    _ddCache[videoId] = data;
+    renderDiveContent(data);
+  } catch(e) {
+    clearTimeout(timer);
+    const msg = e.name==='AbortError'
+      ? '⏰ Request timed out (12s). Check your API key or try again.'
+      : (e.message||'Failed to load video analytics');
+    setEl('dd-error-msg', msg);
+    showDDState('dd-error');
+  } finally {
+    _ddAbortCtrl = null;
+  }
+}
+
+function closeDivePanel() {
+  if(_ddAbortCtrl){ _ddAbortCtrl.abort(); _ddAbortCtrl=null; }
+  document.querySelectorAll('.vrow').forEach(r=>r.classList.remove('selected'));
+  showDDState('dd-empty');
+}
+
+function renderDiveContent(v) {
+  document.getElementById('dd-thumb').src = v.thumbnails?.high||v.thumbnails?.medium||'';
+  document.getElementById('dd-link').href = v.url;
+  setEl('dd-title',   v.title);
+  setEl('dd-channel', (v.channel_title||'')+'  ·  '+fmtDate(v.published_at));
+
+  const gb=document.getElementById('dd-grade-badge');
+  gb.textContent=v.performance_grade;
+  gb.className='badge '+({'A+':'badge-green','A':'badge-green','B':'badge-blue','C':'badge-gray','D':'badge-red'}[v.performance_grade]||'badge-gray');
+  document.getElementById('dd-short-badge').style.display=v.is_short?'inline-block':'none';
+  document.getElementById('dd-long-badge').style.display =v.is_short?'none':'inline-block';
+
+  setEl('dd-views',    fmt(v.views));
+  setEl('dd-likes',    fmt(v.likes));
+  setEl('dd-comments', fmt(v.comments));
+  setEl('dd-eng',      v.engagement_rate+'%');
+  setEl('dd-dur',      v.duration_fmt);
+  setEl('dd-vel',      fmt(v.view_velocity)+'/day');
+  setEl('dd-pub',      fmtDate(v.published_at));
+  setEl('dd-days',     v.days_live+' days');
+  setEl('dd-tagcount', v.tag_count);
+
+  // vs avg chart
+  const vs=document.getElementById('dd-vs-section');
+  if(v.vs_channel && Object.keys(v.vs_channel).length){
+    vs.style.display='block';
+    setTimeout(()=>buildChartVsAvg(v.vs_channel),60);
+  } else { vs.style.display='none'; }
+
+  // Keywords
+  document.getElementById('dd-keywords').innerHTML=(v.top_desc_keywords||[])
+    .map(k=>`<span style="background:var(--bg-card-2);border:1px solid var(--border);padding:3px 8px;border-radius:3px;font-size:11px;">${k.word} <span style="color:var(--text-muted);">×${k.count}</span></span>`)
+    .join('')||'<span style="color:var(--text-muted);font-size:12px;">No description keywords</span>';
+
+  // Tags
+  document.getElementById('dd-tags-full').innerHTML=(v.tags||[])
+    .map(t=>`<span style="background:rgba(255,60,172,.08);border:1px solid rgba(255,60,172,.2);padding:3px 8px;border-radius:3px;font-size:11px;">#${t}</span>`)
+    .join('')||'<span style="color:var(--text-muted);font-size:12px;">No tags used on this video</span>';
+
+  showDDState('dd-content');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Analyse YouTube Channel
+// ══════════════════════════════════════════════════════════════
 async function analyzeYouTube() {
   const input=document.getElementById('yt-input').value.trim();
-  if(!input){showToast('Enter a channel','warn');return;}
+  if(!input){ showToast('Enter a channel','warn'); return; }
   const btn=document.getElementById('yt-analyze-btn');
   btn.disabled=true; btn.textContent='⏳ Analysing…';
   document.getElementById('yt-results').style.display='none';
+  closeDivePanel();
+  _ddCache={};
   try {
     const resp=await postJSON('/api/analytics/youtube',{channel:input});
-    if(resp.error){showToast(resp.error,'error');return;}
+    if(resp.error){ showToast(resp.error,'error'); return; }
     renderYTDashboard(resp);
-    showToast('Analysis complete!','success');
-  } catch(e){showToast(e.message,'error');}
-  finally{btn.disabled=false;btn.textContent='📊 Deep Analyse';}
+    showToast('Analysis complete! '+resp.videos_analyzed+' videos analysed.','success');
+  } catch(e){ showToast(e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent='📊 Deep Analyse'; }
 }
 
-// ── Multi-Channel Comparison ─────────────────────────────────
+async function refreshChannel() {
+  const input=document.getElementById('yt-input').value.trim();
+  if(!input){ showToast('No channel loaded','warn'); return; }
+  _ddCache={};
+  await analyzeYouTube();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Multi-Channel
+// ══════════════════════════════════════════════════════════════
 async function analyzeMulti() {
   const raw=document.getElementById('yt-multi-input').value.trim();
   const channels=raw.split('\n').map(l=>l.trim()).filter(Boolean);
-  if(!channels.length){showToast('Enter at least one channel','warn');return;}
-  if(channels.length>10){showToast('Maximum 10 channels','warn');return;}
+  if(!channels.length){ showToast('Enter at least one channel','warn'); return; }
+  if(channels.length>10){ showToast('Maximum 10 channels','warn'); return; }
   const btn=document.getElementById('yt-multi-btn');
   btn.disabled=true; btn.textContent=`⏳ Analysing ${channels.length} channels…`;
   document.getElementById('multi-results').style.display='none';
   try {
     const resp=await postJSON('/api/analytics/multi',{channels});
-    if(resp.error){showToast(resp.error,'error');return;}
+    if(resp.error){ showToast(resp.error,'error'); return; }
     const results=resp.results||[];
-    const tbody=document.getElementById('multi-tbody');
-    tbody.innerHTML=results.map(r=>{
+    document.getElementById('multi-tbody').innerHTML=results.map(r=>{
       if(r.error) return `<tr><td colspan="12" style="padding:12px;color:var(--accent-red);">❌ ${r.input}: ${r.error}</td></tr>`;
       return `<tr style="border-bottom:1px solid var(--border);">
         <td style="padding:10px 12px;">
           <div style="display:flex;align-items:center;gap:8px;">
             <img src="${r.thumbnail||''}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
-            <div>
-              <div style="font-weight:600;font-size:12px;">${r.title}</div>
-              <div style="font-size:10px;color:var(--text-muted);">${r.input}</div>
-            </div>
-          </div>
-        </td>
-        <td style="padding:10px 12px;text-align:right;font-family:var(--font-mono);">${fmt(r.subscribers)}</td>
-        <td style="padding:10px 12px;text-align:right;font-family:var(--font-mono);">${fmt(r.total_views)}</td>
+            <div><div style="font-weight:600;font-size:12px;">${r.title}</div>
+            <div style="font-size:10px;color:var(--text-muted);">${r.input}</div></div>
+          </div></td>
+        <td style="padding:10px 12px;text-align:right;">${fmt(r.subscribers)}</td>
+        <td style="padding:10px 12px;text-align:right;">${fmt(r.total_views)}</td>
         <td style="padding:10px 12px;text-align:right;">${fmt(r.video_count)}</td>
         <td style="padding:10px 12px;text-align:right;">${fmt(r.avg_views)}</td>
-        <td style="padding:10px 12px;text-align:right;color:${(r.avg_engagement_rate||0)>5?'var(--accent-green)':'var(--text-secondary)'};">${r.avg_engagement_rate}%</td>
+        <td style="padding:10px 12px;text-align:right;color:${(r.avg_engagement_rate||0)>=5?'var(--accent-green)':'var(--text-secondary)'};">${r.avg_engagement_rate}%</td>
         <td style="padding:10px 12px;text-align:right;">${fmt(r.avg_view_velocity)}/day</td>
         <td style="padding:10px 12px;text-align:right;">${r.uploads_per_week}/wk</td>
         <td style="padding:10px 12px;text-align:right;">${r.avg_duration_fmt||'—'}</td>
@@ -720,200 +1067,123 @@ async function analyzeMulti() {
         <td style="padding:10px 12px;font-size:11px;">${r.best_hour_label}</td>
       </tr>`;
     }).join('');
-    document.getElementById('multi-count-badge').textContent=results.length+' channels';
+    setEl('multi-count-badge', results.length+' channels');
     document.getElementById('multi-results').style.display='block';
     showToast(`Compared ${results.length} channels!`,'success');
-  } catch(e){showToast(e.message,'error');}
-  finally{btn.disabled=false;btn.textContent='📊 Compare All Channels';}
+  } catch(e){ showToast(e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent='📊 Compare All Channels'; }
 }
 
-// ── Analyse Instagram ────────────────────────────────────────
-async function analyzeInstagram() {
-  const u=document.getElementById('ig-input').value.trim().replace('@','');
-  if(!u){showToast('Enter a username','warn');return;}
-  const btn=document.getElementById('ig-analyze-btn');
-  btn.disabled=true; btn.textContent='⏳ Analysing…';
-  document.getElementById('ig-results').style.display='none';
-  try {
-    const resp=await postJSON('/api/analytics/instagram',{username:u});
-    if(resp.error){showToast(resp.error,'error');return;}
-    const p=resp.profile, bt=resp.best_times, sm=resp.summary;
-    document.getElementById('ig-avatar').src=p.profile_pic||'';
-    setEl('ig-name',p.full_name||u);
-    setEl('ig-user',`@${p.username} · ${p.post_count} posts`);
-    setEl('ig-followers',fmt(p.followers));
-    setEl('ig-following',fmt(p.following));
-    setEl('ig-avg-eng',sm.avg_engagement_rate+'%');
-    setEl('ig-avg-likes',fmt(sm.avg_likes_per_post));
-    setEl('ig-best-day',bt.best_day);
-    setEl('ig-best-hour',bt.best_hour_label);
-    buildHeatmap('ig-heatmap',bt.heatmap,bt.day_order);
-    document.getElementById('ig-results').style.display='block';
-    showToast('Instagram analysis complete!','success');
-  } catch(e){showToast(e.message,'error');}
-  finally{btn.disabled=false;btn.textContent='📊 Analyse Profile';}
+// ══════════════════════════════════════════════════════════════
+//  Snapshot history
+// ══════════════════════════════════════════════════════════════
+async function loadHistory(channelId) {
+  const resp=await fetch('/api/analytics/snapshots/'+channelId);
+  const json=await resp.json();
+  const snaps=json.snapshots||[];
+  if(!snaps.length) return;
+  document.getElementById('yt-history-section').style.display='block';
+  document.getElementById('yt-own-badge').style.display='block';
+  buildChartSnapshots(snaps);
+  document.getElementById('yt-history-cards').innerHTML=snaps.map(s=>`
+    <div style="background:var(--bg-card-2);padding:12px 16px;border-radius:var(--radius-sm);border:1px solid var(--border);min-width:160px;">
+      <div style="font-size:10px;color:var(--text-muted);">Slot ${s.slot}
+        ${s.slot===snaps[0].slot?'<span style="background:var(--accent);color:#000;padding:1px 5px;border-radius:3px;font-size:9px;">LATEST</span>':''}
+      </div>
+      <div style="font-size:12px;font-weight:600;margin-top:4px;">${s.channel_title}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${s.captured_at.slice(0,16).replace('T',' ')} UTC</div>
+      ${s.data?.content_analysis?`<div style="margin-top:8px;font-size:11px;">
+        <span style="color:var(--text-muted);">Avg Views:</span> <strong>${fmt(s.data.content_analysis.avg_views)}</strong><br>
+        <span style="color:var(--text-muted);">Engagement:</span> <strong>${s.data.content_analysis.avg_engagement_rate}%</strong>
+      </div>`:''}
+    </div>`).join('');
 }
 
-// ── Video Table with click-to-deep-dive ──────────────────────
-let _currentChannelAvg = null;
-
-function renderAllVideosTable(videos, channel_avg) {
-  _currentChannelAvg = channel_avg;
-  const tbody=document.getElementById('yt-video-tbody');
-  setEl('yt-video-total', videos.length+' videos');
-  tbody.innerHTML=videos.map((v,i)=>`
-    <tr style="border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;" 
-        onmouseover="this.style.background='var(--bg-hover)'" 
-        onmouseout="this.style.background=''">
-      <td style="padding:7px 10px;color:var(--text-muted);">${i+1}</td>
-      <td style="padding:7px 10px;max-width:260px;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <img src="${v.thumbnail||''}" style="width:36px;height:24px;object-fit:cover;border-radius:2px;flex-shrink:0;">
-          <a href="https://youtube.com/watch?v=${v.id}" target="_blank" style="color:var(--text);text-decoration:none;font-size:11px;" onclick="event.stopPropagation()" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">${v.title}</a>
-        </div>
-      </td>
-      <td style="padding:7px 10px;text-align:right;">${fmt(v.views)}</td>
-      <td style="padding:7px 10px;text-align:right;">${fmt(v.likes)}</td>
-      <td style="padding:7px 10px;text-align:right;">${fmt(v.comments)}</td>
-      <td style="padding:7px 10px;text-align:right;color:${v.engagement_rate>5?'var(--accent-green)':'var(--text-secondary)'};"> ${v.engagement_rate}%</td>
-      <td style="padding:7px 10px;text-align:right;">${v.duration_fmt||'—'}</td>
-      <td style="padding:7px 10px;text-align:right;">${fmt(v.view_velocity)}</td>
-      <td style="padding:7px 10px;text-align:right;">${v.tag_count}</td>
-      <td style="padding:7px 10px;color:var(--text-muted);">${fmtDate(v.published_at)}</td>
-      <td style="padding:7px 10px;">
-        <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px;" onclick="openVideoModal('${v.id}', event)">🔍 Deep Dive</button>
-      </td>
-    </tr>
-  `).join('');
-}
-
-// ── Video Deep-Dive Modal ─────────────────────────────────────
-async function openVideoModal(videoId, event) {
-  if(event) event.stopPropagation();
-  const modal=document.getElementById('video-modal');
-  modal.style.display='block';
-  document.body.style.overflow='hidden';
-  // Show loading state
-  document.getElementById('vm-title').textContent='⏳ Loading deep analysis…';
-  document.getElementById('vm-thumb').src='';
-  try {
-    const resp=await postJSON('/api/analytics/video',{
-      video: videoId,
-      channel_avg: _currentChannelAvg
-    });
-    if(resp.error){showToast(resp.error,'error');closeVideoModal();return;}
-    renderVideoModal(resp);
-  } catch(e){showToast(e.message,'error');closeVideoModal();}
-}
-
-function closeVideoModal() {
-  document.getElementById('video-modal').style.display='none';
-  document.body.style.overflow='';
-}
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeVideoModal(); });
-
-function renderVideoModal(v) {
-  document.getElementById('vm-thumb').src=v.thumbnails?.high||v.thumbnails?.medium||'';
-  document.getElementById('vm-link').href=v.url;
-  setEl('vm-title', v.title);
-  setEl('vm-channel', v.channel_title+' · '+fmtDate(v.published_at));
-  // Grade badge
-  const gb=document.getElementById('vm-grade-badge');
-  gb.textContent=v.performance_grade;
-  const gradeColors={'A+':'badge-green','A':'badge-green','B':'badge-blue','C':'badge-gray','D':'badge-red'};
-  gb.className='badge '+(gradeColors[v.performance_grade]||'badge-gray');
-  // Short/Long
-  document.getElementById('vm-short-badge').style.display=v.is_short?'inline-block':'none';
-  document.getElementById('vm-long-badge').style.display=v.is_short?'none':'inline-block';
-  // Stats
-  setEl('vm-views',fmt(v.views));
-  setEl('vm-likes',fmt(v.likes));
-  setEl('vm-comments',fmt(v.comments));
-  setEl('vm-eng',v.engagement_rate+'%');
-  setEl('vm-dur',v.duration_fmt);
-  setEl('vm-vel',fmt(v.view_velocity)+'/day');
-  setEl('vm-pub',fmtDate(v.published_at));
-  setEl('vm-days',v.days_live+' days');
-  setEl('vm-likeratio',v.like_ratio+'%');
-  setEl('vm-tagcount',v.tag_count);
-  setEl('vm-hour',v.publish_hour_utc!=null?`${String(v.publish_hour_utc).padStart(2,'0')}:00 UTC (${v.publish_day})`:'—');
-  setEl('vm-desclen',v.description_length+' chars');
-  // vs channel
-  const vsSection=document.getElementById('vm-vs-section');
-  const vsRow=document.getElementById('vm-vs-row');
-  if(v.vs_channel && Object.keys(v.vs_channel).length) {
-    vsSection.style.display='block';
-    const labels={'views_vs_avg':'Views','likes_vs_avg':'Likes','comments_vs_avg':'Comments','eng_vs_avg':'Engagement','velocity_vs_avg':'Velocity'};
-    vsRow.innerHTML=Object.entries(v.vs_channel).map(([k,pct])=>{
-      if(pct==null) return '';
-      const pos=pct>=0;
-      return `<div style="background:${pos?'rgba(0,212,168,.08)':'rgba(255,65,65,.08)'};border:1px solid ${pos?'rgba(0,212,168,.25)':'rgba(255,65,65,.25)'};padding:8px 12px;border-radius:var(--radius-sm);text-align:center;">
-        <div style="font-size:10px;color:var(--text-muted);">${labels[k]||k}</div>
-        <div style="font-size:15px;font-weight:700;color:${pos?'var(--accent-green)':'var(--accent-red)'}">${pos?'+':''}${pct}%</div>
-      </div>`;
-    }).join('');
-  } else {
-    vsSection.style.display='none';
-  }
-  // Keywords
-  const kw=document.getElementById('vm-keywords');
-  kw.innerHTML=(v.top_desc_keywords||[]).map(k=>`<span style="background:var(--bg-card-2);border:1px solid var(--border);padding:3px 8px;border-radius:3px;font-size:11px;">${k.word} <span style="color:var(--text-muted);">×${k.count}</span></span>`).join('');
-  // Tags
-  const tf=document.getElementById('vm-tags-full');
-  tf.innerHTML=(v.tags||[]).map(t=>`<span style="background:rgba(255,60,172,.08);border:1px solid rgba(255,60,172,.2);padding:3px 8px;border-radius:3px;font-size:11px;">#${t}</span>`).join('')||(v.tag_count===0?'<span style="color:var(--text-muted);font-size:12px;">No tags used</span>':'');
-}
-
-// ── Trending ─────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+//  Trending
+// ══════════════════════════════════════════════════════════════
 async function loadTrending(window) {
   ['day','week','month'].forEach(w=>{
     const b=document.getElementById('win-'+w+'-btn');
-    b.classList.toggle('active',w===window);
-    b.style.background=w===window?'var(--bg-card)':'transparent';
-    b.style.border=w===window?'1px solid var(--border)':'none';
+    if(b){ b.classList.toggle('active',w===window); b.style.background=w===window?'var(--bg-card)':'transparent'; b.style.border=w===window?'1px solid var(--border)':'none'; }
   });
   const region=document.getElementById('trend-region').value;
   const category=document.getElementById('trend-category').value;
   document.getElementById('trending-results').style.display='none';
-  try{
+  try {
     const resp=await postJSON('/api/analytics/trending',{window,region,category});
-    if(resp.error){showToast(resp.error,'error');return;}
-    renderTrending(resp, window, region);
-  } catch(e){showToast(e.message,'error');}
+    if(resp.error){ showToast(resp.error,'error'); return; }
+    const wl={day:'Today',week:'This Week',month:'This Month'};
+    setEl('trend-region-label',region); setEl('trend-window-label',wl[window]||window);
+    setEl('trend-shorts-count',resp.shorts.length); setEl('trend-long-count',resp.long_form.length);
+    document.getElementById('trend-shorts-badge').textContent=resp.shorts.length;
+    document.getElementById('trend-long-badge').textContent=resp.long_form.length;
+    document.getElementById('trend-shorts-tbody').innerHTML=resp.shorts.map(buildTrendRow).join('');
+    document.getElementById('trend-long-tbody').innerHTML=resp.long_form.map(buildTrendRow).join('');
+    document.getElementById('trending-results').style.display='block';
+    showToast(`Loaded ${resp.total} trending videos!`,'success');
+  } catch(e){ showToast(e.message,'error'); }
 }
 
-function buildTrendRow(v, i) {
+function buildTrendRow(v,i){
   return `<tr style="border-bottom:1px solid var(--border);">
     <td style="padding:7px 10px;color:var(--text-muted);">${i+1}</td>
     <td style="padding:7px 10px;max-width:280px;">
       <div style="display:flex;align-items:center;gap:8px;">
         <img src="${v.thumbnail||''}" style="width:38px;height:26px;object-fit:cover;border-radius:2px;flex-shrink:0;">
-        <a href="${v.url}" target="_blank" style="color:var(--text);text-decoration:none;font-size:11px;line-height:1.4;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">${v.title}</a>
-      </div>
-    </td>
+        <a href="${v.url}" target="_blank" style="color:var(--text);text-decoration:none;font-size:11px;line-height:1.4;"
+           onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">${v.title}</a>
+      </div></td>
     <td style="padding:7px 10px;text-align:right;">${fmt(v.views)}</td>
-    <td style="padding:7px 10px;text-align:right;color:${v.engagement_rate>5?'var(--accent-green)':'var(--text-secondary)'}">${v.engagement_rate}%</td>
+    <td style="padding:7px 10px;text-align:right;color:${v.engagement_rate>=5?'var(--accent-green)':'var(--text-secondary)'};">${v.engagement_rate}%</td>
     <td style="padding:7px 10px;text-align:right;">${v.duration_fmt}</td>
     <td style="padding:7px 10px;text-align:right;">${fmt(v.view_velocity)}/day</td>
     <td style="padding:7px 10px;max-width:130px;"><a href="https://youtube.com/channel/${v.channel_id}" target="_blank" style="color:var(--text-muted);text-decoration:none;font-size:11px;">${v.channel_title}</a></td>
     <td style="padding:7px 10px;color:var(--text-muted);">${fmtDate(v.published_at)}</td>
     <td style="padding:7px 10px;">
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px;" onclick="openVideoModal('${v.id}', event)">🔍 Deep Dive</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px;" onclick="openTrendDive('${v.id}')">🔍 Deep Dive</button>
     </td>
   </tr>`;
 }
 
-function renderTrending(d, window, region) {
-  const winLabels={day:'Today',week:'This Week',month:'This Month'};
-  setEl('trend-region-label', region);
-  setEl('trend-window-label', winLabels[window]||window);
-  setEl('trend-shorts-count', d.shorts.length);
-  setEl('trend-long-count', d.long_form.length);
-  document.getElementById('trend-shorts-badge').textContent=d.shorts.length;
-  document.getElementById('trend-long-badge').textContent=d.long_form.length;
-  document.getElementById('trend-shorts-tbody').innerHTML=d.shorts.map(buildTrendRow).join('');
-  document.getElementById('trend-long-tbody').innerHTML=d.long_form.map(buildTrendRow).join('');
-  document.getElementById('trending-results').style.display='block';
-  showToast(`Loaded ${d.total} trending videos!`,'success');
+async function openTrendDive(videoId) {
+  if(_ddCache[videoId]){ alert(`${_ddCache[videoId].title}\nViews: ${fmt(_ddCache[videoId].views)} | Engagement: ${_ddCache[videoId].engagement_rate}% | Grade: ${_ddCache[videoId].performance_grade}`); return; }
+  showToast('⏳ Loading video analytics…','info');
+  try {
+    const ctrl=new AbortController();
+    setTimeout(()=>ctrl.abort(),12000);
+    const resp=await fetch('/api/analytics/video',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({video:videoId}),signal:ctrl.signal});
+    const data=await resp.json();
+    if(data.error){ showToast(data.error,'error'); return; }
+    _ddCache[videoId]=data;
+    showToast(`${data.title} · ${fmt(data.views)} views · Grade: ${data.performance_grade}`,'success');
+  } catch(e){ showToast(e.name==='AbortError'?'Request timed out':e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Instagram
+// ══════════════════════════════════════════════════════════════
+async function analyzeInstagram() {
+  const u=document.getElementById('ig-input').value.trim().replace('@','');
+  if(!u){ showToast('Enter a username','warn'); return; }
+  const btn=document.getElementById('ig-analyze-btn');
+  btn.disabled=true; btn.textContent='⏳ Analysing…';
+  document.getElementById('ig-results').style.display='none';
+  try {
+    const resp=await postJSON('/api/analytics/instagram',{username:u});
+    if(resp.error){ showToast(resp.error,'error'); return; }
+    const p=resp.profile, bt=resp.best_times, sm=resp.summary;
+    document.getElementById('ig-avatar').src=p.profile_pic||'';
+    setEl('ig-name',p.full_name||u);
+    setEl('ig-user',`@${p.username} · ${p.post_count} posts`);
+    setEl('ig-followers',fmt(p.followers)); setEl('ig-following',fmt(p.following));
+    setEl('ig-avg-eng',sm.avg_engagement_rate+'%'); setEl('ig-avg-likes',fmt(sm.avg_likes_per_post));
+    setEl('ig-best-day',bt.best_day); setEl('ig-best-hour',bt.best_hour_label);
+    buildHeatmap('ig-heatmap',bt.heatmap,bt.day_order);
+    document.getElementById('ig-results').style.display='block';
+    showToast('Instagram analysis complete!','success');
+  } catch(e){ showToast(e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent='📊 Analyse Profile'; }
 }
 </script>
 {% endblock %}
