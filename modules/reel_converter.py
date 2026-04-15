@@ -217,25 +217,28 @@ def encode_part(input_path: str, output_path: str,
             base_bottom_px = int(REEL_H / 3.0)
         if output_size != 'instagram' and base_bottom_px <= 0:
             base_bottom_px = int(REEL_H * 0.16)
-        overlay_target_h = max(2, int(base_bottom_px * (comp_pct / 100.0)))
-        overlay_target_w = int(REEL_W * 0.96) if output_size == 'instagram' else int(REEL_W * 0.92)
         if output_size == 'instagram':
+            container_w = REEL_W
+            container_h = max(2, int(base_bottom_px * (comp_pct / 100.0)))
             overlay_y = f"'H-{base_bottom_px}+(({base_bottom_px}-h)/2)'"
         else:
+            # Keep old behavior for "original" outputs, but avoid hard-coding side margins.
+            # This makes overlay sizing follow the input/output frame width instead of 1080.
+            probe = probe_video(input_path)
+            container_w = max(2, int(probe.get('width', REEL_W) * 0.92))
+            container_h = max(2, int(base_bottom_px * (comp_pct / 100.0)))
             overlay_y = "'H-h-40'"
         cmd += [
             '-loop', '1', '-i', overlay,
             '-filter_complex',
             (
                 f"[0:v]{base_expr}[base];"
-                f"[1:v]format=rgba[ovsrc];"
-                f"[ovsrc][base]scale2ref="
-                f"w='{overlay_target_w}*{zoom:.4f}':"
-                f"h='{overlay_target_h}*{zoom:.4f}':"
-                f"force_original_aspect_ratio=decrease[ovfit][base2];"
-                f"[ovfit]crop=w='min(iw,{overlay_target_w})':h='min(ih,{overlay_target_h})':"
+                f"[1:v]format=rgba,"
+                f"scale=w={container_w}:h={container_h}:force_original_aspect_ratio=decrease,"
+                f"scale=w=iw*{zoom:.4f}:h=ih*{zoom:.4f}[ovzoom];"
+                f"[ovzoom]crop=w='min(iw,{container_w})':h='min(ih,{container_h})':"
                 f"x='(iw-ow)/2':y='(ih-oh)/2'[ov];"
-                f"[base2][ov]overlay=x='(W-w)/2':y={overlay_y}:shortest=1[vout]"
+                f"[base][ov]overlay=x='(W-w)/2':y={overlay_y}:shortest=1[vout]"
             ),
             '-map', '[vout]', '-map', '0:a?'
         ]

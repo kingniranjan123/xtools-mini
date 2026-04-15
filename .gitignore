@@ -7,3 +7,4 @@ __pycache__/
 .env
 _rate_state.json
 .vscode/
+ig_session_*.json
