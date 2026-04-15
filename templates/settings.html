@@ -220,6 +220,17 @@
   </div>
   <div class="card-body">
     <div class="form-group">
+      <label class="form-label">Primary Root Folder (inside this project)</label>
+      <div style="display:flex; gap:8px;">
+        <input class="form-input mono" id="root-dir" type="text"
+          placeholder="Default: project root folder"
+          value="{{ settings.root_dir or '' }}" style="flex:1;" />
+        <button class="btn btn-secondary" type="button" onclick="pickRootFolder()">Browse</button>
+      </div>
+      <div class="form-hint">Set one root folder and generate all internal subfolders automatically.</div>
+    </div>
+
+    <div class="form-group">
       <label class="form-label">Instagram Downloads Folder</label>
       <input class="form-input mono" id="dir-ig" type="text"
         placeholder="Default: nikethan/downloads/instagram"
@@ -233,9 +244,24 @@
         value="{{ settings.dir_yt or '' }}" />
       <div class="form-hint">Where YouTube Videos & Audio will be saved. Leave blank for default.</div>
     </div>
-    <button class="btn btn-primary" onclick="saveDirectories()">
+
+    <div class="form-group">
+      <label class="form-label">Folder Tree</label>
+      <pre id="folder-tree-preview" style="margin:0; padding:12px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-card-2); color:var(--text-secondary); max-height:220px; overflow:auto; font-family:var(--font-mono); font-size:12px;">{{ settings.folder_tree or '' }}</pre>
+      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+        <button class="btn btn-secondary" type="button" onclick="openRootFolder()">📂 Open Folder</button>
+        <button class="btn btn-ghost" type="button" onclick="copyFolderTree()">📋 Copy Folder Structure</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn btn-primary" type="button" onclick="setupRootFolder()">
+        🏗 Setup Root + Create Subfolders
+      </button>
+      <button class="btn btn-primary" onclick="saveDirectories()">
       💾 Save Directories
-    </button>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1151,6 +1177,7 @@ async function saveRateLimits() {
 
 async function saveDirectories() {
   const resp = await postJSON('/api/settings/directories/save', {
+    root_dir: document.getElementById('root-dir').value.trim(),
     dir_ig: document.getElementById('dir-ig').value.trim(),
     dir_yt: document.getElementById('dir-yt').value.trim(),
   });
@@ -1158,11 +1185,85 @@ async function saveDirectories() {
   else showToast(resp.error || 'Failed', 'error');
 }
 
+async function pickRootFolder() {
+  try {
+    const resp = await fetch('/api/utils/pick-folder');
+    const data = await resp.json();
+    if (data.folder !== undefined) {
+      document.getElementById('root-dir').value = data.folder || '';
+    } else {
+      showToast(data.error || 'Could not pick folder', 'error');
+    }
+  } catch (e) {
+    showToast('Folder picker failed', 'error');
+  }
+}
+
+function renderFolderTree(treeText) {
+  const el = document.getElementById('folder-tree-preview');
+  if (el) el.textContent = treeText || '';
+}
+
+async function setupRootFolder() {
+  const rootDir = document.getElementById('root-dir').value.trim();
+  const resp = await postJSON('/api/settings/root/setup', { root_dir: rootDir });
+  if (!resp.ok) {
+    showToast(resp.error || 'Failed to setup root folder', 'error');
+    return;
+  }
+  if (resp.effective_dirs) {
+    if (resp.effective_dirs.dir_ig) document.getElementById('dir-ig').value = resp.effective_dirs.dir_ig;
+    if (resp.effective_dirs.dir_yt) document.getElementById('dir-yt').value = resp.effective_dirs.dir_yt;
+  }
+  if (resp.root_dir) document.getElementById('root-dir').value = resp.root_dir;
+  renderFolderTree(resp.tree || '');
+  const created = (resp.created_paths || []).length;
+  showToast(`Root folder ready. ${created} folder(s) created.`, 'success');
+}
+
+async function openRootFolder() {
+  const rootDir = document.getElementById('root-dir').value.trim();
+  const resp = await postJSON('/api/utils/open-folder', { path: rootDir });
+  if (resp.ok) showToast('Opened folder in file manager', 'success');
+  else showToast(resp.error || 'Could not open folder', 'error');
+}
+
+async function copyFolderTree() {
+  const text = document.getElementById('folder-tree-preview')?.textContent || '';
+  if (!text.trim()) {
+    showToast('Folder tree is empty', 'error');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('Folder structure copied', 'success');
+  } catch (e) {
+    showToast('Clipboard copy failed', 'error');
+  }
+}
+
+async function refreshFolderTree() {
+  try {
+    const resp = await fetch('/api/settings/root/tree');
+    const data = await resp.json();
+    if (resp.ok && data.ok) {
+      if (data.root_dir && !document.getElementById('root-dir').value.trim()) {
+        document.getElementById('root-dir').value = data.root_dir;
+      }
+      renderFolderTree(data.tree || '');
+    }
+  } catch (e) {}
+}
+
 async function saveAllSettings() {
   await saveDirectories();
   await saveWatermarkSettings();
   await saveRateLimits();
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+  refreshFolderTree();
+});
 
 // ── System Dependencies API ──────────────────────────────
 async function fetchSystemStatus() {
