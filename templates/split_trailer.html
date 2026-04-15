@@ -97,6 +97,20 @@
           </label>
         </div>
 
+        <!-- Output format -->
+        <div style="padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-card-2); margin-bottom:12px;">
+          <div style="font-size:13px; font-weight:600; margin-bottom:8px;">Output Format</div>
+          <label style="display:flex; gap:8px; align-items:flex-start; margin-bottom:6px; cursor:pointer;">
+            <input type="radio" name="tr-output-format" value="original" checked style="accent-color:var(--accent); margin-top:2px;" onchange="updatePreview()">
+            <span style="font-size:12px;">Original (keep source dimensions)</span>
+          </label>
+          <label style="display:flex; gap:8px; align-items:flex-start; cursor:pointer;">
+            <input type="radio" name="tr-output-format" value="instagram" style="accent-color:var(--accent); margin-top:2px;" onchange="updatePreview()">
+            <span style="font-size:12px;">Instagram 9:16 (1080×1920 letterbox)</span>
+          </label>
+          <div class="form-hint" style="margin-top:8px;">Instagram mode re-encodes each extracted clip for vertical posting.</div>
+        </div>
+
         <!-- CUDA toggle -->
         <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-card-2); margin-bottom:16px;">
           <div>
@@ -210,6 +224,7 @@ function updatePreview() {
   const clips   = getClips().filter(c => c.from && c.to);
   const concat  = document.getElementById('tr-concat').checked;
   const useCuda = document.getElementById('tr-cuda').checked;
+  const outputFormat = document.querySelector('input[name="tr-output-format"]:checked')?.value || 'original';
   const hw      = useCuda ? '-hwaccel cuda ' : '';
   const codec   = useCuda ? 'h264_nvenc' : 'libx264';
 
@@ -221,11 +236,16 @@ function updatePreview() {
   sumEl.style.display = 'block';
   sumTxt.innerHTML = clips.map((c, i) =>
     `<div><strong style="color:var(--accent-blue);">Clip ${i+1}</strong> · ${c.from} → ${c.to}${c.label && c.label !== 'clip_' + (i+1) ? ' <em style="color:var(--text-muted);">(' + c.label + ')</em>' : ''}</div>`
-  ).join('') + (concat ? '<div style="margin-top:6px; color:var(--accent-green);">→ Concatenating all clips into <strong>trailer.mp4</strong></div>' : '');
+  ).join('')
+    + `<div style="margin-top:6px;">Output format: <strong>${outputFormat === 'instagram' ? 'Instagram 9:16' : 'Original'}</strong></div>`
+    + (concat ? '<div style="margin-top:6px; color:var(--accent-green);">→ Concatenating all clips into <strong>trailer.mp4</strong></div>' : '');
 
   // FFmpeg preview
+  const vfPart = outputFormat === 'instagram'
+    ? '\n  -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1"'
+    : '';
   const cmds = clips.map((c, i) =>
-    `# Clip ${i + 1}: ${c.label}\nffmpeg ${hw}-ss ${c.from} -to ${c.to} -i "input.mp4" \\\n  -c:v ${codec} -c:a aac "clip_${String(i+1).padStart(3,'0')}.mp4"`
+    `# Clip ${i + 1}: ${c.label}\nffmpeg ${hw}-ss ${c.from} -to ${c.to} -i "input.mp4" \\\n  -c:v ${codec}${vfPart} \\\n  -c:a aac "clip_${String(i+1).padStart(3,'0')}.mp4"`
   ).join('\n\n');
   const concatCmd = concat ? `\n\n# Concatenate\nffmpeg -f concat -safe 0 -i filelist.txt -c copy "trailer.mp4"` : '';
   document.getElementById('tr-ffmpeg-preview').textContent = cmds + concatCmd;
@@ -244,6 +264,7 @@ async function startTrailer() {
   fd.append('clips', JSON.stringify(clips));
   fd.append('concat', document.getElementById('tr-concat').checked ? '1' : '0');
   fd.append('use_cuda', document.getElementById('tr-cuda').checked ? '1' : '0');
+  fd.append('output_format', document.querySelector('input[name="tr-output-format"]:checked')?.value || 'original');
 
   document.getElementById('tr-run-btn').disabled = true;
   document.getElementById('tr-run-btn').textContent = 'Extracting…';
