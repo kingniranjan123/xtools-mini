@@ -2262,7 +2262,7 @@ def api_youtube_reel_convert():
     output_size   = data.get('output_size', 'instagram')  # 'instagram' | 'original'
     overlay_image_path = (data.get('overlay_image_path') or '').strip()
     overlay_image_zoom = float(data.get('overlay_image_zoom', 1.0) or 1.0)
-    overlay_image_comp_pct = float(data.get('overlay_image_comp_pct', 100.0) or 100.0)
+    overlay_image_comp_pct = max(1.0, min(100.0, float(data.get('overlay_image_comp_pct', 100.0) or 100.0)))
     delete_source = bool(data.get('delete_source', False))
 
     if not url:
@@ -2371,7 +2371,7 @@ def api_youtube_reel_convert_local():
     output_size   = data.get('output_size', 'instagram')  # 'instagram' | 'original'
     overlay_image_path = (data.get('overlay_image_path') or '').strip()
     overlay_image_zoom = float(data.get('overlay_image_zoom', 1.0) or 1.0)
-    overlay_image_comp_pct = float(data.get('overlay_image_comp_pct', 100.0) or 100.0)
+    overlay_image_comp_pct = max(1.0, min(100.0, float(data.get('overlay_image_comp_pct', 100.0) or 100.0)))
     delete_source = bool(data.get('delete_source', False))
 
     job_id = str(uuid.uuid4())
