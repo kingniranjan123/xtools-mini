@@ -79,6 +79,10 @@
                 <input type="checkbox" id="dl-opt-parts" name="opt_parts">
                 Overlay sequence numbers (e.g., <strong>PART - 1</strong>)
              </label>
+             <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="dl-delete-source" name="delete_source">
+                Delete <strong>source video</strong> after successful split/conversion
+             </label>
           </div>
           
           <button type="submit" class="btn btn-primary btn-full btn-lg" id="dl-btn">↓ Start Download</button>
@@ -243,6 +247,10 @@
               <input type="checkbox" id="uid-opt-parts">
               Overlay sequence numbers (e.g., <strong>PART - 1</strong>)
            </label>
+           <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" id="uid-delete-source">
+              Delete <strong>source video</strong> after successful split/conversion
+           </label>
         </div>
 
         <button class="btn btn-primary btn-full btn-lg" id="uid-dl-btn" onclick="startUserIDDownload()">
@@ -308,6 +316,7 @@ document.getElementById('download-form').addEventListener('submit', async functi
   const optWatermark = document.getElementById('dl-opt-watermark').checked;
   const optSplit     = document.getElementById('dl-opt-split').checked;
   const optParts     = document.getElementById('dl-opt-parts').checked;
+  const deleteSource = document.getElementById('dl-delete-source').checked;
 
   document.getElementById('progress-card').style.display = 'block';
   document.getElementById('results-card').style.display = 'none';
@@ -318,7 +327,8 @@ document.getElementById('download-form').addEventListener('submit', async functi
 
   const resp = await postJSON('/api/download', { 
       urls: urls, quality: quality, output_dir: outDir,
-      opt_watermark: optWatermark, opt_split: optSplit, opt_parts: optParts
+      opt_watermark: optWatermark, opt_split: optSplit, opt_parts: optParts,
+      delete_source: deleteSource
   });
 
   if (!resp.job_id) {
@@ -448,6 +458,7 @@ async function startUserIDDownload() {
   const optWatermark = document.getElementById('uid-opt-watermark').checked;
   const optSplit     = document.getElementById('uid-opt-split').checked;
   const optParts     = document.getElementById('uid-opt-parts').checked;
+  const deleteSource = document.getElementById('uid-delete-source').checked;
 
   document.getElementById('uid-progress-card').style.display = 'block';
   document.getElementById('uid-results-card').style.display  = 'none';
@@ -458,7 +469,8 @@ async function startUserIDDownload() {
 
   const resp = await postJSON('/api/download/userid', { 
       username, quality, output_dir: outDir,
-      opt_watermark: optWatermark, opt_split: optSplit, opt_parts: optParts
+      opt_watermark: optWatermark, opt_split: optSplit, opt_parts: optParts,
+      delete_source: deleteSource
   });
 
   if (!resp.job_id) {

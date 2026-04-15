@@ -98,6 +98,11 @@
           </div>
         </div>
 
+        <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:14px;cursor:pointer;">
+          <input type="checkbox" id="eq-delete-source" style="accent-color:var(--accent);">
+          <span style="font-size:12px;">Delete uploaded source file after successful split</span>
+        </label>
+
         <button class="btn btn-primary btn-full btn-lg" id="eq-split-btn" onclick="startEqualSplit()" disabled>
           ⊟ Split Video
         </button>
@@ -230,6 +235,7 @@ async function startEqualSplit() {
   fd.append('use_cuda', document.getElementById('eq-cuda').checked ? '1' : '0');
   const fmt = document.querySelector('input[name="output_format"]:checked');
   fd.append('output_format', fmt ? fmt.value : 'original');
+  fd.append('delete_source', document.getElementById('eq-delete-source').checked ? '1' : '0');
 
   document.getElementById('eq-split-btn').disabled = true;
   document.getElementById('eq-split-btn').textContent = 'Splitting…';
