@@ -190,13 +190,28 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
 
 def encode_part(input_path: str, output_path: str,
                 start_sec: float, duration_sec: float,
-                vf: str, progress_cb=None) -> bool:
-    cmd = [
-        FFMPEG, '-y',
-        '-ss', str(start_sec),
-        '-t',  str(duration_sec),
-        '-i',  input_path,
-        '-vf', vf,
+                vf: str, overlay_image_path: str = '', overlay_image_zoom: float = 1.0,
+                progress_cb=None) -> bool:
+    overlay = (overlay_image_path or '').strip()
+    zoom = max(0.2, min(3.0, float(overlay_image_zoom or 1.0)))
+    cmd = [FFMPEG, '-y', '-ss', str(start_sec), '-t', str(duration_sec), '-i', input_path]
+    if overlay and os.path.isfile(overlay):
+        base_expr = vf if vf and vf != 'copy' else 'null'
+        cmd += [
+            '-loop', '1', '-i', overlay,
+            '-filter_complex',
+            (
+                f"[0:v]{base_expr}[base];"
+                f"[1:v]format=rgba,"
+                f"scale='min(iw,W-80)':'min(ih,H*0.22)':force_original_aspect_ratio=decrease,"
+                f"scale='trunc(iw*{zoom:.3f}/2)*2':'trunc(ih*{zoom:.3f}/2)*2'[ov];"
+                f"[base][ov]overlay=x='(W-w)/2':y='H*0.74 + ((H*0.26)-h)/2':shortest=1[vout]"
+            ),
+            '-map', '[vout]', '-map', '0:a?'
+        ]
+    else:
+        cmd += ['-vf', vf]
+    cmd += [
         '-c:v', 'libx264',
         '-preset', 'fast',
         '-crf', '23',
@@ -239,6 +254,8 @@ def convert_to_reels(
     title_pos_pct: float = 20.0,
     part_pos_pct: float = 82.0,
     output_size: str  = 'instagram',   # 'instagram' | 'original'
+    overlay_image_path: str = '',
+    overlay_image_zoom: float = 1.0,
     # Optional: clip a specific range before splitting
     clip_start_sec: float = 0.0,
     clip_end_sec:   float = 0.0,   # 0 = full video
@@ -300,7 +317,12 @@ def convert_to_reels(
         if progress_cb:
             progress_cb(f'🎬 Encoding Part {part_num}/{num_parts} → {out_name}')
 
-        ok = encode_part(input_path, out_path, seg_start, seg_dur, vf, progress_cb)
+        ok = encode_part(
+            input_path, out_path, seg_start, seg_dur, vf,
+            overlay_image_path=overlay_image_path,
+            overlay_image_zoom=overlay_image_zoom,
+            progress_cb=progress_cb
+        )
         if ok:
             parts.append(out_path)
             if progress_cb:

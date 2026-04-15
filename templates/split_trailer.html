@@ -136,6 +136,10 @@
           <div style="font-size:12px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:8px;">Extraction Plan</div>
           <div id="tr-summary-text" style="font-size:13px; line-height:1.8;"></div>
         </div>
+        <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:12px;cursor:pointer;">
+          <input type="checkbox" id="tr-delete-source" style="accent-color:var(--accent);">
+          <span style="font-size:12px;">Delete uploaded source file after successful extraction</span>
+        </label>
 
         <button class="btn btn-primary btn-full btn-lg" id="tr-run-btn" onclick="startTrailer()" disabled>
           ▷ Extract Clips
@@ -265,6 +269,7 @@ async function startTrailer() {
   fd.append('concat', document.getElementById('tr-concat').checked ? '1' : '0');
   fd.append('use_cuda', document.getElementById('tr-cuda').checked ? '1' : '0');
   fd.append('output_format', document.querySelector('input[name="tr-output-format"]:checked')?.value || 'original');
+  fd.append('delete_source', document.getElementById('tr-delete-source').checked ? '1' : '0');
 
   document.getElementById('tr-run-btn').disabled = true;
   document.getElementById('tr-run-btn').textContent = 'Extracting…';

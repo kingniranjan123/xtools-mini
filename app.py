@@ -303,9 +303,6 @@ def post_page():
     if not session.get('logged_in'): return redirect(url_for('login'))
     db = get_db()
     accounts = [dict(r) for r in db.execute('SELECT * FROM poster_accounts ORDER BY id').fetchall()]
-    for a in accounts:
-        if a.get('password'):
-            a['password'] = '********'
     return render_template('post.html', accounts=accounts)
 
 
@@ -1170,6 +1167,27 @@ def _finish(job, message, **extra):
     job['events'].append(('done', job['result']))
     job['done'] = True
 
+def _safe_remove_source(path: str, generated_paths=None) -> tuple[bool, str]:
+    """Delete source file only after successful generated outputs exist."""
+    try:
+        if not path:
+            return False, 'No source path provided'
+        real_src = os.path.realpath(path)
+        if not os.path.isfile(real_src):
+            return False, 'Source file already missing'
+        outputs = []
+        for p in (generated_paths or []):
+            if p and os.path.isfile(p):
+                outputs.append(os.path.realpath(p))
+        if not outputs:
+            return False, 'No generated outputs found; source retained'
+        if any(op == real_src for op in outputs):
+            return False, 'Generated output matches source; source retained'
+        os.remove(real_src)
+        return True, f'Deleted source file: {os.path.basename(real_src)}'
+    except Exception as e:
+        return False, f'Could not delete source file: {e}'
+
 @app.route('/api/download', methods=['POST'])
 def api_download():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
@@ -1180,6 +1198,7 @@ def api_download():
     opt_watermark = data.get('opt_watermark', False)
     opt_split     = data.get('opt_split', False)
     opt_parts     = data.get('opt_parts', False)
+    delete_source = bool(data.get('delete_source', False))
     if not urls:
         return jsonify({'error': 'No URLs provided'}), 400
 
@@ -1222,6 +1241,9 @@ def api_download():
                     )
                     for ff in final_files:
                         pipeline_results.append({'status': 'ok', 'path': ff, 'file_path': ff})
+                    if delete_source:
+                        deleted, msg = _safe_remove_source(fp, final_files)
+                        _emit(job, ('🧹 ' if deleted else '⚠ ') + msg)
             results = pipeline_results if pipeline_results else results
 
         _finish(job, f'Downloaded {len(results)} reel(s)', results=results)
@@ -2078,6 +2100,7 @@ def api_split_equal():
     n             = int(request.form.get('n', 30))
     use_cuda      = request.form.get('use_cuda', '0') == '1'
     output_format = request.form.get('output_format', 'original')  # 'original' | 'instagram'
+    delete_source = request.form.get('delete_source', '0') == '1'
 
     if not video: return jsonify({'error': 'No video'}), 400
 
@@ -2100,6 +2123,9 @@ def api_split_equal():
             output_format=output_format,
             progress_cb=lambda line, pct=None: _emit(job, line, pct),
         )
+        if delete_source:
+            deleted, msg = _safe_remove_source(tmp_path, files)
+            _emit(job, ('🧹 ' if deleted else '⚠ ') + msg)
         _finish(job, f'Created {len(files)} segments', files=[{'name': os.path.basename(f)} for f in files])
 
     threading.Thread(target=run, daemon=True).start()
@@ -2113,6 +2139,7 @@ def api_split_trailer():
     concat   = request.form.get('concat', '0') == '1'
     use_cuda = request.form.get('use_cuda', '0') == '1'
     output_format = (request.form.get('output_format', 'original') or 'original').strip().lower()
+    delete_source = request.form.get('delete_source', '0') == '1'
 
     if not video:  return jsonify({'error': 'No video'}), 400
     if not clips:  return jsonify({'error': 'No clips defined'}), 400
@@ -2138,6 +2165,9 @@ def api_split_trailer():
             output_format=output_format,
             progress_cb=lambda line, pct=None: _emit(job, line, pct),
         )
+        if delete_source:
+            deleted, msg = _safe_remove_source(tmp_path, [f.get('path') for f in files])
+            _emit(job, ('🧹 ' if deleted else '⚠ ') + msg)
         _finish(job, f'Extracted {len(files)} clip(s)',
                 files=[{'name': os.path.basename(f['path']), 'label': f['label']} for f in files])
 
@@ -2230,6 +2260,9 @@ def api_youtube_reel_convert():
     title_pos_pct = float(data.get('title_pos_pct', 20.0))
     part_pos_pct  = float(data.get('part_pos_pct', 82.0))
     output_size   = data.get('output_size', 'instagram')  # 'instagram' | 'original'
+    overlay_image_path = (data.get('overlay_image_path') or '').strip()
+    overlay_image_zoom = float(data.get('overlay_image_zoom', 1.0) or 1.0)
+    delete_source = bool(data.get('delete_source', False))
 
     if not url:
         return jsonify({'error': 'No YouTube URL provided'}), 400
@@ -2288,6 +2321,8 @@ def api_youtube_reel_convert():
             title_pos_pct   = title_pos_pct,
             part_pos_pct    = part_pos_pct,
             output_size     = output_size,
+            overlay_image_path = overlay_image_path,
+            overlay_image_zoom = overlay_image_zoom,
             clip_start_sec  = clip_start,
             clip_end_sec    = clip_end,
             progress_cb     = lambda line: _emit(job, line),
@@ -2298,6 +2333,9 @@ def api_youtube_reel_convert():
 
         reel_results = [{'file': os.path.basename(p), 'path': p, 'status': 'ok'} for p in parts]
         reel_results += [{'file': e, 'status': 'error'} for e in errors]
+        if delete_source and parts:
+            deleted, msg = _safe_remove_source(video_path, parts)
+            _emit(job, ('🧹 ' if deleted else '⚠ ') + msg)
 
         _emit(job, f'🎉 Done! {len(parts)} reel parts created.', 100)
         _finish(job, f'{len(parts)} parts created in {reel_dir}',
@@ -2329,6 +2367,9 @@ def api_youtube_reel_convert_local():
     title_pos_pct = float(data.get('title_pos_pct', 20.0))
     part_pos_pct  = float(data.get('part_pos_pct', 82.0))
     output_size   = data.get('output_size', 'instagram')  # 'instagram' | 'original'
+    overlay_image_path = (data.get('overlay_image_path') or '').strip()
+    overlay_image_zoom = float(data.get('overlay_image_zoom', 1.0) or 1.0)
+    delete_source = bool(data.get('delete_source', False))
 
     job_id = str(uuid.uuid4())
     job    = _make_job(job_id)
@@ -2345,6 +2386,8 @@ def api_youtube_reel_convert_local():
             show_title=show_title, show_part_label=show_part, show_watermark=show_wm,
             title_pos_pct=title_pos_pct, part_pos_pct=part_pos_pct,
             output_size=output_size,
+            overlay_image_path=overlay_image_path,
+            overlay_image_zoom=overlay_image_zoom,
             clip_start_sec=clip_start, clip_end_sec=clip_end,
             progress_cb=lambda line: _emit(job, line),
         )
@@ -2352,11 +2395,27 @@ def api_youtube_reel_convert_local():
         errors = conv.get('errors', [])
         reel_results = [{'file': os.path.basename(p), 'path': p, 'status': 'ok'} for p in parts]
         reel_results += [{'file': e, 'status': 'error'} for e in errors]
+        if delete_source and parts:
+            deleted, msg = _safe_remove_source(video_path, parts)
+            _emit(job, ('🧹 ' if deleted else '⚠ ') + msg)
         _finish(job, f'{len(parts)} parts in {reel_dir}',
                 results=reel_results, reel_dir=reel_dir)
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({'job_id': job_id})
+
+@app.route('/api/youtube/overlay-image-upload', methods=['POST'])
+def api_youtube_overlay_image_upload():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    image = request.files.get('image')
+    if not image:
+        return jsonify({'error': 'No image file provided'}), 400
+    ext = os.path.splitext(image.filename or '')[1].lower()
+    if ext not in ('.png', '.jpg', '.jpeg', '.webp', '.bmp'):
+        return jsonify({'error': 'Unsupported image type'}), 400
+    dest = os.path.join(UPLOAD_TEMP, f'overlay_{uuid.uuid4().hex}{ext or ".png"}')
+    image.save(dest)
+    return jsonify({'path': dest, 'name': os.path.basename(dest)})
 
 
 #  API — Audio Tools (Extract MP3 + Merge)
@@ -2505,6 +2564,7 @@ def api_download_userid():
     opt_watermark = data.get('opt_watermark', False)
     opt_split     = data.get('opt_split', False)
     opt_parts     = data.get('opt_parts', False)
+    delete_source = bool(data.get('delete_source', False))
     if not username: return jsonify({'error': 'No username'}), 400
 
     status = _get_uid_dl_status()
@@ -2630,6 +2690,20 @@ def api_download_userid():
                 meta['status'] = 'ok'
                 _save_reel_to_db(meta)
 
+        # Build file-aware results for downstream pipeline
+        file_results = []
+        for fname in os.listdir(out_dir):
+            if fname.endswith('.mp4'):
+                fp = os.path.join(out_dir, fname)
+                file_results.append({
+                    'status': 'ok',
+                    'id': os.path.splitext(fname)[0],
+                    'path': fp,
+                    'file_path': fp
+                })
+        if file_results:
+            results = file_results
+
         final = _get_uid_dl_status()
 
         # ── Post-download pipeline ────────────────────────────
@@ -2651,6 +2725,9 @@ def api_download_userid():
                     )
                     for ff in final_files:
                         pipeline_results.append({'status': 'ok', 'path': ff, 'file_path': ff})
+                    if delete_source:
+                        deleted, msg = _safe_remove_source(fp, final_files)
+                        _emit(job, ('🧹 ' if deleted else '⚠ ') + msg)
             if pipeline_results:
                 results = pipeline_results
 
