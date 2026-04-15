@@ -1755,6 +1755,30 @@ def api_directories_save():
     _save_setting('dir_yt', data.get('dir_yt', '').strip())
     return jsonify({'ok': True})
 
+@app.route('/api/settings/directories/reset', methods=['POST'])
+def api_directories_reset():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    cfg = _get_settings_dict()
+    try:
+        root_dir = _resolve_root_dir(cfg.get('root_dir', ''))
+    except Exception:
+        root_dir = BASE_DIR
+
+    layout = _folder_layout(root_dir)
+    _save_setting('root_dir', root_dir)
+    _save_setting('dir_ig', layout['instagram_downloads'])
+    _save_setting('dir_yt', layout['youtube_downloads'])
+
+    return jsonify({
+        'ok': True,
+        'root_dir': root_dir,
+        'effective_dirs': {
+            'dir_ig': layout['instagram_downloads'],
+            'dir_yt': layout['youtube_downloads'],
+        },
+        'tree': _folder_tree_text(root_dir),
+    })
+
 @app.route('/api/settings/root/setup', methods=['POST'])
 def api_settings_root_setup():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
@@ -2247,7 +2271,8 @@ def api_youtube_reel_convert():
         _emit(job, f'✅ Downloaded: {os.path.basename(video_path)}', 30)
 
         # ── Step 2: Convert → Reel parts ─────────────────
-        reel_dir = os.path.join(os.path.dirname(video_path), '_reels')
+        reel_dir = output_dir or os.path.join(os.path.dirname(video_path), '_reels')
+        os.makedirs(reel_dir, exist_ok=True)
         _emit(job, f'🎬 Converting to 9:16 Reels (parts of {part_secs}s)…', 35)
 
         from modules.reel_converter import convert_to_reels
@@ -2294,6 +2319,7 @@ def api_youtube_reel_convert_local():
 
     title        = data.get('title', '').strip()
     watermark    = data.get('watermark', '').strip()
+    output_dir   = data.get('output_dir', '').strip()
     part_secs    = int(data.get('part_duration', 60))
     show_title   = bool(data.get('show_title', True))
     show_part    = bool(data.get('show_part_label', True))
@@ -2308,7 +2334,8 @@ def api_youtube_reel_convert_local():
     job    = _make_job(job_id)
 
     def run():
-        reel_dir = os.path.join(os.path.dirname(video_path), '_reels')
+        reel_dir = output_dir or os.path.join(os.path.dirname(video_path), '_reels')
+        os.makedirs(reel_dir, exist_ok=True)
         _emit(job, f'🎬 Converting: {os.path.basename(video_path)}', 5)
         from modules.reel_converter import convert_to_reels
         conv = convert_to_reels(
@@ -2384,7 +2411,7 @@ def api_audio_extract():
 
         if source == 'youtube':
             yt_urls = data.get('yt_urls', [])
-            out = output_dir or os.path.join(DOWNLOADS_DIR, '_youtube_mp3')
+            out = output_dir or _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube_mp3')
             os.makedirs(out, exist_ok=True)
             results = download_youtube(
                 urls=yt_urls, quality='best', output_dir=out, audio_only=True,

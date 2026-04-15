@@ -107,7 +107,7 @@
           <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
           <div style="display:flex;gap:8px;">
             <input class="form-input mono" id="output-dir" type="text"
-              placeholder="Leave blank — saves to mp3_output/ subfolder" />
+              placeholder="Leave blank — saves to mp3_output/ subfolder" value="{{ settings.get('dir_yt', '') }}" />
             <button class="btn btn-secondary btn-sm" onclick="browseFolder('output-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
           </div>
           <div class="form-hint">Defaults to <code>mp3_output/</code> inside the source folder, or the YouTube download folder set in Settings.</div>
