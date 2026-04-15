@@ -81,21 +81,21 @@ def probe_video(path: str) -> dict:
 
 
 
-def _wrap_title(text: str, canvas_w: int, font_size: int, max_lines: int = 3) -> list:
+def _wrap_title(text: str, canvas_w: int, font_size: int, max_lines: int = 4) -> list:
     """
     Split text into lines that fit within canvas_w pixels.
     Returns list of line strings (max max_lines lines, last truncated with '…' if needed).
     Approximation: mono font char ≈ font_size * 0.55 wide.
     """
     import textwrap
-    chars_per_line = max(10, int(canvas_w * 0.82 / (font_size * 0.55)))
+    chars_per_line = max(10, int(canvas_w * 0.90 / (font_size * 0.52)))
     lines = textwrap.wrap(text, width=chars_per_line)
     if not lines:
         return [text]
     if len(lines) > max_lines:
         lines = lines[:max_lines]
-        if len(lines[-1]) > chars_per_line - 1:
-            lines[-1] = lines[-1][:chars_per_line - 1] + '…'
+        if len(lines[-1]) > chars_per_line - 3:
+            lines[-1] = lines[-1][:chars_per_line - 3].rstrip() + '…'
         else:
             lines[-1] = lines[-1] + '…'
     return lines
@@ -139,7 +139,12 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
     if show_title and title.strip():
         full_title = f"{title.strip()} - Part {part_num}"
         title_font_size = 48
-        lines = _wrap_title(full_title, canvas_w, title_font_size, max_lines=3)
+        min_font_size = 32
+        max_lines = 4
+        lines = _wrap_title(full_title, canvas_w, title_font_size, max_lines=max_lines)
+        while lines and lines[-1].endswith('…') and title_font_size > min_font_size:
+            title_font_size -= 2
+            lines = _wrap_title(full_title, canvas_w, title_font_size, max_lines=max_lines)
         line_height = int(title_font_size * 1.35)
         base_y_px = int(canvas_h * title_pos_pct / 100.0)
 

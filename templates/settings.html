@@ -156,12 +156,12 @@
           <option value="mistralai/mistral-7b-instruct" {% if settings.openrouter_model == 'mistralai/mistral-7b-instruct' %}selected{% endif %}>Mistral 7B — Lightweight</option>
         </optgroup>
       </select>
-      <div class="form-hint">Gemini 2.5 Pro recommended — best multilingual support for Indian languages.</div>
+      <div class="form-hint">Gemini 2.5 Pro recommended for high-quality English content generation.</div>
     </div>
     <div class="form-group" style="margin-top:16px;">
       <label class="form-label">🌐 Content Generation Language</label>
       <select class="form-input" id="ai-language" style="cursor:pointer;">
-        <option value="multi" {% if not settings.ai_language or settings.ai_language == 'multi' %}selected{% endif %}>🌍 Multi-Language (Auto Mix — Recommended)</option>
+        <option value="English" {% if not settings.ai_language or settings.ai_language in ['English', 'english', 'multi'] %}selected{% endif %}>🇬🇧 English (Recommended)</option>
         <optgroup label="🇮🇳 Indian Languages">
           <option value="Tamil" {% if settings.ai_language == 'Tamil' %}selected{% endif %}>Tamil தமிழ்</option>
           <option value="Hindi" {% if settings.ai_language == 'Hindi' %}selected{% endif %}>Hindi हिंदी</option>
@@ -193,7 +193,7 @@
           <option value="Urdu" {% if settings.ai_language == 'Urdu' %}selected{% endif %}>Urdu اردو</option>
         </optgroup>
       </select>
-      <div class="form-hint">Multi-Language generates content mixing top Indian languages + English for maximum reach. Select a specific language to generate everything in that language only.</div>
+      <div class="form-hint">English is the default. Select a specific language only when you explicitly want output in that language.</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
       <button class="btn btn-primary" style="background:linear-gradient(135deg,#8250ff,#5e3adb);" onclick="saveOpenRouterKey()">✨ Save AI Settings</button>
@@ -917,7 +917,7 @@ async function saveOpenRouterKey() {
   const key      = document.getElementById('openrouter-api-key').value.trim();
   const niche    = document.getElementById('content-niche').value.trim();
   const model    = document.getElementById('openrouter-model')?.value || 'google/gemini-2.5-pro';
-  const language = document.getElementById('ai-language')?.value || 'multi';
+  const language = document.getElementById('ai-language')?.value || 'English';
   const resp = await postJSON('/api/settings/keys/save', {
     openrouter_api_key: key,
     content_niche: niche,

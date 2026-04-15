@@ -383,6 +383,15 @@ function tagPill(tag, color='rgba(130,80,255,.12)', border='rgba(130,80,255,.25)
   const cleaned = cleanAIText(tag);
   return `<span onclick='navigator.clipboard.writeText(${JSON.stringify(cleaned)}).then(()=>showToast("Copied!","success"))' style="background:${color};border:1px solid ${border};padding:3px 9px;border-radius:3px;font-size:11px;cursor:pointer;transition:opacity .15s;" title="Click to copy">${escapeHtml(cleaned)}</span>`;
 }
+function makeCopyRow(text, opts = {}) {
+  const row = document.createElement('div');
+  row.style.cssText = opts.style || 'padding:10px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;line-height:1.5;';
+  row.textContent = opts.prefix ? `${opts.prefix} ${text}` : text;
+  row.addEventListener('mouseenter', () => { row.style.borderColor = opts.hoverBorder || 'rgba(130,80,255,.5)'; });
+  row.addEventListener('mouseleave', () => { row.style.borderColor = opts.normalBorder || 'var(--border)'; });
+  row.addEventListener('click', () => navigator.clipboard.writeText(text).then(() => showToast(opts.toast || 'Copied!', 'success')));
+  return row;
+}
 
 // ── YouTube Generator ─────────────────────────────────────────
 async function generateYoutube() {
@@ -405,23 +414,45 @@ function renderYTResults(d) {
   // Titles
   const titlesEl = document.getElementById('yt-titles');
   const ytTitles = Array.isArray(d.titles) ? d.titles : [];
-  titlesEl.innerHTML = ytTitles.map((t, i) => {
+  titlesEl.innerHTML = '';
+  ytTitles.forEach((t, i) => {
     const obj = (typeof t === 'object' && t !== null) ? t : { text: t };
     const text = cleanAIText(obj.text || obj.title || '');
     const type = cleanAIText(obj.type || '');
-    const score = obj.score ? `<span style="font-size:11px;font-weight:700;color:#8250ff;">${escapeHtml(obj.score)}</span>` : '';
-    return `
-      <div onclick='navigator.clipboard.writeText(${JSON.stringify(text)}).then(()=>showToast("Title copied!","success"))'
-           style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .15s;"
-           onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='var(--border)'">
-        <span style="font-size:10px;color:var(--text-muted);min-width:22px;">#${i+1}</span>
-        <span style="flex:1;font-size:13px;font-weight:600;">${escapeHtml(text)}</span>
-        <span style="font-size:10px;background:rgba(130,80,255,.12);color:#8250ff;padding:2px 7px;border-radius:3px;white-space:nowrap;">${escapeHtml(type)}</span>
-        ${score}
-        <span style="font-size:10px;color:var(--text-muted);">📋</span>
-      </div>
-    `;
-  }).join('');
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .15s;';
+    row.addEventListener('mouseenter', () => { row.style.borderColor = 'rgba(130,80,255,.5)'; });
+    row.addEventListener('mouseleave', () => { row.style.borderColor = 'var(--border)'; });
+    row.addEventListener('click', () => navigator.clipboard.writeText(text).then(() => showToast('Title copied!', 'success')));
+
+    const num = document.createElement('span');
+    num.style.cssText = 'font-size:10px;color:var(--text-muted);min-width:22px;';
+    num.textContent = `#${i + 1}`;
+    row.appendChild(num);
+
+    const title = document.createElement('span');
+    title.style.cssText = 'flex:1;font-size:13px;font-weight:600;';
+    title.textContent = text;
+    row.appendChild(title);
+
+    const typeTag = document.createElement('span');
+    typeTag.style.cssText = 'font-size:10px;background:rgba(130,80,255,.12);color:#8250ff;padding:2px 7px;border-radius:3px;white-space:nowrap;';
+    typeTag.textContent = type;
+    row.appendChild(typeTag);
+
+    if (obj.score) {
+      const score = document.createElement('span');
+      score.style.cssText = 'font-size:11px;font-weight:700;color:#8250ff;';
+      score.textContent = String(obj.score);
+      row.appendChild(score);
+    }
+
+    const icon = document.createElement('span');
+    icon.style.cssText = 'font-size:10px;color:var(--text-muted);';
+    icon.textContent = '📋';
+    row.appendChild(icon);
+    titlesEl.appendChild(row);
+  });
 
   // Category badge
   document.getElementById('yt-category-badge').textContent = d.category || '';
@@ -443,18 +474,25 @@ function renderYTResults(d) {
   renderYTTags();
 
   // Hooks
-  document.getElementById('yt-hooks').innerHTML = (d.hook_lines||[]).map(h=>
-    `<div onclick="navigator.clipboard.writeText(${JSON.stringify(h)}).then(()=>showToast('Copied!','success'))"
-          style="padding:10px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;line-height:1.5;"
-          onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='var(--border)'">⚡ ${escapeHtml(cleanAIText(h))}</div>`
-  ).join('');
+  const hooksEl = document.getElementById('yt-hooks');
+  hooksEl.innerHTML = '';
+  (d.hook_lines || []).forEach((h) => {
+    const clean = cleanAIText(h);
+    hooksEl.appendChild(makeCopyRow(clean, { prefix: '⚡', toast: 'Copied!' }));
+  });
 
   // Thumbnail headlines
-  document.getElementById('yt-thumbnails').innerHTML = (d.thumbnail_headlines||[]).map(h=>
-    `<div onclick="navigator.clipboard.writeText(${JSON.stringify(h)}).then(()=>showToast('Copied!','success'))"
-          style="padding:10px 14px;background:linear-gradient(135deg,rgba(130,80,255,.1),rgba(94,58,219,.05));border:1px solid rgba(130,80,255,.2);border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;"
-          onmouseover="this.style.borderColor='rgba(130,80,255,.5)'" onmouseout="this.style.borderColor='rgba(130,80,255,.2)'">${escapeHtml(cleanAIText(h))}</div>`
-  ).join('');
+  const thumbsEl = document.getElementById('yt-thumbnails');
+  thumbsEl.innerHTML = '';
+  (d.thumbnail_headlines || []).forEach((h) => {
+    const clean = cleanAIText(h);
+    thumbsEl.appendChild(makeCopyRow(clean, {
+      style: 'padding:10px 14px;background:linear-gradient(135deg,rgba(130,80,255,.1),rgba(94,58,219,.05));border:1px solid rgba(130,80,255,.2);border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;',
+      normalBorder: 'rgba(130,80,255,.2)',
+      hoverBorder: 'rgba(130,80,255,.5)',
+      toast: 'Copied!'
+    }));
+  });
 
   // Best time + CTA + Tips
   document.getElementById('yt-best-time').textContent = d.best_posting_time || '—';
@@ -547,11 +585,16 @@ function renderIGResults(d) {
   document.getElementById('ig-hashtags-full').textContent = h.full_set || (h.all_tags||[]).join(' ');
 
   // CTAs
-  document.getElementById('ig-ctas').innerHTML=(d.cta_options||[]).map(c=>
-    `<div onclick="navigator.clipboard.writeText(${JSON.stringify(c)}).then(()=>showToast('CTA copied!','success'))"
-          style="padding:10px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;"
-          onmouseover="this.style.borderColor='rgba(255,60,172,.4)'" onmouseout="this.style.borderColor='var(--border)'">${escapeHtml(cleanAIText(c))}</div>`
-  ).join('');
+  const ctasEl = document.getElementById('ig-ctas');
+  ctasEl.innerHTML = '';
+  (d.cta_options || []).forEach((c) => {
+    const clean = cleanAIText(c);
+    ctasEl.appendChild(makeCopyRow(clean, {
+      style: 'padding:10px 14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;',
+      hoverBorder: 'rgba(255,60,172,.4)',
+      toast: 'CTA copied!'
+    }));
+  });
 
   document.getElementById('ig-ai-results').style.display='block';
 }
