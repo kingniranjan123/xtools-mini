@@ -42,7 +42,7 @@ def _call_ai(api_key: str, system_prompt: str, user_prompt: str,
             json={
                 'model': model_name,
                 'temperature': temperature,
-                'max_tokens': 700,
+                'max_tokens': 4096,
                 'messages': [
                     {'role': 'system', 'content': system_prompt},
                     {'role': 'user',   'content': user_prompt},
@@ -74,16 +74,73 @@ def _call_ai(api_key: str, system_prompt: str, user_prompt: str,
     raise RuntimeError(last_error)
 
 
-def _parse_json_block(text: str) -> dict:
-    """Extract the first JSON object or array from AI response."""
-    # Strip markdown code fences if present
-    clean = text
-    if '```json' in clean:
-        clean = clean.split('```json')[1].split('```')[0]
-    elif '```' in clean:
-        clean = clean.split('```')[1].split('```')[0]
-    return json.loads(clean.strip())
 
+def _parse_json_block(text: str) -> dict:
+    """
+    Robustly extract a JSON object/array from an AI response.
+    Handles: fenced blocks, truncated responses, plain JSON.
+    Raises ValueError if nothing parses.
+    """
+    import re
+
+    def try_parse(s):
+        s = s.strip()
+        if not s:
+            raise ValueError('empty string')
+        return json.loads(s)
+
+    # Strategy 1: ```json ... ``` fences (standard Gemini output)
+    if '```json' in text:
+        after_fence = text.split('```json', 1)[1]
+        # Prefer closed fence, but fall back to everything after the opening
+        if '```' in after_fence:
+            candidate = after_fence.rsplit('```', 1)[0].strip()
+        else:
+            # Truncated — no closing fence, try from start of JSON
+            candidate = after_fence.strip()
+        try:
+            return try_parse(candidate)
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Strategy 2: ``` ... ``` (no language tag)
+    if text.count('```') >= 2:
+        parts = text.split('```')
+        for i in range(1, len(parts), 2):
+            candidate = parts[i].strip()
+            if candidate.startswith('{') or candidate.startswith('['):
+                try:
+                    return try_parse(candidate)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
+    # Strategy 3: find the first { and try everything from there
+    first_brace = text.find('{')
+    if first_brace != -1:
+        candidate = text[first_brace:]
+        # Try the full slice
+        try:
+            return try_parse(candidate)
+        except (json.JSONDecodeError, ValueError):
+            pass
+        # Try stripping after last }
+        last_brace = candidate.rfind('}')
+        if last_brace != -1:
+            try:
+                return try_parse(candidate[:last_brace + 1])
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+    # Strategy 4: direct parse of full text
+    try:
+        return try_parse(text)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    raise ValueError(
+        f'Could not parse AI JSON response. '
+        f'Response preview: {text[:300]!r}'
+    )
 
 # ─────────────────────────────────────────────────────────────
 #  YouTube AI Content Generator
@@ -157,11 +214,7 @@ Return ONLY valid JSON, no extra text:
 """
 
     raw = _call_ai(api_key, YOUTUBE_SYSTEM, prompt, temperature=0.8)
-    try:
-        result = _parse_json_block(raw)
-    except Exception:
-        # Return raw text if JSON parsing fails
-        result = {'raw_response': raw, 'parse_error': True}
+    result = _parse_json_block(raw)  # raises ValueError on parse failure
     result['topic'] = topic
     result['is_short'] = is_short
     return result
@@ -244,10 +297,7 @@ Return ONLY this JSON structure:
 }}
 """
     raw = _call_ai(api_key, INSTAGRAM_SYSTEM, prompt, temperature=0.85)
-    try:
-        result = _parse_json_block(raw)
-    except Exception:
-        result = {'raw_response': raw, 'parse_error': True}
+    result = _parse_json_block(raw)  # raises ValueError on parse failure
     result['topic'] = topic
     result['content_type'] = content_type
     return result
@@ -279,7 +329,4 @@ Generate an expanded YouTube SEO tag set. Return ONLY this JSON:
 }}
 """
     raw = _call_ai(api_key, TAG_SYSTEM, prompt, temperature=0.5)
-    try:
-        return _parse_json_block(raw)
-    except Exception:
-        return {'raw_response': raw, 'parse_error': True}
+    return _parse_json_block(raw)  # raises ValueError on parse failure

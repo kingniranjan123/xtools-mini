@@ -212,12 +212,13 @@ async function resetCooling(id) {
   else showToast(resp.error || 'Failed', 'error');
 }
 
-// ── Folder picker (via settings browse API if available) ──────
+// ── Folder picker (via native backend picker) ─────────────────
 async function pickFolder(id) {
   try {
-    const resp = await fetch('/api/browse-folder');
+    const resp = await fetch('/api/utils/pick-folder');
     const j    = await resp.json();
-    if (j.path) document.getElementById('folder-'+id).value = j.path;
+    if (j.folder) document.getElementById('folder-'+id).value = j.folder;
+    else if (j.error) showToast('Picker error: ' + j.error, 'warn');
   } catch {
     showToast('Folder picker unavailable — type path manually', 'warn');
   }
