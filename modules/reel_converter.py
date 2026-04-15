@@ -149,7 +149,10 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
         base_y_px = int(canvas_h * title_pos_pct / 100.0)
 
         for i, line in enumerate(lines):
-            safe_line = line.replace("'", "\\'").replace(":", "\\:")
+            safe_line = (line
+                         .replace("'", "\\'")
+                         .replace(":", "\\:")
+                         .replace(",", "\\,"))
             y_px = base_y_px + i * line_height
             filters.append(
                 f"drawtext=text='{safe_line}':"
@@ -165,8 +168,9 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
         default_y_expr = f"h*{part_pos_pct/100.0:.2f}"
         y_pos = default_y_expr
         if output_size == 'instagram':
-            # Keep part label near the lower cinematic compartment by default.
-            y_pos = f"max({default_y_expr},h-text_h-54)"
+            # Avoid comma-based expressions (e.g. max(a,b)) that can break parsing
+            # when this filter chain is embedded inside filter_complex.
+            y_pos = "h-text_h-54"
         filters.append(
             f"drawtext=text='{part_label}':"
             f"{font_attr}"
@@ -177,7 +181,10 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
 
     # Watermark: bottom-right, semi-transparent
     if show_watermark and watermark.strip():
-        safe_wm = watermark.replace("'", "\\'").replace(":", "\\:")
+        safe_wm = (watermark
+                   .replace("'", "\\'")
+                   .replace(":", "\\:")
+                   .replace(",", "\\,"))
         filters.append(
             f"drawtext=text='{safe_wm}':"
             f"{font_attr}"
