@@ -162,7 +162,11 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
     # Part label: custom centered bottom placement
     if show_part_label:
         part_label = f"Part -{part_num}"
-        y_pos = f"h*{part_pos_pct/100.0:.2f}"
+        default_y_expr = f"h*{part_pos_pct/100.0:.2f}"
+        y_pos = default_y_expr
+        if output_size == 'instagram':
+            # Keep part label near the lower cinematic compartment by default.
+            y_pos = f"max({default_y_expr},h-text_h-54)"
         filters.append(
             f"drawtext=text='{part_label}':"
             f"{font_attr}"
@@ -191,12 +195,14 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
 def encode_part(input_path: str, output_path: str,
                 start_sec: float, duration_sec: float,
                 vf: str, overlay_image_path: str = '', overlay_image_zoom: float = 1.0,
+                output_size: str = 'instagram',
                 progress_cb=None) -> bool:
     overlay = (overlay_image_path or '').strip()
     zoom = max(0.2, min(3.0, float(overlay_image_zoom or 1.0)))
     cmd = [FFMPEG, '-y', '-ss', str(start_sec), '-t', str(duration_sec), '-i', input_path]
     if overlay and os.path.isfile(overlay):
         base_expr = vf if vf and vf != 'copy' else 'null'
+        overlay_bottom_margin = '80' if output_size == 'instagram' else '40'
         cmd += [
             '-loop', '1', '-i', overlay,
             '-filter_complex',
@@ -204,11 +210,11 @@ def encode_part(input_path: str, output_path: str,
                 f"[0:v]{base_expr}[base];"
                 f"[1:v]format=rgba[ovsrc];"
                 f"[ovsrc][base]scale2ref="
-                f"w='min(iw,main_w-80)':"
-                f"h='min(ih,main_h*0.22)':"
+                f"w='main_w*0.68':"
+                f"h='main_h*0.18':"
                 f"force_original_aspect_ratio=decrease[ovfit][base2];"
                 f"[ovfit]scale='trunc(iw*{zoom:.3f}/2)*2':'trunc(ih*{zoom:.3f}/2)*2'[ov];"
-                f"[base2][ov]overlay=x='(W-w)/2':y='H*0.74 + ((H*0.26)-h)/2':shortest=1[vout]"
+                f"[base2][ov]overlay=x='(W-w)/2':y='H-h-{overlay_bottom_margin}':shortest=1[vout]"
             ),
             '-map', '[vout]', '-map', '0:a?'
         ]
@@ -324,6 +330,7 @@ def convert_to_reels(
             input_path, out_path, seg_start, seg_dur, vf,
             overlay_image_path=overlay_image_path,
             overlay_image_zoom=overlay_image_zoom,
+            output_size=output_size,
             progress_cb=progress_cb
         )
         if ok:
