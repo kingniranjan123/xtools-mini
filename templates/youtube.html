@@ -118,7 +118,7 @@
         <div class="form-group">
           <label class="form-label">Output Folder (optional)</label>
           <div style="display:flex;gap:8px;">
-            <input class="form-input mono" id="yt-audio-dir" type="text" placeholder="Leave blank for default">
+            <input class="form-input mono" id="yt-audio-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_yt', '') }}">
             <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-audio-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
           </div>
         </div>
@@ -303,7 +303,7 @@
         <div class="form-group">
           <label class="form-label">Output Folder (optional)</label>
           <div style="display:flex;gap:8px;">
-            <input class="form-input mono" id="reel-out-dir" type="text" placeholder="Default: ./downloads/_youtube/_reels" style="flex:1;">
+            <input class="form-input mono" id="reel-out-dir" type="text" placeholder="Default: configured YouTube folder" value="{{ settings.get('dir_yt', '') }}" style="flex:1;">
             <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
           </div>
         </div>

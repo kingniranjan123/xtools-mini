@@ -258,6 +258,9 @@
       <button class="btn btn-primary" type="button" onclick="setupRootFolder()">
         🏗 Setup Root + Create Subfolders
       </button>
+      <button class="btn btn-secondary" type="button" onclick="resetDirectories()">
+        ♻ Reset to Generated Defaults
+      </button>
       <button class="btn btn-primary" onclick="saveDirectories()">
       💾 Save Directories
       </button>
@@ -1183,6 +1186,21 @@ async function saveDirectories() {
   });
   if (resp.ok) showToast('Download directories saved!', 'success');
   else showToast(resp.error || 'Failed', 'error');
+}
+
+async function resetDirectories() {
+  const resp = await postJSON('/api/settings/directories/reset', {});
+  if (!resp.ok) {
+    showToast(resp.error || 'Failed to reset directories', 'error');
+    return;
+  }
+  if (resp.root_dir) document.getElementById('root-dir').value = resp.root_dir;
+  if (resp.effective_dirs) {
+    if (resp.effective_dirs.dir_ig) document.getElementById('dir-ig').value = resp.effective_dirs.dir_ig;
+    if (resp.effective_dirs.dir_yt) document.getElementById('dir-yt').value = resp.effective_dirs.dir_yt;
+  }
+  renderFolderTree(resp.tree || '');
+  showToast('Directories reset to generated defaults', 'success');
 }
 
 async function pickRootFolder() {
