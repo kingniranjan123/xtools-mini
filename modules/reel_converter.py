@@ -207,10 +207,9 @@ def encode_part(input_path: str, output_path: str,
                 output_size: str = 'instagram',
                 progress_cb=None) -> bool:
     overlay = (overlay_image_path or '').strip()
-    zoom = max(0.2, min(3.0, float(overlay_image_zoom or 1.0)))
-    comp_pct = max(0.0, min(100.0, float(overlay_image_comp_pct or 0.0)))
+    comp_pct = max(1.0, min(100.0, float(overlay_image_comp_pct or 100.0)))
     cmd = [FFMPEG, '-y', '-ss', str(start_sec), '-t', str(duration_sec), '-i', input_path]
-    if overlay and os.path.isfile(overlay) and comp_pct > 0:
+    if overlay and os.path.isfile(overlay):
         base_expr = vf if vf and vf != 'copy' else 'null'
         base_bottom_px = max(2, int(bottom_compartment_px or 0))
         if output_size == 'instagram' and base_bottom_px <= 0:
@@ -231,8 +230,8 @@ def encode_part(input_path: str, output_path: str,
                 f"[ovsrc][base]scale2ref="
                 f"w='main_w*0.96':"
                 f"h='{overlay_target_h}':"
-                f"force_original_aspect_ratio=decrease[ovfit][base2];"
-                f"[ovfit]scale='trunc(iw*{zoom:.3f}/2)*2':'trunc(ih*{zoom:.3f}/2)*2'[ov];"
+                f"force_original_aspect_ratio=increase[ovfit][base2];"
+                f"[ovfit]crop=w='iw':h='{overlay_target_h}':x='(iw-ow)/2':y='(ih-oh)/2'[ov];"
                 f"[base2][ov]overlay=x='(W-w)/2':y={overlay_y}:shortest=1[vout]"
             ),
             '-map', '[vout]', '-map', '0:a?'
