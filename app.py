@@ -2229,24 +2229,41 @@ def api_youtube_download():
     job_id = str(uuid.uuid4())
     job    = _make_job(job_id)
 
-    def check_exists(vid_id):
+    def check_exists(vid_id, title=None):
         # Layer 1: Database Check (Fast)
         db = sqlite3.connect(DB_PATH)
+        # Check by ID
         row = db.execute('SELECT file_path FROM reels WHERE id=? LIMIT 1', (vid_id,)).fetchone()
+        if not row and title:
+            # Check by Exact Title (If ID changed but user wants to skip same movie)
+            row = db.execute('SELECT file_path FROM reels WHERE title=? LIMIT 1', (title,)).fetchone()
         db.close()
+
         if row:
             fpath = row[0]
             if fpath and os.path.isfile(fpath):
                 return True
         
-        # Layer 2: Fuzzy Disk Check (Legacy Files)
-        # We look for any file containing [vid_id] in the yt_dir (recursive)
+        # Layer 2: Fuzzy Disk Check (Recursive)
         import glob as _g
         target_dir = data.get('output_dir', '').strip() or _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube')
-        pattern = os.path.join(target_dir, '**', f'*[{vid_id}]*')
-        matches = _g.glob(pattern, recursive=True)
-        if matches:
+        
+        # 2a: Search by ID in brackets
+        pattern_id = os.path.join(target_dir, '**', f'*[{vid_id}]*')
+        if _g.glob(pattern_id, recursive=True):
             return True
+
+        # 2b: Search by Sanitized Title (The "ENG SUB" solution)
+        if title:
+            # Sanitize title like yt-dlp does for Windows
+            safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)
+            # Match files starting with this title
+            pattern_title = os.path.join(target_dir, '**', f'{safe_title}*')
+            matches = _g.glob(pattern_title, recursive=True)
+            if matches:
+                # Filter out partial matches that aren't videos
+                valid_video = any(m.lower().endswith(('.mp4', '.mkv', '.avi', '.mov')) for m in matches)
+                if valid_video: return True
 
         return False
 

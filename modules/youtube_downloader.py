@@ -117,7 +117,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
             
             # Check for duplicate
             if check_exists_cb and vid_id:
-                if check_exists_cb(vid_id):
+                if check_exists_cb(vid_id, title=title):
                     with lock:
                         state['completed_count'] += 1
                         state['consecutive_failures'] = 0 # RESET on skip (system is working)
