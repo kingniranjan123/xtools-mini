@@ -46,7 +46,8 @@
          <label class="form-label" style="display:block;margin-bottom:12px;">Upload <code>cookies.txt</code> file:</label>
          <div style="display:flex;gap:8px;">
            <input type="file" id="cookie-file-input" style="display:none;" onchange="handleCookieUpload(this)">
-           <button class="btn btn-secondary btn-sm btn-full" onclick="document.getElementById('cookie-file-input').click()">📁 Select & Upload File</button>
+           <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="document.getElementById('cookie-file-input').click()">📁 Select & Upload</button>
+           <button class="btn btn-ghost btn-sm" id="btn-clear-cookies" style="display:none;color:var(--accent-red);" onclick="clearCookies()">🗑️ Clear</button>
          </div>
        </div>
      </div>
@@ -123,8 +124,8 @@
         <div class="form-group">
           <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
           <div style="display:flex;gap:8px;">
-            <input class="form-input mono" id="yt-out-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_yt', '') }}" />
-            <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+            <input class="form-input mono" id="yt-out-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_yt', '') }}" onchange="saveDefaultDir('dir_yt', this.value)" />
+            <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-out-dir', 'dir_yt')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
           </div>
         </div>
         <button class="btn btn-primary btn-full btn-lg" id="yt-btn" onclick="startYTDownload()">↓ Start Download</button>
@@ -207,8 +208,8 @@
         <div class="form-group">
           <label class="form-label">Output Folder (optional)</label>
           <div style="display:flex;gap:8px;">
-            <input class="form-input mono" id="yt-audio-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_yt', '') }}">
-            <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-audio-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+            <input class="form-input mono" id="yt-audio-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_yt', '') }}" onchange="saveDefaultDir('dir_yt', this.value)">
+            <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-audio-dir', 'dir_yt')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
           </div>
         </div>
         <button class="btn btn-primary btn-full btn-lg" id="yt-audio-btn" onclick="startYTAudio()">🎵 Extract MP3</button>
@@ -793,19 +794,60 @@ async function startReelConvert() {
   });
 }
 
-async function browseFolder(inputId) {
+async function browseFolder(inputId, saveKey=null) {
   try {
     const resp = await fetch('/api/utils/pick-folder');
     const data = await resp.json();
-    if(data.folder) document.getElementById(inputId).value=data.folder;
+    if(data.folder) {
+        document.getElementById(inputId).value=data.folder;
+        if(saveKey) saveDefaultDir(saveKey, data.folder);
+    }
     else if(data.error) showToast('Error: '+data.error,'error');
   } catch { showToast('Folder picker unavailable — type path manually','warn'); }
+}
+async function saveDefaultDir(key, value){
+  if(!value) return;
+  const payload = {}; payload[key] = value;
+  await postJSON('/api/settings/directories/save', payload);
+  // sync all inputs on page that use this key
+  if(key==='dir_yt'){
+     ['yt-out-dir','yt-audio-dir','reel-out-dir'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.value=value;
+     });
+  }
+}
+async function checkCookieStatus(){
+  const r = await fetch('/api/youtube/cookies/status');
+  const d = await r.json();
+  updateCookieUI(d.exists);
+}
+function updateCookieUI(exists){
+  const badge = document.getElementById('cookie-status-badge');
+  const btnClear = document.getElementById('btn-clear-cookies');
+  if(exists){
+    badge.className='badge badge-green'; badge.textContent='Uploaded ✓';
+    if(btnClear) btnClear.style.display='inline-block';
+  } else {
+    badge.className='badge badge-gray'; badge.textContent='Not Uploaded';
+    if(btnClear) btnClear.style.display='none';
+  }
+}
+async function clearCookies(){
+  if(!confirm('Delete uploaded cookie file?')) return;
+  const d = await postJSON('/api/youtube/cookies/clear', {});
+  updateCookieUI(false);
+  showToast('Cookies cleared.','info');
 }
 function toggleDocs(id){ const d=document.getElementById(id); d.style.display= (d.style.display==='none'?'block':'none'); }
 function toggleBrowserSelector(prefix){
   const mode = document.getElementById(prefix+'-cookie-mode').value;
+  const br = document.getElementById(prefix+'-browser').value;
   const wrap = document.getElementById(prefix+'-browser-wrap');
   if(wrap) wrap.style.display = (mode==='browser'?'block':'none');
+  
+  // Persist choice
+  localStorage.setItem(prefix+'-cookie-mode', mode);
+  localStorage.setItem(prefix+'-browser', br);
 }
 async function handleCookieUpload(input){
   if(!input.files.length) return;
@@ -815,10 +857,8 @@ async function handleCookieUpload(input){
   try {
     const r = await fetch('/api/youtube/upload-cookies', { method:'POST', body:formData });
     const j = await r.json();
-    if(j.error) throw new Error(j.error);
-    showToast('Cookies uploaded! File mode active.','success');
-    document.getElementById('cookie-status-badge').className='badge badge-green';
-    document.getElementById('cookie-status-badge').textContent='Uploaded ✓';
+    j.exists = true;
+    updateCookieUI(true);
     // Auto-switch to file mode
     ['yt','yta','reel'].forEach(p => {
        const el=document.getElementById(p+'-cookie-mode');
@@ -826,5 +866,22 @@ async function handleCookieUpload(input){
     });
   } catch(e) { showToast(e.message,'error'); }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+   checkCookieStatus();
+   // Restore selections
+   ['yt','yta','reel'].forEach(p => {
+      const mode = localStorage.getItem(p+'-cookie-mode');
+      const br   = localStorage.getItem(p+'-browser');
+      if(mode) { 
+         const el = document.getElementById(p+'-cookie-mode');
+         if(el) { el.value = mode; toggleBrowserSelector(p); }
+      }
+      if(br) {
+         const el = document.getElementById(p+'-browser');
+         if(el) el.value = br;
+      }
+   });
+});
 </script>
 {% endblock %}

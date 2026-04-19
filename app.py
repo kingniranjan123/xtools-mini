@@ -1775,8 +1775,11 @@ def api_directories_save():
         except Exception as exc:
             return jsonify({'error': str(exc)}), 400
         _save_setting('root_dir', root_dir)
-    _save_setting('dir_ig', data.get('dir_ig', '').strip())
-    _save_setting('dir_yt', data.get('dir_yt', '').strip())
+    
+    # Allow individual updates
+    if 'dir_ig' in data: _save_setting('dir_ig', data.get('dir_ig', '').strip())
+    if 'dir_yt' in data: _save_setting('dir_yt', data.get('dir_yt', '').strip())
+    
     return jsonify({'ok': True})
 
 @app.route('/api/settings/directories/reset', methods=['POST'])
@@ -2266,7 +2269,19 @@ def api_youtube_upload_cookies():
     file = request.files['file']
     if not file.filename: return jsonify({'error': 'Empty filename'}), 400
     file.save(YT_COOKIES_FILE)
-    return jsonify({'message': 'Cookies uploaded successfully', 'path': YT_COOKIES_FILE})
+    return jsonify({'message': 'Cookies uploaded successfully', 'path': YT_COOKIES_FILE, 'exists': True})
+
+@app.route('/api/youtube/cookies/status')
+def api_youtube_cookies_status():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify({'exists': os.path.isfile(YT_COOKIES_FILE)})
+
+@app.route('/api/youtube/cookies/clear', methods=['POST'])
+def api_youtube_cookies_clear():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    if os.path.isfile(YT_COOKIES_FILE):
+        os.remove(YT_COOKIES_FILE)
+    return jsonify({'ok': True, 'exists': False})
 
 
 @app.route('/api/youtube/reel-convert', methods=['POST'])
