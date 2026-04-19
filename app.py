@@ -2230,11 +2230,15 @@ def api_youtube_download():
     job    = _make_job(job_id)
 
     def check_exists(vid_id):
-        # We need a new connection per thread in SQLite
+        # Verify DB record AND physical file presence
         db = sqlite3.connect(DB_PATH)
-        row = db.execute('SELECT 1 FROM reels WHERE id=? LIMIT 1', (vid_id,)).fetchone()
+        row = db.execute('SELECT file_path FROM reels WHERE id=? LIMIT 1', (vid_id,)).fetchone()
         db.close()
-        return bool(row)
+        if not row: return False
+        fpath = row[0]
+        if fpath and os.path.isfile(fpath):
+            return True
+        return False
 
     def run():
         yt_dir = data.get('output_dir', '').strip()
@@ -2253,6 +2257,16 @@ def api_youtube_download():
                 check_exists_cb=check_exists,
                 progress_cb=lambda line, pct=None: _emit(job, line, pct)
             )
+            # Sync successes to Master DB for persistent duplicate checking
+            db = sqlite3.connect(DB_PATH)
+            for r in results:
+                if r.get('status') == 'ok':
+                    db.execute('''
+                        INSERT OR REPLACE INTO reels (id, url, title, file_path, status)
+                        VALUES (?, ?, ?, ?, 'ok')
+                    ''', (r['id'], r['url'], r.get('title', ''), r.get('file_path', '')))
+            db.commit()
+            db.close()
             ok = sum(1 for r in results if r.get('status') in ('ok', 'skipped'))
             _finish(job, f'Processed {ok}/{len(results)} videos', results=results)
         except Exception as e:
@@ -2316,6 +2330,7 @@ def api_youtube_reel_convert():
     delete_source = bool(data.get('delete_source', False))
     browser       = data.get('browser')
     cookie_mode   = data.get('cookie_mode', 'browser')
+    request_delay = float(data.get('request_delay', 30.0))
 
     if not url:
         return jsonify({'error': 'No YouTube URL provided'}), 400
@@ -2349,6 +2364,16 @@ def api_youtube_reel_convert():
             err = results[0].get('error', 'Download failed') if results else 'Download failed'
             _finish(job, f'Download failed: {err}', results=[])
             return
+        
+        # Save to Master DB
+        r = results[0]
+        db = sqlite3.connect(DB_PATH)
+        db.execute('''
+            INSERT OR REPLACE INTO reels (id, url, title, file_path, status)
+            VALUES (?, ?, ?, ?, 'ok')
+        ''', (r['id'], r['url'], r.get('title', ''), r.get('file_path', '')))
+        db.commit()
+        db.close()
 
         video_path = results[0].get('file_path') or results[0].get('path', '')
         if not video_path or not os.path.isfile(video_path):

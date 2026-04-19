@@ -105,7 +105,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
                         state['completed_count'] += 1
                         state['consecutive_failures'] = 0 # RESET on skip (system is working)
                         pct = int(state['completed_count'] / total * 100)
-                    if progress_cb: progress_cb(f'  ✓ [Skipped] {prefix} (Already downloaded)', pct)
+                    if progress_cb: progress_cb(f'  ✓ [Duplicate] {prefix} Hyperlink already downloaded (Skipped)', pct)
                     return {'url': url, 'id': vid_id, 'status': 'skipped', 'title': title}
 
             # 3. Download
