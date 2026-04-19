@@ -2655,13 +2655,14 @@ def api_download_userid():
         os.makedirs(out_dir, exist_ok=True)
 
         if quality == 'best':
-            fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+            fmt = 'bestvideo[ext=mp4]+bestaudio[m4a]/bestvideo+bestaudio/best'
         else:
-            fmt = f'bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best'
+            fmt = f'bestvideo[height<={quality}][ext=mp4]+bestaudio[m4a]/bestvideo[height<={quality}]+bestaudio/best'
 
         cmd = [
             sys.executable, '-m', 'yt_dlp', '--rm-cache-dir',
             '--format', fmt,
+            '--merge-output-format', 'mp4',
             '--output', os.path.join(out_dir, '%(id)s.%(ext)s'),
             '--write-info-json', '--no-warnings',
             '--ignore-errors',  # skip unavailable videos

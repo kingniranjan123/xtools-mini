@@ -167,11 +167,14 @@ def _download_yt_single(url, quality, output_dir, custom_dir, audio_only,
         dl_cmd += ['-x', '--audio-format', 'mp3', '--audio-quality', '0']
     else:
         if quality == 'best':
-            fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+            # Priority: MP4 Best -> Any Best
+            fmt = 'bestvideo[ext=mp4]+bestaudio[m4a]/bestvideo+bestaudio/best'
         else:
-            fmt = (f'bestvideo[height<={quality}][ext=mp4]+'
-                   f'bestaudio[ext=m4a]/best[height<={quality}][ext=mp4]/best')
-        dl_cmd += ['--format', fmt]
+            # Priority: Requested Height MP4 -> Requested Height Any -> Best Available below/at height
+            fmt = (f'bestvideo[height<={quality}][ext=mp4]+bestaudio[m4a]/'
+                   f'bestvideo[height<={quality}]+bestaudio/'
+                   f'best[height<={quality}]/best')
+        dl_cmd += ['--format', fmt, '--merge-output-format', 'mp4']
         
         if download_thumb:
             dl_cmd += ['--write-thumbnail', '--convert-thumbnails', 'jpg']
