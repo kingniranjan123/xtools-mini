@@ -15,6 +15,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
                      audio_only: bool = False, custom_dir: bool = False, 
                      download_subs: bool = False, download_thumb: bool = False,
                      concurrency: int = 1, browser: str = None, cookie_file: str = None, 
+                     request_delay: float = 0,
                      check_exists_cb=None, progress_cb=None) -> list:
     """
     Download a list of YouTube URLs via yt-dlp in parallel.
@@ -65,10 +66,20 @@ def download_youtube(urls: list, quality: str, output_dir: str,
         
         # 2. Get Info & Deduplication
         try:
-            # Add small random jitter to avoid clashing simultaneous requests to YouTube
-            time.sleep(random.uniform(0, 1.5))
+            # Add safety delay to mimic human behavior and avoid rate limits
+            if request_delay > 0:
+                # Randomize slightly (e.g. 30s delay becomes 25-35s)
+                jitter_delay = random.uniform(request_delay * 0.8, request_delay * 1.2)
+                if progress_cb: progress_cb(f"⏳ Waiting {int(jitter_delay)}s (Safety Mode)...", None)
+                time.sleep(jitter_delay)
+            else:
+                # Minimum jitter even if delay is 0
+                time.sleep(random.uniform(0, 1.5))
             
             info_cmd = ytdlp + ['--rm-cache-dir', '--print-json', '--no-download', '--no-playlist']
+            if request_delay > 0:
+                info_cmd += ['--sleep-interval', str(int(request_delay))]
+            
             if cookie_file and os.path.isfile(cookie_file):
                 info_cmd += ['--cookies', cookie_file]
             elif browser:
@@ -99,6 +110,9 @@ def download_youtube(urls: list, quality: str, output_dir: str,
 
             # 3. Download
             if progress_cb: progress_cb(f'  ↓ Starting: {prefix}', None)
+            
+            # Inject delay for sub-processes
+            info['request_delay'] = request_delay
             
             res = _download_yt_single(
                 url, quality, output_dir, custom_dir, audio_only, download_subs, download_thumb, ytdlp, 
@@ -158,6 +172,14 @@ def _download_yt_single(url, quality, output_dir, custom_dir, audio_only,
     out_template = os.path.join(channel_dir, f'%(title).150s [%(id)s].%(ext)s')
 
     dl_cmd = ytdlp + ['--no-playlist', '--rm-cache-dir', '--output', out_template, '--merge-output-format', 'mp4', '--prefer-free-formats', '--socket-timeout', '30']
+    
+    # Pass delay to yt-dlp internal requests
+    if info.get('request_delay'):
+        try:
+            d = int(info['request_delay'])
+            dl_cmd += ['--sleep-interval', str(d), '--max-sleep-interval', str(d + 5)]
+        except: pass
+
     if cookie_file and os.path.isfile(cookie_file):
         dl_cmd += ['--cookies', cookie_file]
     elif browser:

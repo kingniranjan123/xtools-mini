@@ -2221,7 +2221,9 @@ def api_youtube_download():
     dl_thumb    = bool(data.get('download_thumb', False))
     concurrency = int(data.get('concurrency', 1))
     browser     = data.get('browser')
-    cookie_mode = data.get('cookie_mode', 'browser') # 'browser' or 'file'
+    cookie_mode = data.get('cookie_mode', 'browser')
+    request_delay = float(data.get('request_delay', 30.0))
+    
     if not urls: return jsonify({'error': 'No URLs'}), 400
 
     job_id = str(uuid.uuid4())
@@ -2247,6 +2249,7 @@ def api_youtube_download():
                 urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only, custom_dir=custom_dir,
                 download_subs=dl_subs, download_thumb=dl_thumb,
                 concurrency=concurrency, browser=browser, cookie_file=c_file,
+                request_delay=request_delay,
                 check_exists_cb=check_exists,
                 progress_cb=lambda line, pct=None: _emit(job, line, pct)
             )
@@ -2339,6 +2342,7 @@ def api_youtube_reel_convert():
         results = download_youtube(
             urls=[url], quality=quality, output_dir=yt_dir, audio_only=False,
             custom_dir=bool(output_dir), browser=browser, cookie_file=c_file,
+            request_delay=request_delay,
             progress_cb=lambda line, pct=None: _emit(job, line, pct)
         )
         if not results or results[0].get('status') != 'ok':
@@ -2538,9 +2542,10 @@ def api_audio_extract():
             c_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
             out = output_dir or _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube_mp3')
             os.makedirs(out, exist_ok=True)
+            request_delay = float(data.get('request_delay', 30.0))
             results = download_youtube(
                 urls=yt_urls, quality='best', output_dir=out, audio_only=True,
-                browser=browser, cookie_file=c_file,
+                browser=browser, cookie_file=c_file, request_delay=request_delay,
                 progress_cb=lambda l, p=None: _emit(job, l, p)
             )
             # rename yt_dlp output status 'ok' -> map properly for UI

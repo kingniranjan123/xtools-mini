@@ -54,6 +54,28 @@
    </div>
  </div>
 
+ <!-- ════════ Safety & Rate Limit Settings ════════ -->
+ <div class="card" style="margin-bottom:24px; border-left:4px solid var(--accent-blue);">
+   <div class="card-header">
+     <div class="card-title">🕒 Safety Mode & Request Jitter</div>
+     <div class="badge badge-blue">Recommended: 30s</div>
+   </div>
+   <div class="card-body">
+     <div class="form-group">
+       <label class="form-label" style="display:flex; justify-content:space-between;">
+         <span>Request Delay (Sleep)</span>
+         <span id="delay-val" style="color:var(--accent-blue); font-weight:bold;">30 seconds</span>
+       </label>
+       <input type="range" class="form-input" id="yt-delay" min="0" max="60" step="1" value="30" 
+              style="padding:0; height:8px;" oninput="updateDelayDisplay(this.value)">
+       <div class="form-hint">
+         Sets a random delay (between 80%-120% of this value) before every video pick-up.
+         Use <b>30-60s</b> to safely mimic human behavior and avoid "Bot detected" blocks.
+       </div>
+     </div>
+   </div>
+ </div>
+
 <!-- ═══════════════════════════════════
      TAB 1: VIDEO DOWNLOAD
 ═══════════════════════════════════ -->
@@ -622,8 +644,19 @@ async function startYTDownload() {
   if(!raw){ showToast('Enter at least one YouTube URL','warn'); return; }
   const urls = raw.split('\n').filter(l => l.trim().startsWith('http'));
   if(!urls.length){ showToast('No valid URLs','warn'); return; }
-  const quality = document.getElementById('yt-quality').value;
+  
+  const body = {
+      urls: urls,
+      quality: document.getElementById('yt-quality').value,
+      concurrency: parseInt(document.getElementById('yt-threads').value),
+      download_subs: document.getElementById('yt-dl-subs').checked,
+      download_thumb: document.getElementById('yt-dl-thumb').checked,
+      browser: document.getElementById('yt-browser').value,
+      cookie_mode: document.getElementById('yt-cookie-mode').value,
+      request_delay: parseFloat(document.getElementById('yt-delay').value)
+  };
   const outDir  = document.getElementById('yt-out-dir').value.trim();
+  body.output_dir = outDir;
 
   document.getElementById('yt-progress-card').style.display = 'block';
   document.getElementById('yt-results-card').style.display  = 'none';
@@ -633,27 +666,16 @@ async function startYTDownload() {
   document.getElementById('yt-btn').disabled    = true;
   document.getElementById('yt-btn').textContent = 'Downloading…';
 
-  const dlSubs  = document.getElementById('yt-dl-subs').checked;
-  const dlThumb = document.getElementById('yt-dl-thumb').checked;
-  const threads = parseInt(document.getElementById('yt-threads').value) || 1;
-
-  const browser = document.getElementById('yt-browser').value;
-  const cMode   = document.getElementById('yt-cookie-mode').value;
- 
-  const resp = await postJSON('/api/youtube/download', {
-    urls, quality, audio_only: false, output_dir: outDir,
-    download_subs: dlSubs, download_thumb: dlThumb,
-    concurrency: threads,
-    browser: browser,
-    cookie_mode: cMode
-  });
+  const resp = await postJSON('/api/youtube/download', body);
   if(!resp.job_id){ showToast(resp.error||'Failed','error'); document.getElementById('yt-btn').disabled=false; document.getElementById('yt-btn').textContent='↓ Start Download'; return; }
   ytSSE = startSSEProgress({
     url: '/api/youtube/progress/'+resp.job_id,
     logId:'yt-log', barId:'yt-bar', statusId:'yt-status',
     onComplete: function(d) {
-      document.getElementById('yt-btn').disabled=false; document.getElementById('yt-btn').textContent='↓ Start Download';
-      document.getElementById('yt-status').className='badge badge-green'; document.getElementById('yt-status').textContent='Done';
+      document.getElementById('yt-btn').disabled=false;
+      document.getElementById('yt-btn').textContent='↓ Start Download';
+      document.getElementById('yt-status').className='badge badge-green';
+      document.getElementById('yt-status').textContent='Done';
       showYTResults(d.results||[]);
     }
   });
@@ -681,18 +703,23 @@ async function startYTAudio() {
   if(!raw){ showToast('Enter at least one URL','warn'); return; }
   const urls = raw.split('\n').filter(l=>l.trim().startsWith('http'));
   const outDir = document.getElementById('yt-audio-dir').value.trim();
+  
+  const body = {
+      bitrate: document.getElementById('yta-bitrate').value,
+      yt_urls: urls,
+      source: 'youtube',
+      output_dir: outDir,
+      browser: document.getElementById('yta-browser').value,
+      cookie_mode: document.getElementById('yta-cookie-mode').value,
+      request_delay: parseFloat(document.getElementById('yt-delay').value)
+  };
+
   document.getElementById('yta-progress-card').style.display='block';
   document.getElementById('yta-placeholder').style.display='none';
   document.getElementById('yta-results-card').style.display='none';
   document.getElementById('yta-bar').style.width='0%';
   document.getElementById('yt-audio-btn').disabled=true; document.getElementById('yt-audio-btn').textContent='Extracting…';
-  const resp = await postJSON('/api/audio/extract', {
-    source:'youtube', 
-    yt_urls: urls, 
-    output_dir: outDir,
-    browser: document.getElementById('yta-browser').value,
-    cookie_mode: document.getElementById('yta-cookie-mode').value
-  });
+  const resp = await postJSON('/api/audio/extract', body);
   if(!resp.job_id){ showToast(resp.error||'Failed','error'); document.getElementById('yt-audio-btn').disabled=false; document.getElementById('yt-audio-btn').textContent='🎵 Extract MP3'; return; }
   ytaSSE = startSSEProgress({
     url:'/api/audio/progress/'+resp.job_id, logId:'yta-log', barId:'yta-bar', statusId:'yta-status',
@@ -743,7 +770,8 @@ async function startReelConvert() {
                   overlay_image_comp_pct: overlayCompPct,
                   delete_source: deleteSource,
                   browser: document.getElementById('reel-browser')?.value,
-                  cookie_mode: document.getElementById('reel-cookie-mode')?.value};
+                  cookie_mode: document.getElementById('reel-cookie-mode')?.value,
+                  request_delay: parseFloat(document.getElementById('yt-delay').value)};
 
   let endpoint;
   if(_reelSource === 'yt') {
@@ -849,6 +877,10 @@ function toggleBrowserSelector(prefix){
   localStorage.setItem(prefix+'-cookie-mode', mode);
   localStorage.setItem(prefix+'-browser', br);
 }
+function updateDelayDisplay(val){
+  document.getElementById('delay-val').textContent = val + ' seconds';
+  localStorage.setItem('yt-delay', val);
+}
 async function handleCookieUpload(input){
   if(!input.files.length) return;
   const file = input.files[0];
@@ -869,6 +901,14 @@ async function handleCookieUpload(input){
 
 document.addEventListener('DOMContentLoaded', () => {
    checkCookieStatus();
+   
+   // Restore delay
+   const savedDelay = localStorage.getItem('yt-delay');
+   if(savedDelay){
+      document.getElementById('yt-delay').value = savedDelay;
+      updateDelayDisplay(savedDelay);
+   }
+
    // Restore selections
    ['yt','yta','reel'].forEach(p => {
       const mode = localStorage.getItem(p+'-cookie-mode');
