@@ -4,11 +4,11 @@ color 0A
 
 echo.
 echo  *** Nikethan Reels Toolkit ***
-echo  Starting on http://localhost:5055
+echo  Starting on http://localhost:5056
 echo.
 
 :: Kill anything on port 5055
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5055') do (
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5056') do (
     taskkill /F /PID %%a >nul 2>&1
 )
 

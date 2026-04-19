@@ -2,7 +2,7 @@ import requests
 import json
 import time
 
-API_BASE = 'http://localhost:5055/api'
+API_BASE = 'http://localhost:5056/api'
 
 # 1. Start the job
 payload = {
@@ -25,7 +25,7 @@ r = session.post(f'{API_BASE}/youtube/reel-convert', json=payload)
 
 if r.status_code == 401:
     print("Unauthorized. Logging in first...")
-    session.post('http://localhost:5055/login', data={'password': 'nikethan'})
+    session.post('http://localhost:5056/login', data={'password': 'nikethan'})
     r = session.post(f'{API_BASE}/youtube/reel-convert', json=payload)
 
 if r.status_code != 200:

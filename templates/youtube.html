@@ -38,6 +38,17 @@
           <div class="form-hint">Supports youtube.com, youtu.be, and Shorts links.</div>
         </div>
         <div class="form-group">
+          <label class="form-label">Parallel Threads <span style="color:var(--text-muted);font-weight:400;">(Concurrency)</span></label>
+          <select class="form-select" id="yt-threads">
+            <option value="1" selected>1 (Sequential)</option>
+            <option value="2">2 threads</option>
+            <option value="4">4 threads</option>
+            <option value="6">6 threads</option>
+            <option value="8">8 threads</option>
+            <option value="10">10 threads (Max)</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label class="form-label">Video Quality</label>
           <select class="form-select" id="yt-quality">
             <option value="best">Best available</option>
@@ -46,6 +57,16 @@
             <option value="480">480p</option>
             <option value="360">360p</option>
           </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+          <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;background:var(--bg-card-2);border-radius:var(--radius-sm);border:1px solid var(--border);">
+            <input type="checkbox" id="yt-dl-subs" style="accent-color:var(--accent);">
+            <span style="font-size:12px;">English Subs</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;background:var(--bg-card-2);border-radius:var(--radius-sm);border:1px solid var(--border);">
+            <input type="checkbox" id="yt-dl-thumb" style="accent-color:var(--accent);">
+            <span style="font-size:12px;">Thumbnails</span>
+          </label>
         </div>
         <div class="form-group">
           <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
@@ -527,7 +548,15 @@ async function startYTDownload() {
   document.getElementById('yt-btn').disabled    = true;
   document.getElementById('yt-btn').textContent = 'Downloading…';
 
-  const resp = await postJSON('/api/youtube/download', {urls, quality, audio_only: false, output_dir: outDir});
+  const dlSubs  = document.getElementById('yt-dl-subs').checked;
+  const dlThumb = document.getElementById('yt-dl-thumb').checked;
+  const threads = parseInt(document.getElementById('yt-threads').value) || 1;
+
+  const resp = await postJSON('/api/youtube/download', {
+    urls, quality, audio_only: false, output_dir: outDir,
+    download_subs: dlSubs, download_thumb: dlThumb,
+    concurrency: threads
+  });
   if(!resp.job_id){ showToast(resp.error||'Failed','error'); document.getElementById('yt-btn').disabled=false; document.getElementById('yt-btn').textContent='↓ Start Download'; return; }
   ytSSE = startSSEProgress({
     url: '/api/youtube/progress/'+resp.job_id,
@@ -541,7 +570,7 @@ async function startYTDownload() {
 }
 function cancelYT(){ if(ytSSE){ytSSE.close();ytSSE=null;} document.getElementById('yt-btn').disabled=false; document.getElementById('yt-btn').textContent='↓ Start Download'; document.getElementById('yt-progress-card').style.display='none'; showToast('Cancelled','warn'); }
 function showYTResults(results) {
-  const ok = results.filter(r=>r.status==='ok').length;
+  const ok = results.filter(r=>r.status==='ok' || r.status==='skipped').length;
   document.getElementById('yt-results-summary').textContent=`${ok} / ${results.length}`;
   document.getElementById('yt-results-card').style.display='block';
   document.getElementById('yt-results-list').innerHTML=results.map(r=>`
@@ -552,7 +581,7 @@ function showYTResults(results) {
         <div style="font-size:11px;color:var(--text-muted);">@${r.channel||'—'}${r.duration?' · '+Math.round(r.duration/60)+'m':''}</div>
         ${r.error?`<div style="font-size:11px;color:var(--accent-red);">${r.error}</div>`:''}
       </div>
-      <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
+      <span class="badge ${r.status==='ok'?'badge-green':(r.status==='skipped'?'badge-orange':'badge-red')}">${r.status==='ok'?'OK':(r.status==='skipped'?'Skipped':'Error')}</span>
     </div>`).join('');
 }
 

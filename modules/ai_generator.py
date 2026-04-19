@@ -36,7 +36,7 @@ def _call_ai(api_key: str, system_prompt: str, user_prompt: str,
             headers={
                 'Authorization': f'Bearer {api_key}',
                 'Content-Type': 'application/json',
-                'HTTP-Referer': 'http://localhost:5055',
+                'HTTP-Referer': 'http://localhost:5056',
                 'X-Title': APP_NAME,
             },
             json={

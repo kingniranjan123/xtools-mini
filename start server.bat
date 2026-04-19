@@ -18,9 +18,9 @@ FOR /F "tokens=5" %%a IN ('netstat -ano ^| findstr :5050') DO (
 
 :: Also kill processes on port 5055 (the port app.py actually uses)
 echo [*] Checking for processes on port 5055 to kill...
-FOR /F "tokens=5" %%a IN ('netstat -ano ^| findstr :5055') DO (
+FOR /F "tokens=5" %%a IN ('netstat -ano ^| findstr :5056') DO (
     if %%a neq 0 (
-        echo Killing process %%a on port 5055...
+        echo Killing process %%a on port 5056...
         taskkill /F /PID %%a >nul 2>&1
     )
 )
@@ -31,7 +31,7 @@ pip install -r requirements.txt >nul 2>&1
 
 echo [*] Starting Server...
 :: Wait 2 seconds to ensure the server is up before opening browser
-start /b "" cmd /c "ping localhost -n 3 >nul && start http://localhost:5055"
+start /b "" cmd /c "ping localhost -n 3 >nul && start http://localhost:5056"
 
 echo [*] App is running. Press CTRL+C to stop.
 echo.

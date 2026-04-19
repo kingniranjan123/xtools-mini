@@ -2,7 +2,7 @@
 Nikethan Reels Toolkit — Flask App
 Password: nikethan
 """
-import os, json, uuid, threading, subprocess, shutil, sys, tkinter as tk
+import os, json, uuid, threading, subprocess, shutil, sys, sqlite3, tkinter as tk
 from tkinter import filedialog
 from datetime import datetime, timedelta
 from datetime import timezone
@@ -11,7 +11,7 @@ from flask import (Flask, render_template, redirect, url_for,
                    request, session, flash, g, jsonify, Response,
                    send_file, abort)
 
-from db import init_db, get_db
+from db import init_db, get_db, DB_PATH
 from modules.cuda_check import detect_cuda
 from modules.downloader import download_reels
 from modules.metadata import extract_metadata_from_json
@@ -584,7 +584,7 @@ def api_ai_test_key():
                 headers={
                     'Authorization': f'Bearer {api_key}',
                     'Content-Type': 'application/json',
-                    'HTTP-Referer': 'http://localhost:5055',
+                    'HTTP-Referer': 'http://localhost:5056',
                     'X-Title': 'Nikethan Reels Toolkit',
                 },
                 json={
@@ -2212,11 +2212,21 @@ def api_youtube_download():
     data       = request.get_json()
     urls       = data.get('urls', [])
     quality    = data.get('quality', '720')
-    audio_only = data.get('audio_only', False)
+    audio_only  = data.get('audio_only', False)
+    dl_subs     = bool(data.get('download_subs', False))
+    dl_thumb    = bool(data.get('download_thumb', False))
+    concurrency = int(data.get('concurrency', 1))
     if not urls: return jsonify({'error': 'No URLs'}), 400
 
     job_id = str(uuid.uuid4())
     job    = _make_job(job_id)
+
+    def check_exists(vid_id):
+        # We need a new connection per thread in SQLite
+        db = sqlite3.connect(DB_PATH)
+        row = db.execute('SELECT 1 FROM reels WHERE id=? LIMIT 1', (vid_id,)).fetchone()
+        db.close()
+        return bool(row)
 
     def run():
         yt_dir = data.get('output_dir', '').strip()
@@ -2224,12 +2234,20 @@ def api_youtube_download():
         if not yt_dir:
             yt_dir = _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube')
             custom_dir = False
-        results = download_youtube(
-            urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only, custom_dir=custom_dir,
-            progress_cb=lambda line, pct=None: _emit(job, line, pct)
-        )
-        ok = sum(1 for r in results if r.get('status') == 'ok')
-        _finish(job, f'Downloaded {ok}/{len(results)} videos', results=results)
+        
+        try:
+            results = download_youtube(
+                urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only, custom_dir=custom_dir,
+                download_subs=dl_subs, download_thumb=dl_thumb,
+                concurrency=concurrency,
+                check_exists_cb=check_exists,
+                progress_cb=lambda line, pct=None: _emit(job, line, pct)
+            )
+            ok = sum(1 for r in results if r.get('status') in ('ok', 'skipped'))
+            _finish(job, f'Processed {ok}/{len(results)} videos', results=results)
+        except Exception as e:
+            _finish(job, f'Fatal Error: {str(e)}', status='error')
+
     threading.Thread(target=run, daemon=True).start()
     return jsonify({'job_id': job_id})
 
@@ -2268,6 +2286,15 @@ def api_youtube_reel_convert():
 
     if not url:
         return jsonify({'error': 'No YouTube URL provided'}), 400
+
+    # If it's a Reels request, and the URL has both v= and list=, strip the list= part
+    # because we want to convert the SPECIFIC video, not the whole mix/playlist.
+    if 'v=' in url and 'list=' in url:
+        # Simple regex to keep up to the next param or end of string
+        match = re.search(r'(v=[^&]+)', url)
+        if match:
+            # Reconstruct basic watch URL
+            url = "https://www.youtube.com/watch?" + match.group(1)
 
     job_id = str(uuid.uuid4())
     job    = _make_job(job_id)
@@ -3046,5 +3073,5 @@ if __name__ == '__main__':
     cuda_str = 'CUDA ACTIVE' if CUDA_INFO['available'] else 'CPU Mode'
     print(f'\n  *** Nikethan Reels Toolkit ***')
     print(f'  GPU: {cuda_str}')
-    print(f'  Starting on http://localhost:5055\n')
-    app.run(host='0.0.0.0', port=5055, debug=False)
+    print(f'  Starting on http://localhost:5056\n')
+    app.run(host='0.0.0.0', port=5056, debug=False)
