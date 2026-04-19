@@ -2504,10 +2504,12 @@ def api_audio_extract():
 
         if source == 'youtube':
             yt_urls = data.get('yt_urls', [])
+            browser = data.get('browser')
             out = output_dir or _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube_mp3')
             os.makedirs(out, exist_ok=True)
             results = download_youtube(
                 urls=yt_urls, quality='best', output_dir=out, audio_only=True,
+                browser=browser,
                 progress_cb=lambda l, p=None: _emit(job, l, p)
             )
             # rename yt_dlp output status 'ok' -> map properly for UI

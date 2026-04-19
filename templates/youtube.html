@@ -151,6 +151,20 @@
           <textarea class="form-textarea mono" id="yt-audio-urls" rows="7" placeholder="https://www.youtube.com/watch?v=XXXX&#10;…"></textarea>
         </div>
         <div class="form-group">
+          <label class="form-label">Bypass Restrictions <span style="color:var(--text-muted);font-weight:400;">(Browser Cookies)</span></label>
+          <select class="form-select" id="yta-browser">
+            <option value="" selected>None (Standard)</option>
+            <option value="chrome">Chrome</option>
+            <option value="edge">Edge</option>
+            <option value="firefox">Firefox</option>
+            <option value="brave">Brave</option>
+            <option value="opera">Opera</option>
+            <option value="vivaldi">Vivaldi</option>
+            <option value="safari">Safari</option>
+          </select>
+          <div class="form-hint">Uses active login from your browser to bypass bot checks.</div>
+        </div>
+        <div class="form-group">
           <label class="form-label">Output Folder (optional)</label>
           <div style="display:flex;gap:8px;">
             <input class="form-input mono" id="yt-audio-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_yt', '') }}">
@@ -621,7 +635,12 @@ async function startYTAudio() {
   document.getElementById('yta-results-card').style.display='none';
   document.getElementById('yta-bar').style.width='0%';
   document.getElementById('yt-audio-btn').disabled=true; document.getElementById('yt-audio-btn').textContent='Extracting…';
-  const resp = await postJSON('/api/audio/extract', {source:'youtube', yt_urls: urls, output_dir: outDir});
+  const resp = await postJSON('/api/audio/extract', {
+    source:'youtube', 
+    yt_urls: urls, 
+    output_dir: outDir,
+    browser: document.getElementById('yta-browser').value || null
+  });
   if(!resp.job_id){ showToast(resp.error||'Failed','error'); document.getElementById('yt-audio-btn').disabled=false; document.getElementById('yt-audio-btn').textContent='🎵 Extract MP3'; return; }
   ytaSSE = startSSEProgress({
     url:'/api/audio/progress/'+resp.job_id, logId:'yta-log', barId:'yta-bar', statusId:'yta-status',

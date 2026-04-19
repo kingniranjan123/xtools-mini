@@ -33,7 +33,11 @@ def download_youtube(urls: list, quality: str, output_dir: str,
         if 'list=' in url:
             if progress_cb: progress_cb(f"Expanding playlist: {url}", None)
             try:
-                cmd = ytdlp + ['--flat-playlist', '--get-url', '--no-warnings', url]
+                cmd = ytdlp + ['--flat-playlist', '--get-url', '--no-warnings']
+                if browser:
+                    cmd += ['--cookies-from-browser', browser]
+                cmd.append(url)
+                
                 raw = subprocess.check_output(cmd, text=True, encoding='utf-8', errors='replace').strip()
                 p_urls = [u.strip() for u in raw.splitlines() if u.strip()]
                 expanded_urls.extend(p_urls)
