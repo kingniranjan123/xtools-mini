@@ -2655,9 +2655,9 @@ def api_download_userid():
         os.makedirs(out_dir, exist_ok=True)
 
         if quality == 'best':
-            fmt = 'bestvideo[ext=mp4]+bestaudio[m4a]/bestvideo+bestaudio/best'
+            fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best'
         else:
-            fmt = f'bestvideo[height<={quality}][ext=mp4]+bestaudio[m4a]/bestvideo[height<={quality}]+bestaudio/best'
+            fmt = f'bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={quality}]+bestaudio/best'
 
         cmd = [
             sys.executable, '-m', 'yt_dlp', '--rm-cache-dir',
