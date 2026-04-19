@@ -148,10 +148,24 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.executescript(SCHEMA)
     # Lightweight schema migrations for existing installs.
-    cols = {r[1] for r in conn.execute("PRAGMA table_info('poster_accounts')").fetchall()}
-    if 'session_ttl_hours' not in cols:
+    
+    # 1. Migrate poster_accounts
+    cols_pa = {r[1] for r in conn.execute("PRAGMA table_info('poster_accounts')").fetchall()}
+    if 'session_ttl_hours' not in cols_pa:
         conn.execute('ALTER TABLE poster_accounts ADD COLUMN session_ttl_hours INTEGER DEFAULT 24')
-    if 'session_established_at' not in cols:
+    if 'session_established_at' not in cols_pa:
         conn.execute('ALTER TABLE poster_accounts ADD COLUMN session_established_at DATETIME')
+        
+    # 2. Migrate reels table (Fixes "no column named status" error)
+    cols_reels = {r[1] for r in conn.execute("PRAGMA table_info('reels')").fetchall()}
+    if 'status' not in cols_reels:
+        conn.execute("ALTER TABLE reels ADD COLUMN status TEXT DEFAULT 'pending'")
+    if 'watermarked' not in cols_reels:
+        conn.execute("ALTER TABLE reels ADD COLUMN watermarked INTEGER DEFAULT 0")
+    if 'watermark_folder' not in cols_reels:
+        conn.execute("ALTER TABLE reels ADD COLUMN watermark_folder TEXT")
+    if 'is_posted' not in cols_reels:
+        conn.execute("ALTER TABLE reels ADD COLUMN is_posted INTEGER DEFAULT 0")
+        
     conn.commit()
     conn.close()

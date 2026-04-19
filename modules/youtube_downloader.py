@@ -4,6 +4,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 def _clean_err(stderr_text):
     """Extract the last meaningful error line from yt-dlp stderr."""
     if not stderr_text: return "Unknown error"
+    
+    # Priority Errors (Specific Blocks)
+    if 'cookies are no longer valid' in stderr_text.lower():
+        return "❌ Cookies Expired! Please re-export from browser and upload again."
+    if 'confirm you' in stderr_text.lower() and 'bot' in stderr_text.lower():
+        return "❌ Bot Blocked! Follow 'Bypass Guide' (Install Deno & Re-export Cookies)."
+    if 'Requested format is not available' in stderr_text:
+        return "❌ Format Hidden! (Usually fixed by installing Deno & New Cookies)."
+
     lines = [line.strip() for line in stderr_text.splitlines() if line.strip()]
     # Look for 'ERROR:' or 'YouTube said:' lines
     for line in reversed(lines):
@@ -25,6 +34,8 @@ def download_youtube(urls: list, quality: str, output_dir: str,
         '--no-check-certificates',
         '--geo-bypass',
         '--force-ipv4',
+        '--js-runtime', 'node',
+        '--remote-components', 'ejs:github',
         '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
     ]
     os.makedirs(output_dir, exist_ok=True)

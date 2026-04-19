@@ -2258,15 +2258,18 @@ def api_youtube_download():
                 progress_cb=lambda line, pct=None: _emit(job, line, pct)
             )
             # Sync successes to Master DB for persistent duplicate checking
-            db = sqlite3.connect(DB_PATH)
-            for r in results:
-                if r.get('status') == 'ok':
-                    db.execute('''
-                        INSERT OR REPLACE INTO reels (id, url, title, file_path, status)
-                        VALUES (?, ?, ?, ?, 'ok')
-                    ''', (r['id'], r['url'], r.get('title', ''), r.get('file_path', '')))
-            db.commit()
-            db.close()
+            try:
+                db = sqlite3.connect(DB_PATH)
+                for r in results:
+                    if r.get('status') == 'ok':
+                        db.execute('''
+                            INSERT OR REPLACE INTO reels (id, url, title, file_path, status)
+                            VALUES (?, ?, ?, ?, 'ok')
+                        ''', (r['id'], r['url'], r.get('title', ''), r.get('file_path', '')))
+                db.commit()
+                db.close()
+            except Exception as dbe:
+                print(f"DB Sync Error: {dbe}")
             ok = sum(1 for r in results if r.get('status') in ('ok', 'skipped'))
             _finish(job, f'Processed {ok}/{len(results)} videos', results=results)
         except Exception as e:
@@ -2366,14 +2369,17 @@ def api_youtube_reel_convert():
             return
         
         # Save to Master DB
-        r = results[0]
-        db = sqlite3.connect(DB_PATH)
-        db.execute('''
-            INSERT OR REPLACE INTO reels (id, url, title, file_path, status)
-            VALUES (?, ?, ?, ?, 'ok')
-        ''', (r['id'], r['url'], r.get('title', ''), r.get('file_path', '')))
-        db.commit()
-        db.close()
+        try:
+            r = results[0]
+            db = sqlite3.connect(DB_PATH)
+            db.execute('''
+                INSERT OR REPLACE INTO reels (id, url, title, file_path, status)
+                VALUES (?, ?, ?, ?, 'ok')
+            ''', (r['id'], r['url'], r.get('title', ''), r.get('file_path', '')))
+            db.commit()
+            db.close()
+        except Exception as dbe:
+            print(f"Reel DB Save Error: {dbe}")
 
         video_path = results[0].get('file_path') or results[0].get('path', '')
         if not video_path or not os.path.isfile(video_path):
