@@ -11,6 +11,9 @@ def _clean_err(stderr_text):
             return line
     return lines[-1] if lines else "Unknown error"
 
+def download_youtube(urls: list, quality: str, output_dir: str,
+                     audio_only: bool = False, custom_dir: bool = False, 
+                     download_subs: bool = False, download_thumb: bool = False,
                      concurrency: int = 1, browser: str = None, cookie_file: str = None, 
                      check_exists_cb=None, progress_cb=None) -> list:
     """
