@@ -17,6 +17,41 @@
     <span class="nav-badge" style="background:rgba(255,60,172,.15);color:#ff3cac;border-color:rgba(255,60,172,.3);">NEW</span>
   </button>
 </div>
+ 
+ <!-- ════════ Cookies Configuration & Help ════════ -->
+ <div class="card" style="margin-bottom:24px; border-left:4px solid var(--accent-gold);">
+   <div class="card-header" style="cursor:pointer;" onclick="toggleDocs('cookie-docs')">
+     <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+       🛡️ Bypass Settings & Cookie Manager
+       <span style="font-size:10px;font-weight:400;color:var(--text-muted);">(Click to expand Help)</span>
+     </div>
+     <div style="display:flex;gap:8px;align-items:center;">
+       <span id="cookie-status-badge" class="badge badge-gray">Not Uploaded</span>
+     </div>
+   </div>
+   <div class="card-body" id="cookie-docs" style="display:none;">
+     <div class="two-col" style="gap:24px; margin-bottom:16px;">
+       <div>
+         <h4 style="font-size:13px;margin-bottom:8px;color:var(--text-secondary);">Option A: Extension (Recommended)</h4>
+         <p style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-bottom:12px;">
+           Install <b>"Get cookies.txt LOCALLY"</b>. Go to YouTube, click the icon -> <b>Export</b>. 
+           Upload it below. Chrome can stay open!
+         </p>
+         <h4 style="font-size:13px;margin-bottom:8px;color:var(--text-secondary);">Option B: Manual Copy</h4>
+         <p style="font-size:12px;color:var(--text-muted);line-height:1.6;">
+           Close Chrome. Copy <code>%LocalAppData%\Google\Chrome\User Data\Default\Network\Cookies</code> to this folder and upload it.
+         </p>
+       </div>
+       <div style="background:var(--bg-card-2);padding:16px;border-radius:var(--radius-sm);border:1px dashed var(--border);">
+         <label class="form-label" style="display:block;margin-bottom:12px;">Upload <code>cookies.txt</code> file:</label>
+         <div style="display:flex;gap:8px;">
+           <input type="file" id="cookie-file-input" style="display:none;" onchange="handleCookieUpload(this)">
+           <button class="btn btn-secondary btn-sm btn-full" onclick="document.getElementById('cookie-file-input').click()">📁 Select & Upload File</button>
+         </div>
+       </div>
+     </div>
+   </div>
+ </div>
 
 <!-- ═══════════════════════════════════
      TAB 1: VIDEO DOWNLOAD
@@ -59,18 +94,21 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Bypass Restrictions <span style="color:var(--text-muted);font-weight:400;">(Browser Cookies)</span></label>
+          <label class="form-label">Bypass Mode <span style="color:var(--text-muted);font-weight:400;">(Required for Restricted Videos)</span></label>
+          <select class="form-select" id="yt-cookie-mode" onchange="toggleBrowserSelector('yt')">
+            <option value="browser">Live Browser (Auto-detect)</option>
+            <option value="file">Static Cookie File (Recommended)</option>
+            <option value="none">None (Public only)</option>
+          </select>
+        </div>
+        <div class="form-group" id="yt-browser-wrap">
+          <label class="form-label">Select Browser</label>
           <select class="form-select" id="yt-browser">
-            <option value="" selected>None (Standard)</option>
-            <option value="chrome">Chrome</option>
+            <option value="chrome" selected>Chrome</option>
             <option value="edge">Edge</option>
             <option value="firefox">Firefox</option>
             <option value="brave">Brave</option>
-            <option value="opera">Opera</option>
-            <option value="vivaldi">Vivaldi</option>
-            <option value="safari">Safari</option>
           </select>
-          <div class="form-hint">Uses active login from your browser to bypass bot checks.</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
           <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;background:var(--bg-card-2);border-radius:var(--radius-sm);border:1px solid var(--border);">
@@ -151,18 +189,20 @@
           <textarea class="form-textarea mono" id="yt-audio-urls" rows="7" placeholder="https://www.youtube.com/watch?v=XXXX&#10;…"></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Bypass Restrictions <span style="color:var(--text-muted);font-weight:400;">(Browser Cookies)</span></label>
+          <label class="form-label">Bypass Mode</label>
+          <select class="form-select" id="yta-cookie-mode" onchange="toggleBrowserSelector('yta')">
+            <option value="browser">Live Browser</option>
+            <option value="file">Static Cookie File</option>
+            <option value="none" selected>None</option>
+          </select>
+        </div>
+        <div class="form-group" id="yta-browser-wrap" style="display:none;">
+          <label class="form-label">Select Browser</label>
           <select class="form-select" id="yta-browser">
-            <option value="" selected>None (Standard)</option>
-            <option value="chrome">Chrome</option>
+            <option value="chrome" selected>Chrome</option>
             <option value="edge">Edge</option>
             <option value="firefox">Firefox</option>
-            <option value="brave">Brave</option>
-            <option value="opera">Opera</option>
-            <option value="vivaldi">Vivaldi</option>
-            <option value="safari">Safari</option>
           </select>
-          <div class="form-hint">Uses active login from your browser to bypass bot checks.</div>
         </div>
         <div class="form-group">
           <label class="form-label">Output Folder (optional)</label>
@@ -232,13 +272,19 @@
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Bypass Restrictions <span style="color:var(--text-muted);font-weight:400;">(Cookies)</span></label>
+            <label class="form-label">Bypass Mode</label>
+            <select class="form-select" id="reel-cookie-mode" onchange="toggleBrowserSelector('reel')">
+              <option value="browser">Live Browser</option>
+              <option value="file">Static Cookie File</option>
+              <option value="none" selected>None</option>
+            </select>
+          </div>
+          <div class="form-group" id="reel-browser-wrap" style="display:none;">
+            <label class="form-label">Select Browser</label>
             <select class="form-select" id="reel-browser">
-              <option value="" selected>None</option>
-              <option value="chrome">Chrome</option>
+              <option value="chrome" selected>Chrome</option>
               <option value="edge">Edge</option>
               <option value="firefox">Firefox</option>
-              <option value="brave">Brave</option>
             </select>
           </div>
         </div>
@@ -590,11 +636,15 @@ async function startYTDownload() {
   const dlThumb = document.getElementById('yt-dl-thumb').checked;
   const threads = parseInt(document.getElementById('yt-threads').value) || 1;
 
+  const browser = document.getElementById('yt-browser').value;
+  const cMode   = document.getElementById('yt-cookie-mode').value;
+ 
   const resp = await postJSON('/api/youtube/download', {
     urls, quality, audio_only: false, output_dir: outDir,
     download_subs: dlSubs, download_thumb: dlThumb,
     concurrency: threads,
-    browser: document.getElementById('yt-browser').value || null
+    browser: browser,
+    cookie_mode: cMode
   });
   if(!resp.job_id){ showToast(resp.error||'Failed','error'); document.getElementById('yt-btn').disabled=false; document.getElementById('yt-btn').textContent='↓ Start Download'; return; }
   ytSSE = startSSEProgress({
@@ -639,7 +689,8 @@ async function startYTAudio() {
     source:'youtube', 
     yt_urls: urls, 
     output_dir: outDir,
-    browser: document.getElementById('yta-browser').value || null
+    browser: document.getElementById('yta-browser').value,
+    cookie_mode: document.getElementById('yta-cookie-mode').value
   });
   if(!resp.job_id){ showToast(resp.error||'Failed','error'); document.getElementById('yt-audio-btn').disabled=false; document.getElementById('yt-audio-btn').textContent='🎵 Extract MP3'; return; }
   ytaSSE = startSSEProgress({
@@ -690,7 +741,8 @@ async function startReelConvert() {
                   overlay_image_zoom: overlayZoomPct / 100.0,
                   overlay_image_comp_pct: overlayCompPct,
                   delete_source: deleteSource,
-                  browser: document.getElementById('reel-browser')?.value || null};
+                  browser: document.getElementById('reel-browser')?.value,
+                  cookie_mode: document.getElementById('reel-cookie-mode')?.value};
 
   let endpoint;
   if(_reelSource === 'yt') {
@@ -748,6 +800,31 @@ async function browseFolder(inputId) {
     if(data.folder) document.getElementById(inputId).value=data.folder;
     else if(data.error) showToast('Error: '+data.error,'error');
   } catch { showToast('Folder picker unavailable — type path manually','warn'); }
+}
+function toggleDocs(id){ const d=document.getElementById(id); d.style.display= (d.style.display==='none'?'block':'none'); }
+function toggleBrowserSelector(prefix){
+  const mode = document.getElementById(prefix+'-cookie-mode').value;
+  const wrap = document.getElementById(prefix+'-browser-wrap');
+  if(wrap) wrap.style.display = (mode==='browser'?'block':'none');
+}
+async function handleCookieUpload(input){
+  if(!input.files.length) return;
+  const file = input.files[0];
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const r = await fetch('/api/youtube/upload-cookies', { method:'POST', body:formData });
+    const j = await r.json();
+    if(j.error) throw new Error(j.error);
+    showToast('Cookies uploaded! File mode active.','success');
+    document.getElementById('cookie-status-badge').className='badge badge-green';
+    document.getElementById('cookie-status-badge').textContent='Uploaded ✓';
+    // Auto-switch to file mode
+    ['yt','yta','reel'].forEach(p => {
+       const el=document.getElementById(p+'-cookie-mode');
+       if(el) { el.value='file'; toggleBrowserSelector(p); }
+    });
+  } catch(e) { showToast(e.message,'error'); }
 }
 </script>
 {% endblock %}

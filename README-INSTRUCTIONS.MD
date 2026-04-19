@@ -13,11 +13,18 @@ Before running the application, ensure the following are installed:
 
 ## 2. Browser & Cookie Prerequisites (Crucial for YouTube)
 
-To bypass YouTube's "Sign in to confirm you are not a bot" restrictions, the software uses your browser's active login session.
+To bypass YouTube's "Sign in to confirm you are not a bot" restrictions, the software can either use your live browser or a standalone `cookies.txt` file.
 
-*   **Action Required**: You **MUST** open your preferred web browser (Chrome, Edge, Firefox, or Brave) and log into your YouTube/Google account.
-*   **Keep Browser Prepared**: You do not need to keep the browser open while downloading, but you must have logged in at least once so the cookies are saved locally.
-*   **Selecting in UI**: In the YouTube Downloader or Reel Converter tabs, use the **"Bypass Restrictions (Cookies)"** dropdown to select the browser where you are logged in.
+### Option A: Standalone `cookies.txt` (Recommended - Chrome stays open)
+This is the most reliable method. Once a cookie file is uploaded, you can keep Chrome open and active while downloading.
+1.  **Install Extension**: Add the "Get cookies.txt LOCALLY" extension to Chrome/Edge.
+2.  **Export**: Go to YouTube.com (logged in), click the extension icon, and select **Export**.
+3.  **Upload**: In the Nikethan Tools **YouTube** page, click "Bypass Settings", upload the file, and select **"Static Cookie File"** mode.
+
+### Option B: Live Browser (Requires closing browser)
+The software can read cookies directly from your browser if you select this mode in the UI.
+*   **Important**: On Windows, you often need to **close Chrome/Edge completely** before starting the download to avoid a "Database Locked" error.
+*   Ensure you are logged into YouTube in that browser.
 
 ## 3. Installation & First Run
 

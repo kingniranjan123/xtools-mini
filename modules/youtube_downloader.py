@@ -11,10 +11,7 @@ def _clean_err(stderr_text):
             return line
     return lines[-1] if lines else "Unknown error"
 
-def download_youtube(urls: list, quality: str, output_dir: str,
-                     audio_only: bool = False, custom_dir: bool = False, 
-                     download_subs: bool = False, download_thumb: bool = False,
-                     concurrency: int = 1, browser: str = None, 
+                     concurrency: int = 1, browser: str = None, cookie_file: str = None, 
                      check_exists_cb=None, progress_cb=None) -> list:
     """
     Download a list of YouTube URLs via yt-dlp in parallel.
@@ -34,7 +31,9 @@ def download_youtube(urls: list, quality: str, output_dir: str,
             if progress_cb: progress_cb(f"Expanding playlist: {url}", None)
             try:
                 cmd = ytdlp + ['--flat-playlist', '--get-url', '--no-warnings']
-                if browser:
+                if cookie_file and os.path.isfile(cookie_file):
+                    cmd += ['--cookies', cookie_file]
+                elif browser:
                     cmd += ['--cookies-from-browser', browser]
                 cmd.append(url)
                 
@@ -67,7 +66,9 @@ def download_youtube(urls: list, quality: str, output_dir: str,
             time.sleep(random.uniform(0, 1.5))
             
             info_cmd = ytdlp + ['--rm-cache-dir', '--print-json', '--no-download', '--no-playlist']
-            if browser:
+            if cookie_file and os.path.isfile(cookie_file):
+                info_cmd += ['--cookies', cookie_file]
+            elif browser:
                 info_cmd += ['--cookies-from-browser', browser]
             info_cmd.append(url)
             
@@ -98,7 +99,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
             
             res = _download_yt_single(
                 url, quality, output_dir, custom_dir, audio_only, download_subs, download_thumb, ytdlp, 
-                progress_cb, prefix, info, browser=browser
+                progress_cb, prefix, info, browser=browser, cookie_file=cookie_file
             )
             
             with lock:
@@ -135,7 +136,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
     return results
 
 def _download_yt_single(url, quality, output_dir, custom_dir, audio_only, 
-                        download_subs, download_thumb, ytdlp, progress_cb, prefix, info, browser=None):
+                        download_subs, download_thumb, ytdlp, progress_cb, prefix, info, browser=None, cookie_file=None):
     """Download one YouTube URL."""
 
     title    = info.get('title', 'unknown')
@@ -154,7 +155,9 @@ def _download_yt_single(url, quality, output_dir, custom_dir, audio_only,
     out_template = os.path.join(channel_dir, f'%(title).150s [%(id)s].%(ext)s')
 
     dl_cmd = ytdlp + ['--no-playlist', '--rm-cache-dir', '--output', out_template, '--merge-output-format', 'mp4', '--prefer-free-formats', '--socket-timeout', '30']
-    if browser:
+    if cookie_file and os.path.isfile(cookie_file):
+        dl_cmd += ['--cookies', cookie_file]
+    elif browser:
         dl_cmd += ['--cookies-from-browser', browser]
     
     if audio_only:

@@ -39,6 +39,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'nikethan-secret-2026')
 BASE_DIR      = os.path.dirname(__file__)
 DOWNLOADS_DIR = os.path.join(BASE_DIR, 'downloads')
 COOKIES_FILE  = os.path.join(BASE_DIR, 'cookies.txt')
+YT_COOKIES_FILE = os.path.join(BASE_DIR, 'youtube_cookies.txt')
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 FOLDER_LAYOUT = [
@@ -2217,6 +2218,7 @@ def api_youtube_download():
     dl_thumb    = bool(data.get('download_thumb', False))
     concurrency = int(data.get('concurrency', 1))
     browser     = data.get('browser')
+    cookie_mode = data.get('cookie_mode', 'browser') # 'browser' or 'file'
     if not urls: return jsonify({'error': 'No URLs'}), 400
 
     job_id = str(uuid.uuid4())
@@ -2237,10 +2239,11 @@ def api_youtube_download():
             custom_dir = False
         
         try:
+            c_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
             results = download_youtube(
                 urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only, custom_dir=custom_dir,
                 download_subs=dl_subs, download_thumb=dl_thumb,
-                concurrency=concurrency, browser=browser,
+                concurrency=concurrency, browser=browser, cookie_file=c_file,
                 check_exists_cb=check_exists,
                 progress_cb=lambda line, pct=None: _emit(job, line, pct)
             )
@@ -2255,6 +2258,15 @@ def api_youtube_download():
 @app.route('/api/youtube/progress/<job_id>')
 def api_youtube_progress(job_id):
     return _sse_stream(job_id)
+
+@app.route('/api/youtube/upload-cookies', methods=['POST'])
+def api_youtube_upload_cookies():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    if 'file' not in request.files: return jsonify({'error': 'No file'}), 400
+    file = request.files['file']
+    if not file.filename: return jsonify({'error': 'Empty filename'}), 400
+    file.save(YT_COOKIES_FILE)
+    return jsonify({'message': 'Cookies uploaded successfully', 'path': YT_COOKIES_FILE})
 
 
 @app.route('/api/youtube/reel-convert', methods=['POST'])
@@ -2285,6 +2297,7 @@ def api_youtube_reel_convert():
     overlay_image_comp_pct = max(1.0, min(100.0, float(data.get('overlay_image_comp_pct', 100.0) or 100.0)))
     delete_source = bool(data.get('delete_source', False))
     browser       = data.get('browser')
+    cookie_mode   = data.get('cookie_mode', 'browser')
 
     if not url:
         return jsonify({'error': 'No YouTube URL provided'}), 400
@@ -2307,9 +2320,10 @@ def api_youtube_reel_convert():
         os.makedirs(yt_dir, exist_ok=True)
         _emit(job, f'📥 Downloading: {url}', 5)
 
+        c_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
         results = download_youtube(
             urls=[url], quality=quality, output_dir=yt_dir, audio_only=False,
-            custom_dir=bool(output_dir), browser=browser,
+            custom_dir=bool(output_dir), browser=browser, cookie_file=c_file,
             progress_cb=lambda line, pct=None: _emit(job, line, pct)
         )
         if not results or results[0].get('status') != 'ok':
@@ -2505,11 +2519,13 @@ def api_audio_extract():
         if source == 'youtube':
             yt_urls = data.get('yt_urls', [])
             browser = data.get('browser')
+            cookie_mode = data.get('cookie_mode', 'browser')
+            c_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
             out = output_dir or _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube_mp3')
             os.makedirs(out, exist_ok=True)
             results = download_youtube(
                 urls=yt_urls, quality='best', output_dir=out, audio_only=True,
-                browser=browser,
+                browser=browser, cookie_file=c_file,
                 progress_cb=lambda l, p=None: _emit(job, l, p)
             )
             # rename yt_dlp output status 'ok' -> map properly for UI
