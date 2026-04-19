@@ -2230,14 +2230,24 @@ def api_youtube_download():
     job    = _make_job(job_id)
 
     def check_exists(vid_id):
-        # Verify DB record AND physical file presence
+        # Layer 1: Database Check (Fast)
         db = sqlite3.connect(DB_PATH)
         row = db.execute('SELECT file_path FROM reels WHERE id=? LIMIT 1', (vid_id,)).fetchone()
         db.close()
-        if not row: return False
-        fpath = row[0]
-        if fpath and os.path.isfile(fpath):
+        if row:
+            fpath = row[0]
+            if fpath and os.path.isfile(fpath):
+                return True
+        
+        # Layer 2: Fuzzy Disk Check (Legacy Files)
+        # We look for any file containing [vid_id] in the yt_dir (recursive)
+        import glob as _g
+        target_dir = data.get('output_dir', '').strip() or _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube')
+        pattern = os.path.join(target_dir, '**', f'*[{vid_id}]*')
+        matches = _g.glob(pattern, recursive=True)
+        if matches:
             return True
+
         return False
 
     def run():
