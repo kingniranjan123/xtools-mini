@@ -73,13 +73,10 @@ def download_youtube(urls: list, quality: str, output_dir: str,
     # Thread-safe tracking
     lock = threading.Lock()
     state = {
-        'consecutive_failures': 0,
-        'completed_count': 0,
-        'abend': False
+        'completed_count': 0
     }
 
     def worker(idx, url):
-        if state['abend']: return {'url': url, 'status': 'abended'}
         
         # 2. Get Info & Deduplication
         try:
@@ -120,7 +117,6 @@ def download_youtube(urls: list, quality: str, output_dir: str,
                 if check_exists_cb(vid_id, title=title):
                     with lock:
                         state['completed_count'] += 1
-                        state['consecutive_failures'] = 0 # RESET on skip (system is working)
                         pct = int(state['completed_count'] / total * 100)
                     if progress_cb: progress_cb(f'  ✓ [Duplicate] {prefix} Hyperlink already downloaded (Skipped)', pct)
                     return {'url': url, 'id': vid_id, 'status': 'skipped', 'title': title}
@@ -138,7 +134,6 @@ def download_youtube(urls: list, quality: str, output_dir: str,
             
             with lock:
                 state['completed_count'] += 1
-                state['consecutive_failures'] = 0 # reset on success
                 pct = int(state['completed_count'] / total * 100)
             
             if progress_cb: progress_cb(f'  ✓ Done: {prefix}', pct)
@@ -147,10 +142,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
         except Exception as exc:
             with lock:
                 state['completed_count'] += 1
-                state['consecutive_failures'] += 1
                 pct = int(state['completed_count'] / total * 100)
-                if state['consecutive_failures'] >= 5:
-                    state['abend'] = True
             
             err_msg = str(exc)
             if progress_cb: progress_cb(f'  ✗ Error: {url} -> {err_msg}', pct)
@@ -163,9 +155,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
         for future in as_completed(futures):
             results.append(future.result())
 
-    if state['abend']:
-        if progress_cb: progress_cb("!!! CRITICAL: 5 consecutive failures. Job Abended.", None)
-        raise RuntimeError("Job aborted due to 5 consecutive failures.")
+    # Removed abend logic for resiliency
 
     return results
 
