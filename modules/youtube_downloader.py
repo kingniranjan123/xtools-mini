@@ -20,7 +20,13 @@ def download_youtube(urls: list, quality: str, output_dir: str,
     """
     Download a list of YouTube URLs via yt-dlp in parallel.
     """
-    ytdlp = [sys.executable, '-m', 'yt_dlp', '--no-check-certificates']
+    ytdlp = [
+        sys.executable, '-m', 'yt_dlp', 
+        '--no-check-certificates',
+        '--geo-bypass',
+        '--force-ipv4',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+    ]
     os.makedirs(output_dir, exist_ok=True)
     
     # 1. Expand Playlists
@@ -192,10 +198,11 @@ def _download_yt_single(url, quality, output_dir, custom_dir, audio_only,
             # Priority: MP4 Best -> Any Best
             fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best'
         else:
-            # Priority: Requested Height MP4 -> Requested Height Any -> Best Available below/at height
+            # Priority: Requested Height MP4 -> Requested Height Any -> ANY Best Available below/at height -> ABSOLUTE BEST
             fmt = (f'bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/'
                    f'bestvideo[height<={quality}]+bestaudio/'
-                   f'best[height<={quality}]/best')
+                   f'best[height<={quality}]/'
+                   f'best')
         dl_cmd += ['--format', fmt, '--merge-output-format', 'mp4']
         
         if download_thumb:
