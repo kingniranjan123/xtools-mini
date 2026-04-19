@@ -2,7 +2,7 @@
 Nikethan Reels Toolkit — Flask App
 Password: nikethan
 """
-import os, json, uuid, threading, subprocess, shutil, sys, sqlite3, tkinter as tk
+import os, json, uuid, threading, subprocess, shutil, sys, sqlite3, re, tkinter as tk
 from tkinter import filedialog
 from datetime import datetime, timedelta
 from datetime import timezone
@@ -2216,6 +2216,7 @@ def api_youtube_download():
     dl_subs     = bool(data.get('download_subs', False))
     dl_thumb    = bool(data.get('download_thumb', False))
     concurrency = int(data.get('concurrency', 1))
+    browser     = data.get('browser')
     if not urls: return jsonify({'error': 'No URLs'}), 400
 
     job_id = str(uuid.uuid4())
@@ -2239,7 +2240,7 @@ def api_youtube_download():
             results = download_youtube(
                 urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only, custom_dir=custom_dir,
                 download_subs=dl_subs, download_thumb=dl_thumb,
-                concurrency=concurrency,
+                concurrency=concurrency, browser=browser,
                 check_exists_cb=check_exists,
                 progress_cb=lambda line, pct=None: _emit(job, line, pct)
             )
@@ -2283,6 +2284,7 @@ def api_youtube_reel_convert():
     overlay_image_zoom = float(data.get('overlay_image_zoom', 1.0) or 1.0)
     overlay_image_comp_pct = max(1.0, min(100.0, float(data.get('overlay_image_comp_pct', 100.0) or 100.0)))
     delete_source = bool(data.get('delete_source', False))
+    browser       = data.get('browser')
 
     if not url:
         return jsonify({'error': 'No YouTube URL provided'}), 400
@@ -2307,7 +2309,7 @@ def api_youtube_reel_convert():
 
         results = download_youtube(
             urls=[url], quality=quality, output_dir=yt_dir, audio_only=False,
-            custom_dir=bool(output_dir),
+            custom_dir=bool(output_dir), browser=browser,
             progress_cb=lambda line, pct=None: _emit(job, line, pct)
         )
         if not results or results[0].get('status') != 'ok':

@@ -14,7 +14,8 @@ def _clean_err(stderr_text):
 def download_youtube(urls: list, quality: str, output_dir: str,
                      audio_only: bool = False, custom_dir: bool = False, 
                      download_subs: bool = False, download_thumb: bool = False,
-                     concurrency: int = 1, check_exists_cb=None, progress_cb=None) -> list:
+                     concurrency: int = 1, browser: str = None, 
+                     check_exists_cb=None, progress_cb=None) -> list:
     """
     Download a list of YouTube URLs via yt-dlp in parallel.
     """
@@ -61,7 +62,11 @@ def download_youtube(urls: list, quality: str, output_dir: str,
             # Add small random jitter to avoid clashing simultaneous requests to YouTube
             time.sleep(random.uniform(0, 1.5))
             
-            info_cmd = ytdlp + ['--rm-cache-dir', '--print-json', '--no-download', '--no-playlist', url]
+            info_cmd = ytdlp + ['--rm-cache-dir', '--print-json', '--no-download', '--no-playlist']
+            if browser:
+                info_cmd += ['--cookies-from-browser', browser]
+            info_cmd.append(url)
+            
             # Use run to capture both stdout and stderr for better error reporting
             proc = subprocess.run(info_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60)
             if proc.returncode != 0:
@@ -89,7 +94,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
             
             res = _download_yt_single(
                 url, quality, output_dir, custom_dir, audio_only, download_subs, download_thumb, ytdlp, 
-                progress_cb, prefix, info
+                progress_cb, prefix, info, browser=browser
             )
             
             with lock:
@@ -126,7 +131,7 @@ def download_youtube(urls: list, quality: str, output_dir: str,
     return results
 
 def _download_yt_single(url, quality, output_dir, custom_dir, audio_only, 
-                        download_subs, download_thumb, ytdlp, progress_cb, prefix, info):
+                        download_subs, download_thumb, ytdlp, progress_cb, prefix, info, browser=None):
     """Download one YouTube URL."""
 
     title    = info.get('title', 'unknown')
@@ -145,6 +150,8 @@ def _download_yt_single(url, quality, output_dir, custom_dir, audio_only,
     out_template = os.path.join(channel_dir, f'%(title).150s [%(id)s].%(ext)s')
 
     dl_cmd = ytdlp + ['--no-playlist', '--rm-cache-dir', '--output', out_template, '--merge-output-format', 'mp4', '--prefer-free-formats', '--socket-timeout', '30']
+    if browser:
+        dl_cmd += ['--cookies-from-browser', browser]
     
     if audio_only:
         dl_cmd += ['-x', '--audio-format', 'mp3', '--audio-quality', '0']
