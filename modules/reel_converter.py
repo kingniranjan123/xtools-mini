@@ -29,12 +29,16 @@ REEL_H = 1920
 
 _FONT_CANDIDATES = [
     # Windows
+    # Windows - Multilingual / Indic Support
+    'C:/Windows/Fonts/nirmala.ttf',
+    'C:/Windows/Fonts/Nirmala.ttf',
+    'C:/Windows/Fonts/seguihis.ttf',
+    'C:/Windows/Fonts/segoeui.ttf',
     'C:/Windows/Fonts/arial.ttf',
     'C:/Windows/Fonts/Arial.ttf',
     'C:/Windows/Fonts/arialbd.ttf',
     'C:/Windows/Fonts/calibri.ttf',
     'C:/Windows/Fonts/tahoma.ttf',
-    'C:/Windows/Fonts/segoeui.ttf',
     # Linux / Mac
     '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
     '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
@@ -56,7 +60,28 @@ def _resolve_font() -> str:
     return ''
 
 
-# ── Video probe ───────────────────────────────────────────────────
+# ── Utility Helpers ────────────────────────────────────────────────
+import re
+
+def _safe_filename(text: str) -> str:
+    """Strip characters that are illegal or problematic on Windows file systems."""
+    # Keep alphanumeric, spaces, dots, dashes, and underscores
+    # Replace anything else with an underscore
+    s = re.sub(r'[^\w\s\.-]', '_', text)
+    # Strip leading/trailing spaces and multiple underscores
+    s = re.sub(r' +', ' ', s).strip()
+    s = re.sub(r'_+', '_', s)
+    return s
+
+def _clean_label(text: str) -> str:
+    """Clean text for use inside drawtext filters (sanitize symbols)."""
+    return (text
+            .replace("'", "")
+            .replace(":", " ")
+            .replace(",", " ")
+            .replace("|", " ")
+            .replace("\\", " ")
+            .strip())
 
 def probe_video(path: str) -> dict:
     cmd = [
@@ -149,10 +174,7 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
         base_y_px = int(canvas_h * title_pos_pct / 100.0)
 
         for i, line in enumerate(lines):
-            safe_line = (line
-                         .replace("'", "\\'")
-                         .replace(":", "\\:")
-                         .replace(",", "\\,"))
+            safe_line = _clean_label(line)
             y_px = base_y_px + i * line_height
             filters.append(
                 f"drawtext=text='{safe_line}':"
@@ -181,10 +203,7 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
 
     # Watermark: bottom-right, semi-transparent
     if show_watermark and watermark.strip():
-        safe_wm = (watermark
-                   .replace("'", "\\'")
-                   .replace(":", "\\:")
-                   .replace(",", "\\,"))
+        safe_wm = _clean_label(watermark)
         filters.append(
             f"drawtext=text='{safe_wm}':"
             f"{font_attr}"
@@ -209,6 +228,10 @@ def encode_part(input_path: str, output_path: str,
     overlay = (overlay_image_path or '').strip()
     comp_pct = max(1.0, min(100.0, float(overlay_image_comp_pct or 100.0)))
     zoom = max(1.0, min(2.0, float(overlay_image_zoom or 1.0)))
+    # Normalize paths to use forward slashes for FFmpeg consistency on Windows
+    input_path = input_path.replace('\\', '/')
+    output_path = output_path.replace('\\', '/')
+    
     cmd = [FFMPEG, '-y', '-ss', str(start_sec), '-t', str(duration_sec), '-i', input_path]
     if overlay and os.path.isfile(overlay):
         base_expr = vf if vf and vf != 'copy' else 'null'
@@ -232,13 +255,13 @@ def encode_part(input_path: str, output_path: str,
             '-loop', '1', '-i', overlay,
             '-filter_complex',
             (
-                f"[0:v]{base_expr}[base];"
+                f"[0:v]{base_expr}[base_ready];"
                 f"[1:v]format=rgba,"
                 f"scale=w={container_w}:h={container_h}:force_original_aspect_ratio=decrease,"
                 f"scale=w=iw*{zoom:.4f}:h=ih*{zoom:.4f}[ovzoom];"
                 f"[ovzoom]crop=w='min(iw,{container_w})':h='min(ih,{container_h})':"
                 f"x='(iw-ow)/2':y='(ih-oh)/2'[ov];"
-                f"[base][ov]overlay=x='(W-w)/2':y={overlay_y}:shortest=1[vout]"
+                f"[base_ready][ov]overlay=x='(W-w)/2':y={overlay_y}:shortest=1[vout]"
             ),
             '-map', '[vout]', '-map', '0:a?'
         ]
@@ -346,7 +369,8 @@ def convert_to_reels(
         if seg_dur <= 0:
             break
 
-        out_name = f"{base_name}_part{part_num:02d}.mp4"
+        safe_base = _safe_filename(base_name)
+        out_name = f"{safe_base}_part{part_num:02d}.mp4"
         out_path = os.path.join(output_dir, out_name)
 
         vf = build_filters(in_w, in_h, part_num, title, watermark,
