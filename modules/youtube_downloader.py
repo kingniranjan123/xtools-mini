@@ -10,8 +10,8 @@ def _clean_err(stderr_text):
         return "❌ Cookies Expired! Please re-export from browser and upload again."
     if 'confirm you' in stderr_text.lower() and 'bot' in stderr_text.lower():
         return "❌ Bot Blocked! Follow 'Bypass Guide' (Install Deno & Re-export Cookies)."
-    if 'Requested format is not available' in stderr_text:
-        return "❌ Format Hidden! (Usually fixed by installing Deno & New Cookies)."
+    if 'Requested format is not available' in stderr_text or 'requested format' in stderr_text.lower():
+        return "❌ Format unavailable for this video (try with cookies or a different quality setting)."
 
     lines = [line.strip() for line in stderr_text.splitlines() if line.strip()]
     # Look for 'ERROR:' or 'YouTube said:' lines
@@ -30,12 +30,11 @@ def download_youtube(urls: list, quality: str, output_dir: str,
     Download a list of YouTube URLs via yt-dlp in parallel.
     """
     ytdlp = [
-        sys.executable, '-m', 'yt_dlp', 
+        sys.executable, '-m', 'yt_dlp',
         '--no-check-certificates',
         '--geo-bypass',
         '--force-ipv4',
-        '--js-runtime', 'node',
-        '--remote-components', 'ejs:github',
+        '--js-runtimes', 'node',        # prefer node; falls back internally if unavailable
         '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
     ]
     os.makedirs(output_dir, exist_ok=True)
@@ -51,7 +50,8 @@ def download_youtube(urls: list, quality: str, output_dir: str,
         if 'list=' in url:
             if progress_cb: progress_cb(f"Expanding playlist: {url}", None)
             try:
-                cmd = ytdlp + ['--flat-playlist', '--get-url', '--no-warnings']
+                # Print both webpage_url AND id so we can reconstruct if CDN URLs leak through
+                cmd = ytdlp + ['--flat-playlist', '--print', '%(webpage_url)s\t%(id)s', '--no-warnings']
                 if cookie_file and os.path.isfile(cookie_file):
                     cmd += ['--cookies', cookie_file]
                 elif browser:
@@ -59,8 +59,25 @@ def download_youtube(urls: list, quality: str, output_dir: str,
                 cmd.append(url)
                 
                 raw = subprocess.check_output(cmd, text=True, encoding='utf-8', errors='replace').strip()
-                p_urls = [u.strip() for u in raw.splitlines() if u.strip()]
-                expanded_urls.extend(p_urls)
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts_tab = line.split('\t', 1)
+                    entry_url = parts_tab[0].strip()
+                    entry_id  = parts_tab[1].strip() if len(parts_tab) > 1 else ''
+                    # Reject raw CDN / videoplayback URLs — they contain illegal filename chars
+                    is_watch_url = (
+                        'youtube.com/watch' in entry_url or
+                        'youtu.be/' in entry_url or
+                        'youtube.com/shorts' in entry_url
+                    )
+                    if is_watch_url:
+                        expanded_urls.append(entry_url)
+                    elif entry_id:
+                        # Reconstruct a proper watch URL from the video ID
+                        expanded_urls.append(f'https://www.youtube.com/watch?v={entry_id}')
+                    # else: completely malformed entry — skip silently
             except Exception as e:
                 expanded_urls.append(url)
         else:
@@ -77,20 +94,23 @@ def download_youtube(urls: list, quality: str, output_dir: str,
     }
 
     def worker(idx, url):
-        
+        # Guard: reject raw CDN stream URLs
+        if 'googlevideo.com' in url or 'videoplayback?' in url:
+            if progress_cb: progress_cb(f'  ✗ Skipped CDN URL (not a valid YouTube page): {url[:60]}...', None)
+            return {'url': url, 'status': 'error', 'error': 'Raw CDN URL — not a valid YouTube watch page'}
+
         # 2. Get Info & Deduplication
         try:
-            # Add safety delay to mimic human behavior and avoid rate limits
+            # Randomize slightly (e.g. 30s delay becomes 25-35s)
             if request_delay > 0:
-                # Randomize slightly (e.g. 30s delay becomes 25-35s)
                 jitter_delay = random.uniform(request_delay * 0.8, request_delay * 1.2)
                 if progress_cb: progress_cb(f"⏳ Waiting {int(jitter_delay)}s (Safety Mode)...", None)
                 time.sleep(jitter_delay)
             else:
-                # Minimum jitter even if delay is 0
                 time.sleep(random.uniform(0, 1.5))
             
-            info_cmd = ytdlp + ['--rm-cache-dir', '--print-json', '--no-download', '--no-playlist']
+            # Removed --rm-cache-dir to prevent WinError 32 locks from concurrent challenges
+            info_cmd = ytdlp + ['--print-json', '--no-download', '--no-playlist']
             if request_delay > 0:
                 info_cmd += ['--sleep-interval', str(int(request_delay))]
             
@@ -176,9 +196,10 @@ def _download_yt_single(url, quality, output_dir, custom_dir, audio_only,
     
     # We use a temp name to avoid any collision before we rename
     # Adding id to template helps us find the specific files later
-    out_template = os.path.join(channel_dir, f'%(title).150s [%(id)s].%(ext)s')
+    out_template = os.path.join(channel_dir, f'%(title).100s [%(id).40s].%(ext)s')
 
-    dl_cmd = ytdlp + ['--no-playlist', '--rm-cache-dir', '--output', out_template, '--merge-output-format', 'mp4', '--prefer-free-formats', '--socket-timeout', '30']
+    # Removed --rm-cache-dir to prevent cache locks across threads
+    dl_cmd = ytdlp + ['--no-playlist', '--output', out_template, '--merge-output-format', 'mp4', '--prefer-free-formats', '--socket-timeout', '30']
     
     # Pass delay to yt-dlp internal requests
     if info.get('request_delay'):

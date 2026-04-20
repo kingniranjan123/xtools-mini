@@ -16,6 +16,9 @@ import os
 import subprocess
 import sys
 import json
+import re
+import uuid
+import tempfile
 from math import ceil
 
 FFMPEG  = 'ffmpeg'
@@ -30,8 +33,14 @@ REEL_H = 1920
 _FONT_CANDIDATES = [
     # Windows
     # Windows - Multilingual / Indic Support
+    'C:/Windows/Fonts/nirmala.ttc',
     'C:/Windows/Fonts/nirmala.ttf',
+    'C:/Windows/Fonts/Nirmala.ttc',
     'C:/Windows/Fonts/Nirmala.ttf',
+    'C:/Windows/Fonts/latha.ttf',
+    'C:/Windows/Fonts/Latha.ttf',
+    'C:/Windows/Fonts/vijaya.ttf',
+    'C:/Windows/Fonts/Vijaya.ttf',
     'C:/Windows/Fonts/seguihis.ttf',
     'C:/Windows/Fonts/segoeui.ttf',
     'C:/Windows/Fonts/arial.ttf',
@@ -129,11 +138,24 @@ def _wrap_title(text: str, canvas_w: int, font_size: int, max_lines: int = 4) ->
 def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: str,
                   show_title: bool, show_part_label: bool, show_watermark: bool,
                   title_pos_pct: float = 20.0, part_pos_pct: float = 82.0,
-                  output_size: str = 'instagram') -> str:
+                  output_size: str = 'instagram',
+                  temp_dir: str = None) -> (str, list):
     """
     Build the -vf filter chain for one part.
-    output_size: 'instagram' (9:16 1080×1920 letterbox) | 'original' (keep source dims)
+    Returns (filter_string, list_of_temp_files_to_cleanup)
     """
+    temp_files = []
+    
+    def _make_text_file(txt: str) -> str:
+        if not temp_dir: return ''
+        fname = os.path.join(temp_dir, f"text_{uuid.uuid4().hex}.txt")
+        # Standard UTF-8 works for most modern FFmpeg builds
+        with open(fname, 'w', encoding='utf-8') as f:
+            f.write(txt)
+        temp_files.append(fname)
+        # FFmpeg escape path (esp. backslashes and colons on Windows)
+        return fname.replace('\\', '/').replace(':', '\\:')
+
     is_portrait = in_h > in_w
 
     if output_size == 'original':
@@ -159,6 +181,9 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
 
     font_file = _resolve_font()
     font_attr = f"fontfile='{font_file}':" if font_file else ''
+    
+    # Text shaper (LibHarfBuzz/LibFriBidi) is essential for Indic/Arabic scripts
+    shaping_attr = "text_shaping=1:"
 
     # Title: word-wrapped, centered placement
     if show_title and title.strip():
@@ -175,10 +200,15 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
 
         for i, line in enumerate(lines):
             safe_line = _clean_label(line)
+            t_file = _make_text_file(safe_line)
             y_px = base_y_px + i * line_height
+            
+            # Use textfile instead of text to bypass shell encoding issues
+            text_param = f"textfile='{t_file}'" if t_file else f"text='{safe_line}'"
+            
             filters.append(
-                f"drawtext=text='{safe_line}':"
-                f"{font_attr}"
+                f"drawtext={text_param}:"
+                f"{font_attr}{shaping_attr}"
                 f"fontcolor=white:fontsize={title_font_size}:"
                 f"x=(w-text_w)/2:y={y_px}:"
                 f"shadowcolor=black@0.85:shadowx=2:shadowy=2"
@@ -187,15 +217,16 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
     # Part label: custom centered bottom placement
     if show_part_label:
         part_label = f"Part -{part_num}"
+        t_file = _make_text_file(part_label)
+        text_param = f"textfile='{t_file}'" if t_file else f"text='{part_label}'"
+        
         default_y_expr = f"h*{part_pos_pct/100.0:.2f}"
         y_pos = default_y_expr
         if output_size == 'instagram':
-            # Avoid comma-based expressions (e.g. max(a,b)) that can break parsing
-            # when this filter chain is embedded inside filter_complex.
             y_pos = "h-text_h-54"
         filters.append(
-            f"drawtext=text='{part_label}':"
-            f"{font_attr}"
+            f"drawtext={text_param}:"
+            f"{font_attr}{shaping_attr}"
             f"fontcolor=white:fontsize=64:"
             f"x=(w-text_w)/2:y={y_pos}:"
             f"shadowcolor=black@0.9:shadowx=3:shadowy=3"
@@ -204,16 +235,19 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
     # Watermark: bottom-right, semi-transparent
     if show_watermark and watermark.strip():
         safe_wm = _clean_label(watermark)
+        t_file = _make_text_file(safe_wm)
+        text_param = f"textfile='{t_file}'" if t_file else f"text='{safe_wm}'"
+        
         filters.append(
-            f"drawtext=text='{safe_wm}':"
-            f"{font_attr}"
+            f"drawtext={text_param}:"
+            f"{font_attr}{shaping_attr}"
             f"fontcolor=white@0.55:fontsize=34:"
             f"x=w-text_w-28:y=h-text_h-28:"
             f"shadowcolor=black@0.5:shadowx=1:shadowy=1"
         )
 
     # If no filters at all, pass through unchanged
-    return ','.join(filters) if filters else 'copy'
+    return (','.join(filters) if filters else 'copy', temp_files)
 
 
 # ── Single-part encode ────────────────────────────────────────────
@@ -224,6 +258,7 @@ def encode_part(input_path: str, output_path: str,
                 overlay_image_comp_pct: float = 100.0,
                 bottom_compartment_px: int = 0,
                 output_size: str = 'instagram',
+                temp_files: list = None,
                 progress_cb=None) -> bool:
     overlay = (overlay_image_path or '').strip()
     comp_pct = max(1.0, min(100.0, float(overlay_image_comp_pct or 100.0)))
@@ -286,6 +321,13 @@ def encode_part(input_path: str, output_path: str,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+    # Cleanup temp text files
+    if temp_files:
+        for tf in temp_files:
+            try:
+                if os.path.isfile(tf): os.remove(tf)
+            except: pass
+
     if result.returncode != 0:
         if progress_cb:
             # Safely decode stderr — ignore any undecodable bytes
@@ -373,9 +415,13 @@ def convert_to_reels(
         out_name = f"{safe_base}_part{part_num:02d}.mp4"
         out_path = os.path.join(output_dir, out_name)
 
-        vf = build_filters(in_w, in_h, part_num, title, watermark,
-                           show_title, show_part_label, show_watermark,
-                           title_pos_pct, part_pos_pct, output_size=output_size)
+        # Build filters with temp dir context for text files
+        vf, t_files = build_filters(
+            in_w, in_h, part_num, title, watermark,
+            show_title, show_part_label, show_watermark,
+            title_pos_pct, part_pos_pct, output_size=output_size,
+            temp_dir=output_dir # Use same output dir for temp files
+        )
 
         if progress_cb:
             progress_cb(f'🎬 Encoding Part {part_num}/{num_parts} → {out_name}')
@@ -387,6 +433,7 @@ def convert_to_reels(
             overlay_image_comp_pct=overlay_image_comp_pct,
             bottom_compartment_px=bottom_compartment_px,
             output_size=output_size,
+            temp_files=t_files,
             progress_cb=progress_cb
         )
         if ok:

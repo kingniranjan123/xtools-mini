@@ -2096,6 +2096,153 @@ def api_ig_list_delete():
     return jsonify({'ok': True})
 
 # ══════════════════════════════════════════════════════════════
+#  YouTube Account Rotation Manager
+# ══════════════════════════════════════════════════════════════
+
+def _get_available_yt_account():
+    """
+    Pick the best available YouTube account based on:
+    1. Active status
+    2. Usage count < 20 (autoresets daily)
+    3. Cooldown (2 hours since first_error_at)
+    """
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    now = datetime.now()
+    
+    # 1. Auto-Reset Logic: Reset counts for anything not used in 24 hours
+    # This is a 'lazy' reset performed whenever a picker is called.
+    db.execute('''
+        UPDATE youtube_accounts 
+        SET usage_count = 0 
+        WHERE last_used_at < ?
+    ''', ((now - timedelta(days=1)).isoformat(),))
+    db.commit()
+
+    # 2. Selection Logic
+    # We want accounts that:
+    # a. Are active
+    # b. Have a cookie path
+    # c. Are NOT in cooldown (either first_error_at IS NULL OR it was > 2 hours ago)
+    # d. Have usage_count < 20
+    # Ordered by last_used_at ascending to balance the load.
+    
+    two_hours_ago = (now - timedelta(hours=2)).isoformat()
+    
+    query = '''
+        SELECT * FROM youtube_accounts
+        WHERE is_active = 1
+        AND cookie_path IS NOT NULL
+        AND (first_error_at IS NULL OR first_error_at < ?)
+        AND usage_count < max_usage
+        ORDER BY last_used_at ASC
+        LIMIT 1
+    '''
+    row = db.execute(query, (two_hours_ago,)).fetchone()
+    db.close()
+    return dict(row) if row else None
+
+def _update_yt_account_usage(acc_id, success=True, error_msg=""):
+    """Update usage count or flag rate limits."""
+    db = sqlite3.connect(DB_PATH)
+    now = datetime.now().isoformat()
+    if success:
+        db.execute('''
+            UPDATE youtube_accounts 
+            SET usage_count = usage_count + 1, 
+                last_used_at = ?, 
+                first_error_at = NULL,
+                status = 'ok'
+            WHERE id = ?
+        ''', (now, acc_id))
+    else:
+        status = 'ok'
+        if 'rate-limit' in error_msg.lower() or 'unavailable' in error_msg.lower() or 'try again later' in error_msg.lower():
+            status = 'rate_limited'
+        elif 'cookie' in error_msg.lower() and 'expired' in error_msg.lower():
+            status = 'expired'
+            
+        db.execute('''
+            UPDATE youtube_accounts 
+            SET first_error_at = COALESCE(first_error_at, ?),
+                status = ?,
+                last_used_at = ?
+            WHERE id = ?
+        ''', (now, status, now, acc_id))
+    db.commit()
+    db.close()
+
+@app.route('/api/youtube/accounts')
+def api_youtube_accounts():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    db = get_db()
+    rows = db.execute('SELECT * FROM youtube_accounts ORDER BY id ASC').fetchall()
+    res = []
+    for r in rows:
+        d = dict(r)
+        d['has_cookie'] = bool(d['cookie_path'] and os.path.isfile(d['cookie_path']))
+        # Calculate cooldown status
+        d['in_cooldown'] = False
+        if d['first_error_at']:
+            err_at = datetime.fromisoformat(d['first_error_at'])
+            if datetime.now() - err_at < timedelta(hours=2):
+                d['in_cooldown'] = True
+        res.append(d)
+    return jsonify(res)
+
+@app.route('/api/youtube/accounts/save', methods=['POST'])
+def api_youtube_accounts_save():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json()
+    acc_id = data.get('id')
+    label = data.get('label')
+    content = data.get('content', '').strip()
+    
+    if not acc_id or not label: return jsonify({'error': 'Missing ID or Label'}), 400
+    
+    cookie_path = None
+    if content:
+        yt_cookie_dir = os.path.join(BASE_DIR, 'cookies', 'youtube')
+        os.makedirs(yt_cookie_dir, exist_ok=True)
+        cookie_path = os.path.join(yt_cookie_dir, f'yt_acc_{acc_id}.txt')
+        with open(cookie_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+            
+    db = get_db()
+    if cookie_path:
+        db.execute('UPDATE youtube_accounts SET label=?, cookie_path=?, status="ok", first_error_at=NULL, usage_count=0 WHERE id=?',
+                   (label, cookie_path, acc_id))
+    else:
+        db.execute('UPDATE youtube_accounts SET label=? WHERE id=?', (label, acc_id))
+    db.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/youtube/accounts/toggle', methods=['POST'])
+def api_youtube_accounts_toggle():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json()
+    acc_id = data.get('id')
+    active = data.get('active', 1)
+    db = get_db()
+    db.execute('UPDATE youtube_accounts SET is_active=? WHERE id=?', (active, acc_id))
+    db.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/youtube/accounts/delete-cookies', methods=['POST'])
+def api_youtube_accounts_delete_cookies():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json()
+    acc_id = data.get('id')
+    db = get_db()
+    row = db.execute('SELECT cookie_path FROM youtube_accounts WHERE id=?', (acc_id,)).fetchone()
+    if row and row['cookie_path'] and os.path.isfile(row['cookie_path']):
+        os.remove(row['cookie_path'])
+    db.execute('UPDATE youtube_accounts SET cookie_path=NULL, status="ok", first_error_at=NULL WHERE id=?', (acc_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+# ══════════════════════════════════════════════════════════════
 #  API — Split
 # ══════════════════════════════════════════════════════════════
 @app.route('/api/split/equal', methods=['POST'])
@@ -2224,6 +2371,22 @@ def api_youtube_download():
     cookie_mode = data.get('cookie_mode', 'browser')
     request_delay = float(data.get('request_delay', 30.0))
     
+    # ── Multi-Account Rotation ──────────────────────────
+    use_rotation = data.get('use_rotation', False)
+    selected_account = None
+    if use_rotation:
+        selected_account = _get_available_yt_account()
+        if not selected_account:
+            return jsonify({'error': 'All YouTube accounts are exhausted or in cooldown. Please wait or add more accounts.'}), 429
+        # Update YT_COOKIES_FILE just for this job's context? 
+        # Actually, download_youtube takes a cookie_file path.
+        cookie_file = selected_account['cookie_path']
+        cookie_mode = 'file'
+    else:
+        # Fallback to legacy single-file logic
+        cookie_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
+    # ───────────────────────────────────────────────────
+
     if not urls: return jsonify({'error': 'No URLs'}), 400
 
     job_id = str(uuid.uuid4())
@@ -2235,36 +2398,28 @@ def api_youtube_download():
         # Check by ID
         row = db.execute('SELECT file_path FROM reels WHERE id=? LIMIT 1', (vid_id,)).fetchone()
         if not row and title:
-            # Check by Exact Title (If ID changed but user wants to skip same movie)
+            # Check by Exact Title
             row = db.execute('SELECT file_path FROM reels WHERE title=? LIMIT 1', (title,)).fetchone()
         db.close()
 
-        if row:
-            fpath = row[0]
-            if fpath and os.path.isfile(fpath):
-                return True
-        
-        # Layer 2: Fuzzy Disk Check (Recursive)
+        if not row:
+            # ── DB has no record → treat as new, never skip ──
+            # Clearing the DB fully resets duplicate detection.
+            return False
+
+        # DB has a record → confirm the physical file still exists
+        fpath = row[0]
+        if fpath and os.path.isfile(fpath):
+            return True
+
+        # DB has a record but file is missing → also confirm via ID on disk
         import glob as _g
         target_dir = data.get('output_dir', '').strip() or _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube')
-        
-        # 2a: Search by ID in brackets
         pattern_id = os.path.join(target_dir, '**', f'*[{vid_id}]*')
         if _g.glob(pattern_id, recursive=True):
             return True
 
-        # 2b: Search by Sanitized Title (The "ENG SUB" solution)
-        if title:
-            # Sanitize title like yt-dlp does for Windows
-            safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)
-            # Match files starting with this title
-            pattern_title = os.path.join(target_dir, '**', f'{safe_title}*')
-            matches = _g.glob(pattern_title, recursive=True)
-            if matches:
-                # Filter out partial matches that aren't videos
-                valid_video = any(m.lower().endswith(('.mp4', '.mkv', '.avi', '.mov')) for m in matches)
-                if valid_video: return True
-
+        # Record existed in DB but file is gone → re-download
         return False
 
     def run():
@@ -2275,16 +2430,35 @@ def api_youtube_download():
             custom_dir = False
         
         try:
-            c_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
+            # Use rotation-provided cookie file if active
+            c_file = cookie_file if use_rotation else (YT_COOKIES_FILE if cookie_mode == 'file' else None)
+            
+            def cb(line, pct=None):
+                _emit(job, line, pct)
+                if 'Error:' in line or 'ERROR:' in line:
+                    if selected_account:
+                        _update_yt_account_usage(selected_account['id'], success=False, error_msg=line)
+
             results = download_youtube(
                 urls=urls, quality=quality, output_dir=yt_dir, audio_only=audio_only, custom_dir=custom_dir,
                 download_subs=dl_subs, download_thumb=dl_thumb,
-                concurrency=concurrency, browser=browser, cookie_file=c_file,
+                concurrency=concurrency, browser=browser if cookie_mode == 'browser' else None, 
+                cookie_file=c_file,
                 request_delay=request_delay,
                 check_exists_cb=check_exists,
-                progress_cb=lambda line, pct=None: _emit(job, line, pct)
+                progress_cb=cb
             )
-            # Sync successes to Master DB for persistent duplicate checking
+
+            # Update rotation usage logic
+            if selected_account:
+                # Count ok + skipped as successful usages
+                ok_count = len([r for r in results if r.get('status') in ('ok', 'skipped')])
+                if ok_count > 0:
+                    # Update count per video as requested
+                    for _ in range(ok_count):
+                        _update_yt_account_usage(selected_account['id'], success=True)
+
+            # Sync successes to Master DB
             try:
                 db = sqlite3.connect(DB_PATH)
                 for r in results:
@@ -2297,6 +2471,7 @@ def api_youtube_download():
                 db.close()
             except Exception as dbe:
                 print(f"DB Sync Error: {dbe}")
+
             ok = sum(1 for r in results if r.get('status') in ('ok', 'skipped'))
             _finish(job, f'Processed {ok}/{len(results)} videos', results=results)
         except Exception as e:
@@ -2330,6 +2505,20 @@ def api_youtube_cookies_clear():
         os.remove(YT_COOKIES_FILE)
     return jsonify({'ok': True, 'exists': False})
 
+@app.route('/api/youtube/clear-logs', methods=['POST'])
+def api_youtube_clear_logs():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    try:
+        db = sqlite3.connect(DB_PATH)
+        db.execute('DELETE FROM reels')
+        db.commit()
+        db.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
 
 @app.route('/api/youtube/reel-convert', methods=['POST'])
 def api_youtube_reel_convert():
@@ -2361,6 +2550,20 @@ def api_youtube_reel_convert():
     browser       = data.get('browser')
     cookie_mode   = data.get('cookie_mode', 'browser')
     request_delay = float(data.get('request_delay', 30.0))
+    use_rotation  = bool(data.get('use_rotation', False))
+
+    # ── Multi-Account Rotation ──────────────────────────
+    selected_account = None
+    cookie_file = None
+    if use_rotation:
+        selected_account = _get_available_yt_account()
+        if not selected_account:
+            return jsonify({'error': 'All YouTube accounts are exhausted or in cooldown. Please wait or add more accounts.'}), 429
+        cookie_file = selected_account['cookie_path']
+        cookie_mode = 'file'
+    else:
+        cookie_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
+    # ───────────────────────────────────────────────────
 
     if not url:
         return jsonify({'error': 'No YouTube URL provided'}), 400
@@ -2383,13 +2586,23 @@ def api_youtube_reel_convert():
         os.makedirs(yt_dir, exist_ok=True)
         _emit(job, f'📥 Downloading: {url}', 5)
 
-        c_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
+        def dcb(line, pct=None):
+            _emit(job, line, pct)
+            if 'Error:' in line or 'ERROR:' in line:
+                if selected_account:
+                    _update_yt_account_usage(selected_account['id'], success=False, error_msg=line)
+
         results = download_youtube(
             urls=[url], quality=quality, output_dir=yt_dir, audio_only=False,
-            custom_dir=bool(output_dir), browser=browser, cookie_file=c_file,
+            custom_dir=bool(output_dir), browser=browser if cookie_mode == 'browser' else None, 
+            cookie_file=cookie_file,
             request_delay=request_delay,
-            progress_cb=lambda line, pct=None: _emit(job, line, pct)
+            progress_cb=dcb
         )
+        
+        if results and results[0].get('status') == 'ok':
+            if selected_account:
+                _update_yt_account_usage(selected_account['id'], success=True)
         if not results or results[0].get('status') != 'ok':
             err = results[0].get('error', 'Download failed') if results else 'Download failed'
             _finish(job, f'Download failed: {err}', results=[])
@@ -2597,17 +2810,36 @@ def api_audio_extract():
             yt_urls = data.get('yt_urls', [])
             browser = data.get('browser')
             cookie_mode = data.get('cookie_mode', 'browser')
-            c_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
+            use_rotation = bool(data.get('use_rotation', False))
+            request_delay = float(data.get('request_delay', 30.0))
+            selected_account = None
+            if use_rotation:
+                selected_account = _get_available_yt_account()
+                if selected_account:
+                    c_file = selected_account['cookie_path']
+                    cookie_mode = 'file'
+                else:
+                    _emit(job, '⚠ All accounts in cooldown — using default cookie.')
+                    c_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
+            else:
+                c_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
             out = output_dir or _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube_mp3')
             os.makedirs(out, exist_ok=True)
-            request_delay = float(data.get('request_delay', 30.0))
+            def yta_cb(l, p=None):
+                _emit(job, l, p)
+                if selected_account and ('Error:' in l or 'ERROR:' in l):
+                    _update_yt_account_usage(selected_account['id'], success=False, error_msg=l)
             results = download_youtube(
                 urls=yt_urls, quality='best', output_dir=out, audio_only=True,
-                browser=browser, cookie_file=c_file, request_delay=request_delay,
-                progress_cb=lambda l, p=None: _emit(job, l, p)
+                browser=browser if cookie_mode == 'browser' else None,
+                cookie_file=c_file, request_delay=request_delay,
+                progress_cb=yta_cb
             )
+            if selected_account and any(r.get('status') == 'ok' for r in results):
+                _update_yt_account_usage(selected_account['id'], success=True)
             # rename yt_dlp output status 'ok' -> map properly for UI
             for r in results: r['output'] = r.get('id') or r.get('url')
+
         elif folder:
             out = output_dir or os.path.join(folder, 'mp3_output')
             os.makedirs(out, exist_ok=True)
