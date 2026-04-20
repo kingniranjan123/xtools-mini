@@ -2140,7 +2140,18 @@ def _get_available_yt_account():
     '''
     row = db.execute(query, (two_hours_ago,)).fetchone()
     db.close()
-    return dict(row) if row else None
+    if not row:
+        return None
+    acc = dict(row)
+    # Guard: cookie file must actually exist on disk
+    if not acc.get('cookie_path') or not os.path.isfile(acc['cookie_path']):
+        # Mark as expired so it's skipped next time
+        db2 = sqlite3.connect(DB_PATH)
+        db2.execute("UPDATE youtube_accounts SET status='expired', cookie_path=NULL WHERE id=?", (acc['id'],))
+        db2.commit()
+        db2.close()
+        return None
+    return acc
 
 def _update_yt_account_usage(acc_id, success=True, error_msg=""):
     """Update usage count or flag rate limits."""
@@ -2237,7 +2248,8 @@ def api_youtube_accounts_delete_cookies():
     row = db.execute('SELECT cookie_path FROM youtube_accounts WHERE id=?', (acc_id,)).fetchone()
     if row and row['cookie_path'] and os.path.isfile(row['cookie_path']):
         os.remove(row['cookie_path'])
-    db.execute('UPDATE youtube_accounts SET cookie_path=NULL, status="ok", first_error_at=NULL WHERE id=?', (acc_id,))
+    # Mark as expired — do NOT reset to 'ok' since cookies are gone
+    db.execute("UPDATE youtube_accounts SET cookie_path=NULL, status='expired', first_error_at=NULL WHERE id=?", (acc_id,))
     db.commit()
     return jsonify({'ok': True})
 

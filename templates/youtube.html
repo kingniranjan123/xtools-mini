@@ -17,16 +17,57 @@
       📱 Reel Converter
       <span class="nav-badge" style="background:rgba(255,60,172,.15);color:#ff3cac;border-color:rgba(255,60,172,.3);">NEW</span>
     </button>
+    <button class="btn btn-sm btn-ghost" id="ytab-cookies-btn" onclick="switchYTab('cookies')">🍪 Cookies</button>
   </div>
   <button class="btn btn-sm btn-ghost" style="color:var(--accent-red); border:1px solid rgba(255,100,100,0.3);" onclick="clearYTLogs()">🗑 Clear Download Logs</button>
 </div>
  
- <!-- ════════ YouTube Multi-Account Rotation Manager ════════ -->
- <div class="card" style="margin-bottom:24px; border-left:4px solid var(--accent-gold);">
-   <div class="card-header" style="cursor:pointer;" onclick="toggleDocs('yt-rotation-mgr')">
-     <div class="card-title" style="display:flex;align-items:center;gap:8px;">
-       🛡️ YouTube Multi-Account Rotation Manager
-       <span style="font-size:10px;font-weight:400;color:var(--text-muted);">(Configure 5-10 accounts to bypass rate limits)</span>
+ <!-- ════════ TAB 4: COOKIES ════════ -->
+ <div id="ytab-cookies" style="display:none;">
+
+   <!-- Global Cookie Upload -->
+   <div class="card" style="margin-bottom:24px; border-left:4px solid var(--accent-green);">
+     <div class="card-header">
+       <div class="card-title">🌐 Global Cookie File <span style="font-size:10px;font-weight:400;color:var(--text-muted);">(Used by all YouTube operations)</span></div>
+       <div style="display:flex;align-items:center;gap:10px;">
+         <span id="cookie-status-badge" class="badge badge-gray">Not Uploaded</span>
+         <button id="btn-clear-cookies" class="btn btn-ghost btn-sm" style="color:var(--accent-red);display:none;" onclick="clearCookies()">🗑 Clear</button>
+       </div>
+     </div>
+     <div class="card-body">
+       <div class="form-hint" style="margin-bottom:14px;">Upload a single <code>cookies.txt</code> to authenticate <b>all</b> YouTube downloads, reel conversions, and audio exports — no per-tab settings needed.</div>
+       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+         <input type="file" id="global-cookie-file" accept=".txt" style="display:none;" onchange="handleCookieUpload(this)">
+         <button class="btn btn-secondary" onclick="document.getElementById('global-cookie-file').click()">📁 Upload cookies.txt</button>
+         <div class="form-hint" style="margin:0;">Export from YouTube while logged in using <b>"Get cookies.txt LOCALLY"</b> browser extension.</div>
+       </div>
+     </div>
+   </div>
+
+   <!-- Safety Mode -->
+   <div class="card" style="margin-bottom:24px; border-left:4px solid var(--accent-blue);">
+     <div class="card-header">
+       <div class="card-title">🕒 Safety Mode &amp; Request Jitter</div>
+       <div class="badge badge-blue">Recommended: 30s</div>
+     </div>
+     <div class="card-body">
+       <div class="form-group">
+         <label class="form-label" style="display:flex; justify-content:space-between;">
+           <span>Request Delay (Sleep)</span>
+           <span id="delay-val" style="color:var(--accent-blue); font-weight:bold;">30 seconds</span>
+         </label>
+         <input type="range" class="form-input" id="yt-delay" min="0" max="60" step="1" value="30"
+                style="padding:0; height:8px;" oninput="updateDelayDisplay(this.value)">
+         <div class="form-hint">Sets a random delay (80%–120% of value) before each video. Use <b>30–60s</b> to avoid bot detection.</div>
+       </div>
+     </div>
+   </div>
+
+   <!-- Rotation Manager -->
+   <div class="card" style="margin-bottom:24px; border-left:4px solid var(--accent-gold);">
+     <div class="card-header" style="cursor:pointer;" onclick="toggleDocs('yt-rotation-mgr')">
+       <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+         🛡️ Multi-Account Rotation
      </div>
      <div style="display:flex;gap:12px;align-items:center;">
        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;cursor:pointer;">
@@ -56,7 +97,10 @@
    </div>
  </div>
 
- <!-- YouTube Account Edit Modal -->
+
+ </div><!-- /ytab-cookies -->
+
+ <!-- YouTube Account Edit Modal (fixed overlay — outside all tabs) -->
  <div id="yt-acc-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
     <div class="card" style="width:100%; max-width:500px; margin:20px;">
       <div class="card-header">
@@ -86,27 +130,7 @@
     </div>
  </div>
 
- <!-- ════════ Safety & Rate Limit Settings ════════ -->
- <div class="card" style="margin-bottom:24px; border-left:4px solid var(--accent-blue);">
-   <div class="card-header">
-     <div class="card-title">🕒 Safety Mode & Request Jitter</div>
-     <div class="badge badge-blue">Recommended: 30s</div>
-   </div>
-   <div class="card-body">
-     <div class="form-group">
-       <label class="form-label" style="display:flex; justify-content:space-between;">
-         <span>Request Delay (Sleep)</span>
-         <span id="delay-val" style="color:var(--accent-blue); font-weight:bold;">30 seconds</span>
-       </label>
-       <input type="range" class="form-input" id="yt-delay" min="0" max="60" step="1" value="30" 
-              style="padding:0; height:8px;" oninput="updateDelayDisplay(this.value)">
-       <div class="form-hint">
-         Sets a random delay (between 80%-120% of this value) before every video pick-up.
-         Use <b>30-60s</b> to safely mimic human behavior and avoid "Bot detected" blocks.
-       </div>
-     </div>
-   </div>
- </div>
+
 
 <!-- ═══════════════════════════════════
      TAB 1: VIDEO DOWNLOAD
@@ -244,28 +268,13 @@
           <textarea class="form-textarea mono" id="yt-audio-urls" rows="7" placeholder="https://www.youtube.com/watch?v=XXXX&#10;…"></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Bypass Mode</label>
-          <select class="form-select" id="yta-cookie-mode" onchange="toggleBrowserSelector('yta')">
-            <option value="browser">Live Browser</option>
-            <option value="file">Static Cookie File</option>
-            <option value="none" selected>None</option>
-          </select>
-        </div>
-        <div class="form-group" id="yta-browser-wrap" style="display:none;">
-          <label class="form-label">Select Browser</label>
-          <select class="form-select" id="yta-browser">
-            <option value="chrome" selected>Chrome</option>
-            <option value="edge">Edge</option>
-            <option value="firefox">Firefox</option>
-          </select>
-        </div>
-        <div class="form-group">
           <label class="form-label">Output Folder (optional)</label>
           <div style="display:flex;gap:8px;">
             <input class="form-input mono" id="yt-audio-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_yt', '') }}" onchange="saveDefaultDir('dir_yt', this.value)">
             <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-audio-dir', 'dir_yt')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
           </div>
         </div>
+        <div class="form-hint" style="margin-bottom:12px;">🍪 Using global cookie from <b>Cookies</b> tab. <a href="#" onclick="switchYTab('cookies'); return false;" style="color:var(--accent);">Manage cookies →</a></div>
         <button class="btn btn-primary btn-full btn-lg" id="yt-audio-btn" onclick="startYTAudio()">🎵 Extract MP3</button>
       </div>
     </div>
@@ -326,22 +335,7 @@
               <option value="best">Best available</option>
             </select>
           </div>
-          <div class="form-group">
-            <label class="form-label">Bypass Mode</label>
-            <select class="form-select" id="reel-cookie-mode" onchange="toggleBrowserSelector('reel')">
-              <option value="browser">Live Browser</option>
-              <option value="file">Static Cookie File</option>
-              <option value="none" selected>None</option>
-            </select>
-          </div>
-          <div class="form-group" id="reel-browser-wrap" style="display:none;">
-            <label class="form-label">Select Browser</label>
-            <select class="form-select" id="reel-browser">
-              <option value="chrome" selected>Chrome</option>
-              <option value="edge">Edge</option>
-              <option value="firefox">Firefox</option>
-            </select>
-          </div>
+          <div class="form-hint">🍪 Using global cookie from <b>Cookies</b> tab. <a href="#" onclick="switchYTab('cookies'); return false;" style="color:var(--accent);">Manage cookies →</a></div>
         </div>
 
         <!-- Local source -->
@@ -768,11 +762,12 @@ async function clearYTLogs() {
 
 // ── Tab switch ────────────────────────────────────────────────
 function switchYTab(t) {
-  ['dl','audio','reel'].forEach(id => {
+  ['dl','audio','reel','cookies'].forEach(id => {
     const el = document.getElementById('ytab-'+id); if(el) el.style.display = id===t?'block':'none';
     const b  = document.getElementById('ytab-'+id+'-btn');
     if(b){ b.classList.toggle('active',id===t); b.style.background=id===t?'var(--bg-card)':'transparent'; b.style.border=id===t?'1px solid var(--border)':'none'; }
   });
+  if(t === 'cookies') loadYTAccounts();
 }
 function setReelSource(s) {
   _reelSource = s;
@@ -920,8 +915,7 @@ async function startYTAudio() {
       yt_urls: urls,
       source: 'youtube',
       output_dir: outDir,
-      browser: document.getElementById('yta-browser').value,
-      cookie_mode: document.getElementById('yta-cookie-mode').value,
+      cookie_mode: 'file',
       request_delay: parseFloat(document.getElementById('yt-delay').value),
       use_rotation: _ytRotationActive
   };
@@ -982,8 +976,7 @@ async function startReelConvert() {
                   overlay_image_zoom: overlayZoomPct / 100.0,
                   overlay_image_comp_pct: overlayCompPct,
                   delete_source: deleteSource,
-                  browser: document.getElementById('reel-browser')?.value,
-                  cookie_mode: document.getElementById('reel-cookie-mode')?.value,
+                  cookie_mode: 'file',
                   request_delay: parseFloat(document.getElementById('yt-delay').value),
                   use_rotation: _ytRotationActive};
 
@@ -1115,27 +1108,19 @@ async function handleCookieUpload(input){
 
 document.addEventListener('DOMContentLoaded', () => {
    checkCookieStatus();
-   
-   // Restore delay
+
+   // Restore delay (element is inside Cookies tab but still in DOM — safe to set value)
    const savedDelay = localStorage.getItem('yt-delay');
    if(savedDelay){
-      document.getElementById('yt-delay').value = savedDelay;
-      updateDelayDisplay(savedDelay);
+      const delayEl = document.getElementById('yt-delay');
+      if(delayEl) { delayEl.value = savedDelay; updateDelayDisplay(savedDelay); }
    }
 
-   // Restore selections
-   ['yt','yta','reel'].forEach(p => {
-      const mode = localStorage.getItem(p+'-cookie-mode');
-      const br   = localStorage.getItem(p+'-browser');
-      if(mode) { 
-         const el = document.getElementById(p+'-cookie-mode');
-         if(el) { el.value = mode; toggleBrowserSelector(p); }
-      }
-      if(br) {
-         const el = document.getElementById(p+'-browser');
-         if(el) el.value = br;
-      }
-   });
+   // Restore browser selector for Download tab only (audio/reel bypass dropdowns removed)
+   const ytMode = localStorage.getItem('yt-cookie-mode');
+   const ytBr   = localStorage.getItem('yt-browser');
+   if(ytMode){ const el=document.getElementById('yt-cookie-mode'); if(el){ el.value=ytMode; toggleBrowserSelector('yt'); } }
+   if(ytBr)  { const el=document.getElementById('yt-browser');      if(el) el.value=ytBr; }
 });
 </script>
 {% endblock %}
