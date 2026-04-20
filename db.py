@@ -135,6 +135,24 @@ CREATE TABLE IF NOT EXISTS post_queue (
 );
 
 CREATE INDEX IF NOT EXISTS ix_queue_status ON post_queue(status, scheduled_at);
+
+CREATE TABLE IF NOT EXISTS youtube_accounts (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  label            TEXT NOT NULL,
+  cookie_path      TEXT,
+  usage_count      INTEGER DEFAULT 0,
+  max_usage        INTEGER DEFAULT 20,
+  is_active        INTEGER DEFAULT 1,
+  status           TEXT DEFAULT 'ok',
+  first_error_at   DATETIME,
+  last_used_at     DATETIME,
+  created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Seed slots 1-10 if they don't exist
+INSERT OR IGNORE INTO youtube_accounts (id, label) VALUES
+  (1, 'Account 1'), (2, 'Account 2'), (3, 'Account 3'), (4, 'Account 4'), (5, 'Account 5'),
+  (6, 'Account 6'), (7, 'Account 7'), (8, 'Account 8'), (9, 'Account 9'), (10, 'Account 10');
 """
 
 def get_db():
