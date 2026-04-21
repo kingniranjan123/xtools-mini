@@ -17,6 +17,7 @@
       📱 Reel Converter
       <span class="nav-badge" style="background:rgba(255,60,172,.15);color:#ff3cac;border-color:rgba(255,60,172,.3);">NEW</span>
     </button>
+    <button class="btn btn-sm btn-ghost" id="ytab-bulkreel-btn" onclick="switchYTab('bulkreel')">📑 Bulk Reels</button>
     <button class="btn btn-sm btn-ghost" id="ytab-cookies-btn" onclick="switchYTab('cookies')">🍪 Cookies</button>
   </div>
   <button class="btn btn-sm btn-ghost" style="color:var(--accent-red); border:1px solid rgba(255,100,100,0.3);" onclick="clearYTLogs()">🗑 Clear Download Logs</button>
@@ -574,6 +575,168 @@
 </div>
 </div><!-- /ytab-reel -->
 
+
+<!-- =====================================================
+     TAB: BULK REELS
+===================================================== -->
+<div id="ytab-bulkreel" style="display:none;">
+<div class="two-col">
+
+  <!-- LEFT: Settings -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">&#x25B6; Bulk YouTube URLs</div>
+        <span id="bulk-reel-url-count" class="badge badge-gray">0 URLs</span>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">YouTube Links <span style="color:var(--text-muted);font-weight:400;">(one per line)</span></label>
+          <textarea class="form-textarea mono" id="bulk-reel-urls" rows="7"
+            placeholder="https://www.youtube.com/watch?v=XXXX&#10;https://youtu.be/YYYY&#10;..."
+            oninput="document.getElementById('bulk-reel-url-count').textContent = this.value.split('\n').filter(l=>l.trim().startsWith('http')).length + ' URLs'"></textarea>
+          <div class="form-hint" style="margin-top:8px;">
+            &#x26A1; <b>Auto-Thumbnail:</b> Each video's own YouTube thumbnail is automatically downloaded and placed as the bottom overlay - no manual selection needed.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">&#x2702; Split Settings</div></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">Part Duration
+            <span id="bulk-part-dur-val" style="font-family:var(--font-mono);color:var(--accent);margin-left:8px;">60s</span>
+          </label>
+          <input class="form-input" id="bulk-reel-part-dur" type="range" min="15" max="600" value="60"
+            oninput="document.getElementById('bulk-part-dur-val').textContent=this.value+'s'">
+        </div>
+        <div class="form-group" style="margin-top:10px;">
+          <label class="form-label">Quality</label>
+          <select class="form-select" id="bulk-reel-quality">
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+            <option value="best">Best Available</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">&#x270F; Overlays</div></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;">
+          <input type="checkbox" id="bulk-overlay-title" checked style="accent-color:var(--accent);margin-top:3px;">
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;">&#x1F4CC; Video Title (Top)</div>
+            <div style="font-size:11px;color:var(--text-muted);">Auto-harvested from YouTube metadata</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+              <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Position from top</span>
+              <input type="range" id="bulk-title-pos-pct" min="5" max="50" value="20" style="flex:1;accent-color:var(--accent);"
+                oninput="document.getElementById('bulk-title-pos-val').textContent=this.value+'%'">
+              <span id="bulk-title-pos-val" style="font-size:11px;font-weight:600;min-width:32px;font-family:var(--font-mono)">20%</span>
+            </div>
+          </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;">
+          <input type="checkbox" id="bulk-overlay-part" checked style="accent-color:var(--accent);margin-top:3px;">
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;">&#x1F522; Part Number (Bottom Area)</div>
+            <div style="font-size:11px;color:var(--text-muted);">"Part -1", "Part -2" &hellip;</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+              <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Position from top</span>
+              <input type="range" id="bulk-part-pos-pct" min="50" max="95" value="82" style="flex:1;accent-color:var(--accent);"
+                oninput="document.getElementById('bulk-part-pos-val').textContent=this.value+'%'">
+              <span id="bulk-part-pos-val" style="font-size:11px;font-weight:600;min-width:32px;font-family:var(--font-mono)">82%</span>
+            </div>
+          </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;">
+          <input type="checkbox" id="bulk-overlay-watermark" style="accent-color:var(--accent);margin-top:3px;">
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;">&#x1F4A7; Watermark</div>
+            <input class="form-input" id="bulk-reel-watermark" type="text" placeholder="@YourChannel" style="margin-top:8px;font-size:12px;">
+          </div>
+        </label>
+
+        <div style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px;">&#x1F5BC; Thumbnail Overlay Constraints</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+            <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;min-width:50px;">Fill %</span>
+            <input type="range" id="bulk-overlay-comp-pct" min="1" max="100" value="100" style="flex:1;accent-color:var(--accent);"
+              oninput="document.getElementById('bulk-overlay-comp-val').textContent=this.value+'%'">
+            <span id="bulk-overlay-comp-val" style="font-size:11px;font-weight:600;min-width:32px;font-family:var(--font-mono)">100%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;min-width:50px;">Zoom %</span>
+            <input type="range" id="bulk-overlay-zoom-pct" min="100" max="200" value="100" style="flex:1;accent-color:var(--accent);"
+              oninput="document.getElementById('bulk-overlay-zoom-val').textContent=this.value+'%'">
+            <span id="bulk-overlay-zoom-val" style="font-size:11px;font-weight:600;min-width:32px;font-family:var(--font-mono)">100%</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">&#x1F4C2; Output</div></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+          <div style="display:flex;gap:8px;">
+            <input class="form-input mono" id="bulk-reel-out-dir" type="text" placeholder="Leave blank to use default YouTube dir" style="flex:1;">
+            <button class="btn btn-secondary btn-sm" onclick="browseFolder('bulk-reel-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse&hellip;</button>
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-top:10px;cursor:pointer;">
+          <input type="checkbox" id="bulk-reel-delete-source" style="accent-color:var(--accent);">
+          <span style="font-size:12px;">Delete source video after successful split</span>
+        </label>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-full btn-lg" id="bulk-reel-btn" onclick="startBulkReelConvert()"
+            style="background:linear-gradient(135deg,#ff3cac,#8250ff);font-size:15px;padding:14px;">
+      &#x1F3AC; Start Bulk Reel Generation
+    </button>
+  </div>
+
+  <!-- RIGHT: Progress -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card" id="bulk-reel-progress-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">&#x23F3; Processing Queue</div>
+        <span class="badge badge-orange" id="bulk-reel-status">Running</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:6px;">
+          <span id="bulk-reel-current">Starting&hellip;</span>
+          <span id="bulk-reel-pct">0%</span>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-bar animated" id="bulk-reel-bar" style="width:0%;background:linear-gradient(90deg,#ff3cac,#8250ff);"></div>
+        </div>
+        <div class="sse-log" id="bulk-reel-log" style="margin-top:12px;max-height:500px;overflow-y:auto;"></div>
+      </div>
+    </div>
+    <div class="card" id="bulk-reel-placeholder" style="display:flex;align-items:center;justify-content:center;min-height:200px;border:2px dashed var(--border);">
+      <div style="text-align:center;color:var(--text-muted);">
+        <div style="font-size:36px;margin-bottom:12px;">&#x1F4D1;</div>
+        <div style="font-size:14px;">Paste URLs on the left and hit Start</div>
+        <div style="font-size:12px;margin-top:6px;">Each video's thumbnail is auto-placed in the bottom overlay</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div><!-- /ytab-bulkreel -->
+
 {% endblock %}
 
 {% block scripts %}
@@ -762,7 +925,7 @@ async function clearYTLogs() {
 
 // ── Tab switch ────────────────────────────────────────────────
 function switchYTab(t) {
-  ['dl','audio','reel','cookies'].forEach(id => {
+  ['dl','audio','reel','bulkreel','cookies'].forEach(id => {
     const el = document.getElementById('ytab-'+id); if(el) el.style.display = id===t?'block':'none';
     const b  = document.getElementById('ytab-'+id+'-btn');
     if(b){ b.classList.toggle('active',id===t); b.style.background=id===t?'var(--bg-card)':'transparent'; b.style.border=id===t?'1px solid var(--border)':'none'; }
@@ -940,6 +1103,66 @@ async function startYTAudio() {
           <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
         </div>`).join('');
       loadYTAccounts();
+    }
+  });
+}
+
+// -- Bulk Reel Converter --------------------------------------------------
+async function startBulkReelConvert() {
+  const rawUrls = document.getElementById('bulk-reel-urls').value.trim();
+  if (!rawUrls) { showToast('Paste at least one YouTube URL', 'warn'); return; }
+  const urls = rawUrls.split('\n').map(l=>l.trim()).filter(l=>l.startsWith('http'));
+  if (!urls.length) { showToast('No valid URLs found', 'warn'); return; }
+
+  const partDur   = parseInt(document.getElementById('bulk-reel-part-dur').value) || 60;
+  const quality   = document.getElementById('bulk-reel-quality').value || '1080';
+  const showTitle = document.getElementById('bulk-overlay-title').checked;
+  const showPart  = document.getElementById('bulk-overlay-part').checked;
+  const showWm    = document.getElementById('bulk-overlay-watermark').checked;
+  const wm        = document.getElementById('bulk-reel-watermark').value.trim();
+  const outDir    = document.getElementById('bulk-reel-out-dir').value.trim();
+  const titlePos  = parseInt(document.getElementById('bulk-title-pos-pct').value) || 20;
+  const partPos   = parseInt(document.getElementById('bulk-part-pos-pct').value) || 82;
+  const compPct   = parseInt(document.getElementById('bulk-overlay-comp-pct').value) || 100;
+  const zoomPct   = parseInt(document.getElementById('bulk-overlay-zoom-pct').value) || 100;
+  const deleteSrc = document.getElementById('bulk-reel-delete-source').checked;
+
+  const payload = {
+    urls, part_duration: partDur, quality,
+    show_title: showTitle, show_part_label: showPart, show_watermark: showWm,
+    watermark: wm,
+    title_pos_pct: titlePos, part_pos_pct: partPos,
+    overlay_image_zoom: zoomPct / 100.0, overlay_image_comp_pct: compPct,
+    output_dir: outDir, delete_source: deleteSrc,
+    use_rotation: _ytRotationActive
+  };
+
+  document.getElementById('bulk-reel-progress-card').style.display = 'block';
+  document.getElementById('bulk-reel-placeholder').style.display   = 'none';
+  document.getElementById('bulk-reel-log').textContent = '';
+  document.getElementById('bulk-reel-bar').style.width = '0%';
+  document.getElementById('bulk-reel-btn').disabled    = true;
+  document.getElementById('bulk-reel-btn').textContent = 'Processing...';
+  document.getElementById('bulk-reel-status').className   = 'badge badge-orange';
+  document.getElementById('bulk-reel-status').textContent = 'Running';
+
+  const resp = await postJSON('/api/youtube/bulk-reel-convert', payload);
+  if (!resp.job_id) {
+    showToast(resp.error || 'Failed to start bulk job', 'error');
+    document.getElementById('bulk-reel-btn').disabled    = false;
+    document.getElementById('bulk-reel-btn').textContent = 'Start Bulk Reel Generation';
+    return;
+  }
+  startSSEProgress({
+    url: '/api/youtube/progress/' + resp.job_id,
+    logId: 'bulk-reel-log', barId: 'bulk-reel-bar', statusId: 'bulk-reel-status',
+    onComplete: function(d) {
+      document.getElementById('bulk-reel-btn').disabled    = false;
+      document.getElementById('bulk-reel-btn').textContent = 'Start Bulk Reel Generation';
+      document.getElementById('bulk-reel-status').className   = 'badge badge-green';
+      document.getElementById('bulk-reel-status').textContent = 'Done';
+      const ok = (d.results||[]).filter(r=>r.status==='ok').length;
+      showToast(ok + ' reel parts created!', 'success');
     }
   });
 }

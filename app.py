@@ -2380,7 +2380,7 @@ def api_youtube_download():
     dl_thumb    = bool(data.get('download_thumb', False))
     concurrency = int(data.get('concurrency', 1))
     browser     = data.get('browser')
-    cookie_mode = data.get('cookie_mode', 'browser')
+    cookie_mode = data.get('cookie_mode', 'file')  # default: always use uploaded cookie
     request_delay = float(data.get('request_delay', 30.0))
     
     # ── Multi-Account Rotation ──────────────────────────
@@ -2396,7 +2396,7 @@ def api_youtube_download():
         cookie_mode = 'file'
     else:
         # Fallback to legacy single-file logic
-        cookie_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
+        cookie_file = YT_COOKIES_FILE if os.path.isfile(YT_COOKIES_FILE) else None  # always use if exists
     # ───────────────────────────────────────────────────
 
     if not urls: return jsonify({'error': 'No URLs'}), 400
@@ -2560,7 +2560,7 @@ def api_youtube_reel_convert():
     overlay_image_comp_pct = max(1.0, min(100.0, float(data.get('overlay_image_comp_pct', 100.0) or 100.0)))
     delete_source = bool(data.get('delete_source', False))
     browser       = data.get('browser')
-    cookie_mode   = data.get('cookie_mode', 'browser')
+    cookie_mode   = data.get('cookie_mode', 'file')  # default: always use uploaded cookie
     request_delay = float(data.get('request_delay', 30.0))
     use_rotation  = bool(data.get('use_rotation', False))
 
@@ -2574,7 +2574,7 @@ def api_youtube_reel_convert():
         cookie_file = selected_account['cookie_path']
         cookie_mode = 'file'
     else:
-        cookie_file = YT_COOKIES_FILE if cookie_mode == 'file' else None
+        cookie_file = YT_COOKIES_FILE if os.path.isfile(YT_COOKIES_FILE) else None  # always use if exists
     # ───────────────────────────────────────────────────
 
     if not url:
@@ -2688,6 +2688,156 @@ def api_youtube_reel_convert():
         _emit(job, f'🎉 Done! {len(parts)} reel parts created.', 100)
         _finish(job, f'{len(parts)} parts created in {reel_dir}',
                 results=reel_results, reel_dir=reel_dir, source_video=video_path)
+
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({'job_id': job_id})
+
+
+
+@app.route('/api/youtube/bulk-reel-convert', methods=['POST'])
+def api_youtube_bulk_reel_convert():
+    """
+    Bulk: Download YouTube URLs sequentially, auto-inject thumbnail as bottom overlay,
+    and split each video into 9:16 Instagram Reel parts.
+    """
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+
+    urls = [u.strip() for u in data.get('urls', []) if str(u).strip().startswith('http')]
+    if not urls:
+        return jsonify({'error': 'No valid YouTube URLs provided'}), 400
+
+    output_dir    = data.get('output_dir', '').strip()
+    watermark     = data.get('watermark', '').strip()
+    part_secs     = int(data.get('part_duration', 60))
+    quality       = data.get('quality', '1080')
+    show_title    = bool(data.get('show_title', True))
+    show_part     = bool(data.get('show_part_label', True))
+    show_wm       = bool(data.get('show_watermark', bool(watermark)))
+    title_pos_pct = float(data.get('title_pos_pct', 20.0))
+    part_pos_pct  = float(data.get('part_pos_pct', 82.0))
+    overlay_zoom  = float(data.get('overlay_image_zoom', 1.0) or 1.0)
+    overlay_comp  = max(1.0, min(100.0, float(data.get('overlay_image_comp_pct', 100.0) or 100.0)))
+    delete_source = bool(data.get('delete_source', False))
+    use_rotation  = bool(data.get('use_rotation', False))
+    # Always use uploaded cookie file if present
+    global_cookie = YT_COOKIES_FILE if os.path.isfile(YT_COOKIES_FILE) else None
+
+    job_id = str(uuid.uuid4())
+    job    = _make_job(job_id)
+
+    def run():
+        from modules.reel_converter import convert_to_reels
+        yt_dir = output_dir or _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube')
+        os.makedirs(yt_dir, exist_ok=True)
+        total = len(urls)
+        _emit(job, f'Bulk Reel Generation started -- {total} URL(s) queued', 2)
+
+        all_results = []
+
+        for idx, url in enumerate(urls, 1):
+            base_pct = int((idx - 1) / total * 95)
+            _emit(job, f'[{idx}/{total}] Processing: {url}', base_pct)
+
+            # Strip playlist params -- process single video
+            if 'v=' in url and 'list=' in url:
+                m = re.search(r'(v=[^&]+)', url)
+                if m: url = 'https://www.youtube.com/watch?' + m.group(1)
+
+            selected_account = None
+            c_file = global_cookie
+            if use_rotation:
+                selected_account = _get_available_yt_account()
+                if not selected_account:
+                    _emit(job, 'Skipping: No accounts available (all exhausted/cooldown)', None)
+                    all_results.append({'url': url, 'status': 'error', 'error': 'No accounts available'})
+                    continue
+                c_file = selected_account['cookie_path']
+
+            def dcb(line, pct=None):
+                _emit(job, '  ' + line, None)
+
+            # Download video + thumbnail automatically
+            dl_results = download_youtube(
+                urls=[url], quality=quality, output_dir=yt_dir,
+                audio_only=False, custom_dir=bool(output_dir),
+                browser=None, cookie_file=c_file,
+                download_thumb=True,
+                request_delay=30.0,
+                progress_cb=dcb
+            )
+
+            if not dl_results or dl_results[0].get('status') not in ('ok', 'skipped'):
+                err = dl_results[0].get('error', 'Download failed') if dl_results else 'Download failed'
+                _emit(job, f'Download failed: {err}', None)
+                if selected_account:
+                    _update_yt_account_usage(selected_account['id'], success=False, error_msg=err)
+                all_results.append({'url': url, 'status': 'error', 'error': err})
+                continue
+
+            if selected_account:
+                _update_yt_account_usage(selected_account['id'], success=True)
+
+            r = dl_results[0]
+            video_path  = r.get('file_path', '')
+            thumb_path  = r.get('thumbnail', '')
+            video_title = r.get('title', 'Video')
+
+            # Fallback: find newest mp4 in yt_dir
+            if not video_path or not os.path.isfile(video_path):
+                import glob as _g
+                files = sorted(_g.glob(os.path.join(yt_dir, '**', '*.mp4'), recursive=True),
+                               key=os.path.getmtime, reverse=True)
+                video_path = files[0] if files else ''
+
+            if not video_path or not os.path.isfile(video_path):
+                _emit(job, 'Could not locate downloaded MP4', None)
+                all_results.append({'url': url, 'status': 'error', 'error': 'MP4 not found after download'})
+                continue
+
+            _emit(job, f'Downloaded: {os.path.basename(video_path)} | Thumbnail: {os.path.basename(thumb_path) if thumb_path else "none"}', None)
+
+            # Convert to reel parts, injecting auto-downloaded thumbnail
+            reel_dir = output_dir or os.path.join(os.path.dirname(video_path), '_reels')
+            os.makedirs(reel_dir, exist_ok=True)
+            _emit(job, f'Splitting into {part_secs}s reel parts...', None)
+
+            conv = convert_to_reels(
+                input_path         = video_path,
+                output_dir         = reel_dir,
+                title              = video_title,
+                watermark          = watermark,
+                part_duration_sec  = part_secs,
+                show_title         = show_title,
+                show_part_label    = show_part,
+                show_watermark     = show_wm,
+                title_pos_pct      = title_pos_pct,
+                part_pos_pct       = part_pos_pct,
+                output_size        = 'instagram',
+                overlay_image_path = thumb_path,
+                overlay_image_zoom = overlay_zoom,
+                overlay_image_comp_pct = overlay_comp,
+                clip_start_sec     = 0,
+                clip_end_sec       = 0,
+                progress_cb        = lambda line: _emit(job, '  ' + line),
+            )
+
+            parts  = conv.get('parts', [])
+            cvt_errors = conv.get('errors', [])
+            _emit(job, f'{len(parts)} reel parts created for: {video_title}', None)
+
+            for p in parts:
+                all_results.append({'file': os.path.basename(p), 'path': p, 'status': 'ok'})
+            for e in cvt_errors:
+                all_results.append({'file': e, 'status': 'error'})
+
+            if delete_source and parts:
+                deleted, msg = _safe_remove_source(video_path, parts)
+                _emit(job, msg)
+
+        ok_count = len([r for r in all_results if r.get('status') == 'ok'])
+        _emit(job, f'Bulk complete! {ok_count} reel parts from {total} video(s).', 100)
+        _finish(job, f'Bulk done: {ok_count} parts', results=all_results)
 
     threading.Thread(target=run, daemon=True).start()
     return jsonify({'job_id': job_id})
@@ -2821,7 +2971,7 @@ def api_audio_extract():
         if source == 'youtube':
             yt_urls = data.get('yt_urls', [])
             browser = data.get('browser')
-            cookie_mode = data.get('cookie_mode', 'browser')
+            cookie_mode = data.get('cookie_mode', 'file')  # default: always use uploaded cookie
             use_rotation = bool(data.get('use_rotation', False))
             request_delay = float(data.get('request_delay', 30.0))
             selected_account = None
