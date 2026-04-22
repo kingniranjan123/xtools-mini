@@ -494,6 +494,10 @@
               <input type="radio" name="reel_output_size" id="sz-original" value="original" style="accent-color:var(--accent);">
               <div><div style="font-weight:700;font-size:12px;">📐 Original Size</div><div style="font-size:10px;color:var(--text-muted);">Keep source dims</div></div>
             </label>
+            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg-card-2);border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;" id="sz-rot-lbl">
+              <input type="radio" name="reel_output_size" id="sz-rotated90" value="rotated90" style="accent-color:var(--accent);">
+              <div><div style="font-weight:700;font-size:12px;">🔄 Tilted Landscape</div><div style="font-size:10px;color:var(--text-muted);">Rotated 90° Right</div></div>
+            </label>
           </div>
         </div>
         <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-top:10px;cursor:pointer;">
@@ -522,9 +526,9 @@
             <div style="font-size:8px;color:#fff;font-weight:600;" id="mock-title">Title - Part 1</div>
           </div>
           <!-- Simulated letterbox video area -->
-          <div style="position:absolute;top:50%;left:0;right:0;transform:translateY(-50%);">
-            <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);height:78px;display:flex;align-items:center;justify-content:center;">
-              <span style="font-size:24px;">🎬</span>
+          <div style="position:absolute;top:0;bottom:0;left:0;right:0;display:flex;align-items:center;">
+            <div id="mock-video-bg" style="background:linear-gradient(135deg,#1a1a2e,#16213e);height:78px;width:100%;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
+              <span id="mock-video-icon" style="font-size:24px;transition:all 0.3s ease;">🎬</span>
             </div>
           </div>
           <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:6px;text-align:center;min-height:46px;">
@@ -538,7 +542,7 @@
         <div style="margin-left:16px;font-size:11px;color:var(--text-muted);line-height:1.8;">
           <div>📐 <strong>1080×1920</strong></div>
           <div>🎞 H.264 / AAC</div>
-          <div>⬛ Letterbox bars preserved</div>
+          <div id="mock-crop-text">⬛ Letterbox bars preserved</div>
           <div>✂ Equal parts</div>
         </div>
       </div>
@@ -968,6 +972,33 @@ function updateMock() {
     mockImg.style.transform = `scale(${(normalizedZoomPct / 100).toFixed(2)})`;
   }
 }
+
+function updateOutputSizePreview() {
+  const bg = document.getElementById('mock-video-bg');
+  const icon = document.getElementById('mock-video-icon');
+  const txt = document.getElementById('mock-crop-text');
+  if(!bg) return;
+  const val = document.querySelector('input[name="reel_output_size"]:checked')?.value || 'instagram';
+  
+  if(val === 'instagram') {
+    bg.style.height = '78px';
+    icon.style.transform = 'none';
+    txt.textContent = '⬛ Letterbox bars preserved';
+  } else if(val === 'original') {
+    bg.style.height = '78px';
+    icon.style.transform = 'none';
+    txt.textContent = '📐 Keeps source dimensions';
+  } else if(val === 'rotated90') {
+    bg.style.height = '100%';
+    icon.style.transform = 'rotate(90deg)';
+    txt.textContent = '🔄 Fullscreen (Rotated)';
+  }
+}
+
+document.querySelectorAll('input[name="reel_output_size"]').forEach(el => {
+  el.addEventListener('change', updateOutputSizePreview);
+});
+
 ['reel-title','reel-watermark','overlay-title','overlay-part','overlay-watermark','overlay-image-comp-pct','overlay-image-zoom-pct'].forEach(id => {
   const el = document.getElementById(id);
   if(el) el.addEventListener('input', updateMock);

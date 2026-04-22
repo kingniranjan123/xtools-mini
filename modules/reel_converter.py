@@ -139,7 +139,8 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
                   show_title: bool, show_part_label: bool, show_watermark: bool,
                   title_pos_pct: float = 20.0, part_pos_pct: float = 82.0,
                   output_size: str = 'instagram',
-                  temp_dir: str = None) -> (str, list):
+                  temp_dir: str = None,
+                  rotate_90: bool = False) -> (str, list):
     """
     Build the -vf filter chain for one part.
     Returns (filter_string, list_of_temp_files_to_cleanup)
@@ -156,6 +157,8 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
         # FFmpeg escape path (esp. backslashes and colons on Windows)
         return fname.replace('\\', '/').replace(':', '\\:')
 
+    if rotate_90:
+        in_w, in_h = in_h, in_w
     is_portrait = in_h > in_w
 
     if output_size == 'original':
@@ -178,6 +181,9 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
         canvas_w = REEL_W
         canvas_h = REEL_H
         filters  = [scale_pad]
+
+    if rotate_90:
+        filters.insert(0, "transpose=1")
 
     font_file = _resolve_font()
     font_attr = f"fontfile='{font_file}':" if font_file else ''
@@ -430,7 +436,8 @@ def convert_to_reels(
             in_w, in_h, part_num, title, watermark,
             show_title, show_part_label, show_watermark,
             title_pos_pct, part_pos_pct, output_size=output_size,
-            temp_dir=output_dir # Use same output dir for temp files
+            temp_dir=output_dir, # Use same output dir for temp files
+            rotate_90=rotate_90
         )
 
         if progress_cb:
