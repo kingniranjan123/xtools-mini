@@ -311,7 +311,7 @@ def encode_part(input_path: str, output_path: str,
         ]
     else:
         cmd += ['-vf', vf]
-    vcodec_args = ['-c:v', 'h264_nvenc', '-preset', 'p4', '-cq', '26'] if use_cuda else ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23']
+    vcodec_args = ['-c:v', 'h264_nvenc', '-preset', 'p4', '-cq', '26', '-pix_fmt', 'yuv420p'] if use_cuda else ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-pix_fmt', 'yuv420p']
     cmd += vcodec_args + [
         '-c:a', 'aac',
         '-b:a', '128k',

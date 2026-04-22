@@ -22,8 +22,8 @@ def _get_duration(path: str) -> float:
 
 def _codec_args(use_cuda: bool) -> list:
     if use_cuda:
-        return ['-c:v', 'h264_nvenc', '-rc', 'vbr', '-cq', '24']
-    return ['-c:v', 'libx264', '-crf', '23', '-preset', 'fast']
+        return ['-c:v', 'h264_nvenc', '-rc', 'vbr', '-cq', '24', '-pix_fmt', 'yuv420p']
+    return ['-c:v', 'libx264', '-crf', '23', '-preset', 'fast', '-pix_fmt', 'yuv420p']
 
 
 def _hwaccel_args(use_cuda: bool) -> list:
