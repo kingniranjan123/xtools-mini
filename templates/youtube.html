@@ -2,6 +2,138 @@
 {% block title %}YouTube Downloader — Nikethan{% endblock %}
 {% block breadcrumb %}YouTube Downloader{% endblock %}
 
+{% block head %}
+<style>
+/* ── YouTube page 3-zone layout ── */
+.yt-zone-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.yt-zone-exec {
+  display: grid;
+  grid-template-columns: 180px 1fr 1.2fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.yt-zone-table {
+  margin-bottom: 14px;
+}
+/* compact selects in 2x2 option grid */
+.opts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.opts-grid .form-group { margin: 0; }
+.opts-grid .form-label { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 3px; }
+/* checkboxes inline row */
+.check-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.check-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  background: var(--bg-card-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+}
+/* inline slider row: label + range + val */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.slider-row .sr-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 80px;
+}
+.slider-row input[type=range] { flex: 1; accent-color: var(--accent); }
+.slider-row .sr-val {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  min-width: 36px;
+  text-align: right;
+}
+/* horizontal radio pills for split mode / output size */
+.radio-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.radio-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card-2);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: border-color .15s, background .15s;
+  flex: 1;
+  min-width: 0;
+}
+.radio-pill input[type=radio] { accent-color: var(--accent); }
+.radio-pill:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(255,60,172,.07);
+}
+/* compact progress bar */
+.prog-compact { height: 6px; border-radius: 3px; }
+/* console log compact */
+.console-compact {
+  font-size: 11px;
+  max-height: 150px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+/* section label inside card */
+.sec-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+/* results table */
+.yt-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.yt-table th { padding: 8px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.yt-table td { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; }
+.yt-table tr:last-child td { border-bottom: none; }
+.yt-pagination { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--border); font-size: 11px; }
+.yt-pagination button { padding: 3px 9px; font-size: 11px; }
+/* start-pane card body flex column */
+.start-pane { display: flex; flex-direction: column; gap: 8px; padding: 12px !important; }
+/* 3-column overlay mode (none/manual/auto) compact horizontal */
+.overlay-mode-pills {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+@media (max-width: 900px) {
+  .yt-zone-inputs, .yt-zone-exec { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
   <h1 class="page-title"><span class="grad-text">YouTube Downloader</span></h1>
@@ -137,683 +269,745 @@
      TAB 1: VIDEO DOWNLOAD
 ═══════════════════════════════════ -->
 <div id="ytab-dl">
-<div class="two-col">
-  <div style="display:flex;flex-direction:column;gap:16px;">
+
+  <!-- ZONE 1: INPUTS -->
+  <div class="yt-zone-inputs">
+
+    <!-- LEFT: URLs -->
     <div class="card">
       <div class="card-header">
         <div class="card-title">▶ YouTube URLs</div>
         <span id="yt-url-count" class="badge badge-gray">0 URLs</span>
       </div>
       <div class="card-body">
-        <div class="form-group">
-          <label class="form-label">YouTube Links <span style="color:var(--text-muted);font-weight:400;">(one per line)</span></label>
-          <textarea class="form-textarea mono" id="yt-urls" rows="9"
-            placeholder="https://www.youtube.com/watch?v=XXXX&#10;https://youtu.be/YYYY&#10;…"
-            oninput="countYTUrls(this)"></textarea>
-          <div class="form-hint">Supports youtube.com, youtu.be, and Shorts links.</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Parallel Threads <span style="color:var(--text-muted);font-weight:400;">(Concurrency)</span></label>
-          <select class="form-select" id="yt-threads">
-            <option value="1" selected>1 (Sequential)</option>
-            <option value="2">2 threads</option>
-            <option value="4">4 threads</option>
-            <option value="6">6 threads</option>
-            <option value="8">8 threads</option>
-            <option value="10">10 threads (Max)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Video Quality</label>
-          <select class="form-select" id="yt-quality">
-            <option value="best">Best available</option>
-            <option value="1080">1080p</option>
-            <option value="720" selected>720p</option>
-            <option value="480">480p</option>
-            <option value="360">360p</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Bypass Mode <span style="color:var(--text-muted);font-weight:400;">(Required for Restricted Videos)</span></label>
-          <select class="form-select" id="yt-cookie-mode" onchange="toggleBrowserSelector('yt')">
-            <option value="browser">Live Browser (Auto-detect)</option>
-            <option value="file">Static Cookie File (Recommended)</option>
-            <option value="none">None (Public only)</option>
-          </select>
-        </div>
-        <div class="form-group" id="yt-browser-wrap">
-          <label class="form-label">Select Browser</label>
-          <select class="form-select" id="yt-browser">
-            <option value="chrome" selected>Chrome</option>
-            <option value="edge">Edge</option>
-            <option value="firefox">Firefox</option>
-            <option value="brave">Brave</option>
-          </select>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-          <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;background:var(--bg-card-2);border-radius:var(--radius-sm);border:1px solid var(--border);">
-            <input type="checkbox" id="yt-dl-subs" style="accent-color:var(--accent);">
-            <span style="font-size:12px;">English Subs</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;background:var(--bg-card-2);border-radius:var(--radius-sm);border:1px solid var(--border);">
-            <input type="checkbox" id="yt-dl-thumb" style="accent-color:var(--accent);">
-            <span style="font-size:12px;">Thumbnails</span>
-          </label>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-          <div style="display:flex;gap:8px;">
-            <input class="form-input mono" id="yt-out-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_yt', '') }}" onchange="saveDefaultDir('dir_yt', this.value)" />
-            <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-out-dir', 'dir_yt')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+        <textarea class="form-textarea mono" id="yt-urls" rows="8"
+          placeholder="https://www.youtube.com/watch?v=XXXX&#10;https://youtu.be/YYYY&#10;…"
+          oninput="countYTUrls(this)"></textarea>
+        <div class="form-hint" style="margin-top:6px;">Supports youtube.com, youtu.be, and Shorts links.</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Options -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">⚙ Download Options</div></div>
+      <div class="card-body">
+        <div class="opts-grid">
+          <div class="form-group">
+            <label class="form-label">Quality</label>
+            <select class="form-select" id="yt-quality">
+              <option value="best">Best available</option>
+              <option value="1080">1080p</option>
+              <option value="720" selected>720p</option>
+              <option value="480">480p</option>
+              <option value="360">360p</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Threads</label>
+            <select class="form-select" id="yt-threads">
+              <option value="1" selected>1 (Sequential)</option>
+              <option value="2">2 threads</option>
+              <option value="4">4 threads</option>
+              <option value="6">6 threads</option>
+              <option value="8">8 threads</option>
+              <option value="10">10 (Max)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Bypass Mode</label>
+            <select class="form-select" id="yt-cookie-mode" onchange="toggleBrowserSelector('yt')">
+              <option value="browser">Live Browser</option>
+              <option value="file">Cookie File</option>
+              <option value="none">None (Public)</option>
+            </select>
+          </div>
+          <div class="form-group" id="yt-browser-wrap">
+            <label class="form-label">Browser</label>
+            <select class="form-select" id="yt-browser">
+              <option value="chrome" selected>Chrome</option>
+              <option value="edge">Edge</option>
+              <option value="firefox">Firefox</option>
+              <option value="brave">Brave</option>
+            </select>
           </div>
         </div>
-        <button class="btn btn-primary btn-full btn-lg" id="yt-btn" onclick="startYTDownload()">↓ Start Download</button>
+        <div class="check-row">
+          <label class="check-pill">
+            <input type="checkbox" id="yt-dl-subs" style="accent-color:var(--accent);">
+            English Subs
+          </label>
+          <label class="check-pill">
+            <input type="checkbox" id="yt-dl-thumb" style="accent-color:var(--accent);">
+            Thumbnails
+          </label>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Output Folder <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+          <div style="display:flex;gap:6px;">
+            <input class="form-input mono" id="yt-out-dir" type="text" placeholder="Leave blank for default"
+              value="{{ settings.get('dir_yt', '') }}" onchange="saveDefaultDir('dir_yt', this.value)" style="flex:1;">
+            <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-out-dir','dir_yt')" style="white-space:nowrap;">Browse</button>
+          </div>
+        </div>
+        <div class="form-hint" style="margin-top:8px;">🍪 Cookie managed in <a href="#" onclick="switchYTab('cookies');return false;" style="color:var(--accent);">Cookies tab →</a></div>
       </div>
     </div>
+  </div><!-- /zone1 -->
+
+  <!-- ZONE 2: EXECUTION -->
+  <div class="yt-zone-exec">
+
+    <!-- START PANE -->
     <div class="card">
-      <div class="card-header"><div class="card-title">ℹ Notes</div></div>
-      <div class="card-body" style="font-size:12px;color:var(--text-secondary);line-height:1.9;">
-        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:var(--accent-green);">✓</span><span>No authentication required for public videos</span></div>
-        <div style="display:flex;gap:8px;margin-bottom:4px;"><span style="color:var(--accent-green);">✓</span><span>Saved in <code>downloads/[channel]/</code></span></div>
-        <div style="display:flex;gap:8px;"><span style="color:var(--accent-gold);">⚠</span><span>Age-restricted or private videos may fail</span></div>
+      <div class="card-body start-pane">
+        <button class="btn btn-primary btn-full btn-lg" id="yt-btn" onclick="startYTDownload()">↓ Start Download</button>
+        <button class="btn btn-ghost btn-sm btn-full" onclick="cancelYT()">✕ Cancel</button>
+        <div style="font-size:10px;color:var(--text-muted);line-height:1.7;margin-top:4px;">
+          ✓ Public videos need no auth<br>
+          ✓ Saved in <code>downloads/[channel]/</code><br>
+          ⚠ Age-restricted may fail
+        </div>
       </div>
     </div>
-  </div>
-  <div style="display:flex;flex-direction:column;gap:16px;">
-    <div class="card" id="yt-progress-card" style="display:none;">
+
+    <!-- PROGRESS PANE -->
+    <div class="card" id="yt-progress-card">
       <div class="card-header">
-        <div class="card-title">⏳ Downloading</div>
-        <span class="badge badge-orange" id="yt-status">Running</span>
+        <div class="card-title">⏳ Progress</div>
+        <span class="badge badge-gray" id="yt-status">Ready</span>
       </div>
       <div class="card-body">
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:6px;">
-          <span id="yt-current">Starting…</span><span id="yt-pct">0%</span>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:5px;">
+          <span id="yt-current">—</span><span id="yt-pct">0%</span>
         </div>
-        <div class="progress-wrap"><div class="progress-bar animated" id="yt-bar" style="width:0%"></div></div>
-        <div class="sse-log" id="yt-log" style="margin-top:12px;"></div>
-        <button class="btn btn-ghost btn-sm btn-full" style="margin-top:12px;" onclick="cancelYT()">✕ Cancel</button>
+        <div class="progress-wrap prog-compact">
+          <div class="progress-bar animated" id="yt-bar" style="width:0%;"></div>
+        </div>
+        <div id="yt-placeholder" style="text-align:center;padding:24px 0;color:var(--text-muted);">
+          <div style="font-size:32px;margin-bottom:8px;">▶</div>
+          <div style="font-size:12px;">Paste links and hit Download</div>
+        </div>
       </div>
     </div>
+
+    <!-- CONSOLE PANE -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">💻 Console</div></div>
+      <div class="card-body" style="padding:8px;">
+        <div class="sse-log console-compact" id="yt-log"></div>
+      </div>
+    </div>
+  </div><!-- /zone2 -->
+
+  <!-- ZONE 3: RESULTS TABLE -->
+  <div class="yt-zone-table">
     <div class="card" id="yt-results-card" style="display:none;">
       <div class="card-header">
         <div class="card-title">✅ Downloaded</div>
         <span class="badge badge-green" id="yt-results-summary">0 videos</span>
       </div>
-      <div class="card-body" style="padding:0;"><div id="yt-results-list"></div></div>
-    </div>
-    <div class="card" id="yt-placeholder">
-      <div class="card-body" style="text-align:center;padding:48px 20px;">
-        <div style="font-size:48px;margin-bottom:12px;">▶</div>
-        <div style="font-size:14px;font-weight:600;color:var(--text-secondary);">Paste YouTube links and hit Download</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Results will appear here</div>
+      <div class="card-body" style="padding:0;">
+        <table class="yt-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Title</th>
+              <th>Channel</th>
+              <th>Duration</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="yt-results-list"></tbody>
+        </table>
+        <div class="yt-pagination" id="yt-pagination" style="display:none;">
+          <button class="btn btn-ghost btn-sm" id="yt-prev" onclick="ytPage(-1)">‹ Prev</button>
+          <span id="yt-page-info" style="flex:1;text-align:center;color:var(--text-muted);"></span>
+          <button class="btn btn-ghost btn-sm" id="yt-next" onclick="ytPage(1)">Next ›</button>
+        </div>
       </div>
     </div>
-  </div>
-</div>
+  </div><!-- /zone3 -->
+
 </div><!-- /ytab-dl -->
 
 <!-- ═══════════════════════════════════
      TAB 2: AUDIO ONLY
 ═══════════════════════════════════ -->
 <div id="ytab-audio" style="display:none;">
-<div class="two-col">
-  <div style="display:flex;flex-direction:column;gap:16px;">
+
+  <!-- ZONE 1: INPUTS -->
+  <div class="yt-zone-inputs">
+
+    <!-- LEFT: URLs -->
     <div class="card">
       <div class="card-header">
         <div class="card-title">🎵 YouTube → MP3</div>
         <span class="badge badge-gray">Audio Only</span>
       </div>
       <div class="card-body">
+        <textarea class="form-textarea mono" id="yt-audio-urls" rows="8"
+          placeholder="https://www.youtube.com/watch?v=XXXX&#10;…"></textarea>
+        <div class="form-hint" style="margin-top:6px;">One URL per line. Audio will be extracted to MP3.</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Options -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">⚙ Audio Options</div></div>
+      <div class="card-body">
         <div class="form-group">
-          <label class="form-label">YouTube Links (one per line)</label>
-          <textarea class="form-textarea mono" id="yt-audio-urls" rows="7" placeholder="https://www.youtube.com/watch?v=XXXX&#10;…"></textarea>
+          <label class="form-label">MP3 Bitrate</label>
+          <select class="form-select" id="yta-bitrate">
+            <option value="128">128 kbps</option>
+            <option value="192" selected>192 kbps</option>
+            <option value="320">320 kbps (High)</option>
+          </select>
         </div>
-        <div class="form-group">
-          <label class="form-label">Output Folder (optional)</label>
-          <div style="display:flex;gap:8px;">
-            <input class="form-input mono" id="yt-audio-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_yt', '') }}" onchange="saveDefaultDir('dir_yt', this.value)">
-            <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-audio-dir', 'dir_yt')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+        <div class="form-group" style="margin-top:10px;">
+          <label class="form-label">Output Folder <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+          <div style="display:flex;gap:6px;">
+            <input class="form-input mono" id="yt-audio-dir" type="text"
+              placeholder="Leave blank for default"
+              value="{{ settings.get('dir_yt', '') }}"
+              onchange="saveDefaultDir('dir_yt', this.value)" style="flex:1;">
+            <button class="btn btn-secondary btn-sm" onclick="browseFolder('yt-audio-dir','dir_yt')" style="white-space:nowrap;">Browse</button>
           </div>
         </div>
-        <div class="form-hint" style="margin-bottom:12px;">🍪 Using global cookie from <b>Cookies</b> tab. <a href="#" onclick="switchYTab('cookies'); return false;" style="color:var(--accent);">Manage cookies →</a></div>
+        <div class="form-hint" style="margin-top:10px;">🍪 Cookie managed in <a href="#" onclick="switchYTab('cookies');return false;" style="color:var(--accent);">Cookies tab →</a></div>
+      </div>
+    </div>
+  </div><!-- /zone1 -->
+
+  <!-- ZONE 2: EXECUTION -->
+  <div class="yt-zone-exec">
+
+    <!-- START PANE -->
+    <div class="card">
+      <div class="card-body start-pane">
         <button class="btn btn-primary btn-full btn-lg" id="yt-audio-btn" onclick="startYTAudio()">🎵 Extract MP3</button>
       </div>
     </div>
-  </div>
-  <div style="display:flex;flex-direction:column;gap:16px;">
-    <div class="card" id="yta-progress-card" style="display:none;">
-      <div class="card-header"><div class="card-title">⏳ Extracting Audio</div><span class="badge badge-orange" id="yta-status">Running</span></div>
+
+    <!-- PROGRESS PANE -->
+    <div class="card" id="yta-progress-card">
+      <div class="card-header">
+        <div class="card-title">⏳ Extracting</div>
+        <span class="badge badge-orange" id="yta-status">Ready</span>
+      </div>
       <div class="card-body">
-        <div class="progress-wrap"><div class="progress-bar animated" id="yta-bar" style="width:0%"></div></div>
-        <div class="sse-log" id="yta-log" style="margin-top:12px;"></div>
+        <div class="progress-wrap prog-compact">
+          <div class="progress-bar animated" id="yta-bar" style="width:0%;"></div>
+        </div>
+        <div id="yta-placeholder" style="text-align:center;padding:20px 0;color:var(--text-muted);">
+          <div style="font-size:28px;margin-bottom:6px;">🎵</div>
+          <div style="font-size:12px;">Enter URLs to extract audio</div>
+        </div>
       </div>
     </div>
+
+    <!-- CONSOLE PANE -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">💻 Console</div></div>
+      <div class="card-body" style="padding:8px;">
+        <div class="sse-log console-compact" id="yta-log"></div>
+      </div>
+    </div>
+  </div><!-- /zone2 -->
+
+  <!-- ZONE 3: RESULTS TABLE -->
+  <div class="yt-zone-table">
     <div class="card" id="yta-results-card" style="display:none;">
-      <div class="card-header"><div class="card-title">✅ Extracted</div><span class="badge badge-green" id="yta-summary">0 files</span></div>
-      <div class="card-body" style="padding:0;"><div id="yta-results-list"></div></div>
-    </div>
-    <div class="card" id="yta-placeholder">
-      <div class="card-body" style="text-align:center;padding:48px 20px;">
-        <div style="font-size:48px;margin-bottom:12px;">🎵</div>
-        <div style="font-size:14px;font-weight:600;color:var(--text-secondary);">Enter YouTube URLs to extract audio</div>
+      <div class="card-header">
+        <div class="card-title">✅ Extracted Files</div>
+        <span class="badge badge-green" id="yta-summary">0 files</span>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <table class="yt-table">
+          <thead>
+            <tr><th>#</th><th>Output File</th><th>Status</th></tr>
+          </thead>
+          <tbody id="yta-results-list"></tbody>
+        </table>
       </div>
     </div>
-  </div>
-</div>
+  </div><!-- /zone3 -->
+
 </div><!-- /ytab-audio -->
 
 <!-- ═══════════════════════════════════
      TAB 3: REEL CONVERTER
 ═══════════════════════════════════ -->
 <div id="ytab-reel" style="display:none;">
-<div class="two-col">
 
-  <!-- Left: Config -->
-  <div style="display:flex;flex-direction:column;gap:16px;">
+  <!-- ZONE 1: INPUTS (2-col) -->
+  <div class="yt-zone-inputs">
 
-    <!-- Source -->
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">📹 Source</div>
-      </div>
-      <div class="card-body">
-        <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:16px;">
-          <button class="btn btn-sm active" id="src-yt-btn" onclick="setReelSource('yt')" style="background:var(--bg-card);border:1px solid var(--border);">▶ YouTube URL</button>
-          <button class="btn btn-sm btn-ghost" id="src-local-btn" onclick="setReelSource('local')">📁 Local File</button>
-        </div>
+    <!-- LEFT: Source + Split Mode -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
 
-        <!-- YouTube source -->
-        <div id="reel-src-yt">
-          <div class="form-group">
-            <label class="form-label">YouTube URL</label>
-            <input class="form-input mono" id="reel-yt-url" type="text" placeholder="https://www.youtube.com/watch?v=...">
+      <div class="card">
+        <div class="card-header"><div class="card-title">&#x1F4F9; Source</div></div>
+        <div class="card-body">
+          <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:12px;">
+            <button class="btn btn-sm active" id="src-yt-btn" onclick="setReelSource('yt')" style="background:var(--bg-card);border:1px solid var(--border);">&#x25B6; YouTube URL</button>
+            <button class="btn btn-sm btn-ghost" id="src-local-btn" onclick="setReelSource('local')">&#x1F4C1; Local File</button>
           </div>
-          <div class="form-group">
-            <label class="form-label">Quality</label>
-            <select class="form-select" id="reel-quality">
-              <option value="1080" selected>1080p (recommended)</option>
-              <option value="720">720p</option>
-              <option value="best">Best available</option>
-            </select>
-          </div>
-          <div class="form-hint">🍪 Using global cookie from <b>Cookies</b> tab. <a href="#" onclick="switchYTab('cookies'); return false;" style="color:var(--accent);">Manage cookies →</a></div>
-        </div>
-
-        <!-- Local source -->
-        <div id="reel-src-local" style="display:none;">
-          <div class="form-group">
-            <label class="form-label">Video File Path</label>
-            <div style="display:flex;gap:8px;">
-              <input class="form-input mono" id="reel-local-path" type="text" placeholder="C:\videos\movie.mp4" style="flex:1;">
-              <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-local-path')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
+          <div id="reel-src-yt">
+            <div class="form-group" style="margin-bottom:8px;">
+              <label class="form-label">YouTube URL</label>
+              <input class="form-input mono" id="reel-yt-url" type="text" placeholder="https://www.youtube.com/watch?v=...">
             </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Quality</label>
+              <select class="form-select" id="reel-quality">
+                <option value="1080" selected>1080p (recommended)</option>
+                <option value="720">720p</option>
+                <option value="best">Best available</option>
+              </select>
+            </div>
+            <div class="form-hint" style="margin-top:6px;">&#x1F36A; Cookie managed in <a href="#" onclick="switchYTab('cookies');return false;" style="color:var(--accent);">Cookies tab &#x2192;</a></div>
+          </div>
+          <div id="reel-src-local" style="display:none;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Video File Path</label>
+              <div style="display:flex;gap:6px;">
+                <input class="form-input mono" id="reel-local-path" type="text" placeholder="C:\videos\movie.mp4" style="flex:1;">
+                <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-local-path')" style="white-space:nowrap;">Browse</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">&#x2702; Split Mode</div></div>
+        <div class="card-body">
+          <div class="radio-pills" style="margin-bottom:10px;">
+            <label class="radio-pill" id="split-equal-box" onclick="setSplitMode('equal')">
+              <input type="radio" name="split-mode" value="equal" checked style="accent-color:var(--accent);">
+              &#x26A1; Equal Parts
+            </label>
+            <label class="radio-pill" id="split-clip-box" onclick="setSplitMode('clip')">
+              <input type="radio" name="split-mode" value="clip" style="accent-color:var(--accent);">
+              &#x2702; Clip Range
+            </label>
+            <label class="radio-pill" id="split-trailer-box" onclick="setSplitMode('trailer')">
+              <input type="radio" name="split-mode" value="trailer" style="accent-color:var(--accent);">
+              &#x1F3AC; Trailer
+            </label>
+          </div>
+          <!-- Equal opts -->
+          <div id="split-equal-opts">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Part Duration (sec)</label>
+              <input class="form-input" id="reel-part-dur" type="number" value="60" min="10" max="3600">
+              <div class="form-hint">60s = Instagram max. 30s for Shorts.</div>
+            </div>
+          </div>
+          <!-- Clip opts -->
+          <div id="split-clip-opts" style="display:none;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+              <div class="form-group" style="margin:0;">
+                <label class="form-label" style="font-size:10px;">Clip Start (sec)</label>
+                <input class="form-input" id="reel-clip-start" type="number" value="0" min="0">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label class="form-label" style="font-size:10px;">Clip End (sec)</label>
+                <input class="form-input" id="reel-clip-end" type="number" value="0" min="0">
+                <div class="form-hint" style="font-size:9px;">0 = end</div>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label class="form-label" style="font-size:10px;">Part Dur (sec)</label>
+                <input class="form-input" id="reel-part-dur-clip" type="number" value="60" min="10">
+              </div>
+            </div>
+          </div>
+          <!-- Trailer opts -->
+          <div id="split-trailer-opts" style="display:none;margin-top:8px;border:1px solid var(--accent);border-radius:var(--radius-sm);padding:10px;background:var(--bg-card-2);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <div class="sec-label">&#x23F1; Time Ranges — each row = one clip</div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="addYtClipRow()">+ Add Clip</button>
+            </div>
+            <table style="width:100%;text-align:left;font-size:12px;">
+              <thead>
+                <tr style="color:var(--text-muted);">
+                  <th style="padding-bottom:4px;font-weight:600;">From (HH:MM:SS)</th>
+                  <th style="padding-bottom:4px;font-weight:600;">To (HH:MM:SS)</th>
+                  <th style="padding-bottom:4px;font-weight:600;">Label</th>
+                  <th style="width:30px;"></th>
+                </tr>
+              </thead>
+              <tbody id="yt-clip-tbody">
+                <tr>
+                  <td><input class="form-input mono" type="text" placeholder="00:00:00" name="from_1" style="width:100%;"></td>
+                  <td><input class="form-input mono" type="text" placeholder="00:00:30" name="to_1" style="width:100%;"></td>
+                  <td><input class="form-input" type="text" placeholder="Hook" name="label_1" style="width:100%;"></td>
+                  <td style="text-align:right;"><button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('tr').remove()" style="padding:4px 8px;">&#x2715;</button></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Reel Settings -->
-    <div class="card">
-      <div class="card-header"><div class="card-title">✂ Split Settings</div></div>
-      <div class="card-body">
+    <!-- RIGHT: Overlays + Output -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
 
-        <div class="form-group">
-          <label class="form-label">Split Mode</label>
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" id="split-equal-box" onclick="setSplitMode('equal')">
-              <input type="radio" name="split-mode" value="equal" checked style="accent-color:var(--accent);margin-top:2px;">
-              <div>
-                <div style="font-size:13px;font-weight:600;">⚡ Equal Duration Parts</div>
-                <div style="font-size:11px;color:var(--text-muted);">Splits entire video into equal segments</div>
-              </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">&#x270F; Overlays</div></div>
+        <div class="card-body">
+          <!-- Title overlay -->
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:6px;">
+            <input type="checkbox" id="overlay-title" checked style="accent-color:var(--accent);flex-shrink:0;">
+            <span style="font-size:12px;font-weight:600;flex:1;">&#x1F4CC; Title</span>
+            <input class="form-input" id="reel-title" type="text" placeholder="Auto-filled from YouTube" style="flex:2;font-size:11px;">
+          </div>
+          <div class="slider-row" style="padding:0 4px;margin-bottom:8px;">
+            <span class="sr-label">Title from top</span>
+            <input type="range" id="title-pos-pct" min="5" max="50" value="20" oninput="document.getElementById('title-pos-val').textContent=this.value+'%'">
+            <span class="sr-val" id="title-pos-val">20%</span>
+          </div>
+          <!-- Part overlay -->
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:6px;">
+            <input type="checkbox" id="overlay-part" checked style="accent-color:var(--accent);flex-shrink:0;">
+            <span style="font-size:12px;font-weight:600;">&#x1F522; Part Number</span>
+          </div>
+          <div class="slider-row" style="padding:0 4px;margin-bottom:8px;">
+            <span class="sr-label">Part from top</span>
+            <input type="range" id="part-pos-pct" min="50" max="95" value="82" oninput="document.getElementById('part-pos-val').textContent=this.value+'%'">
+            <span class="sr-val" id="part-pos-val">82%</span>
+          </div>
+          <!-- Watermark -->
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:10px;">
+            <input type="checkbox" id="overlay-watermark" style="accent-color:var(--accent);flex-shrink:0;">
+            <span style="font-size:12px;font-weight:600;flex:1;">&#x1F4A7; Watermark</span>
+            <input class="form-input" id="reel-watermark" type="text" placeholder="@YourChannel" style="flex:2;font-size:11px;">
+          </div>
+          <!-- Bottom overlay mode -->
+          <div class="sec-label">&#x1F5BC; Bottom Overlay Image</div>
+          <div class="overlay-mode-pills">
+            <label class="radio-pill" onclick="setOverlayMode('none')">
+              <input type="radio" name="overlay-mode" value="none" id="overlay-mode-none" checked style="accent-color:var(--accent);">
+              &#x1F6AB; None
             </label>
-            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" id="split-clip-box" onclick="setSplitMode('clip')">
-              <input type="radio" name="split-mode" value="clip" style="accent-color:var(--accent);margin-top:2px;">
-              <div>
-                <div style="font-size:13px;font-weight:600;">✂ Clip Specific Range + Split</div>
-                <div style="font-size:11px;color:var(--text-muted);">Extract a section first, then split that section</div>
-              </div>
+            <label class="radio-pill" onclick="setOverlayMode('manual')">
+              <input type="radio" name="overlay-mode" value="manual" id="overlay-mode-manual" style="accent-color:var(--accent);">
+              &#x1F5BC; Manual
             </label>
-            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" id="split-trailer-box" onclick="setSplitMode('trailer')">
-              <input type="radio" name="split-mode" value="trailer" style="accent-color:var(--accent);margin-top:2px;">
-              <div>
-                <div style="font-size:13px;font-weight:600;">🎬 Trailer Mode</div>
-                <div style="font-size:11px;color:var(--text-muted);">Extract multiple specific clips (HH:MM:SS)</div>
-              </div>
+            <label class="radio-pill" onclick="setOverlayMode('auto')">
+              <input type="radio" name="overlay-mode" value="auto" id="overlay-mode-auto" style="accent-color:var(--accent);">
+              &#x26A1; Auto
             </label>
           </div>
-        </div>
-
-        <!-- Equal split options -->
-        <div id="split-equal-opts">
-          <div class="form-group">
-            <label class="form-label">Part Duration (seconds)</label>
-            <input class="form-input" id="reel-part-dur" type="number" value="60" min="10" max="3600">
-            <div class="form-hint">Each output Reel will be exactly this long. 60s = Instagram max. Use 30s for Shorts-style.</div>
-          </div>
-        </div>
-
-        <!-- Clip range options -->
-        <div id="split-clip-opts" style="display:none;">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-            <div class="form-group" style="margin:0;">
-              <label class="form-label" style="font-size:10px;">Clip Start (sec)</label>
-              <input class="form-input" id="reel-clip-start" type="number" value="0" min="0">
+          <div id="overlay-manual-controls" style="display:none;margin-top:8px;">
+            <input class="form-input" id="overlay-image-file" type="file" accept="image/*" style="font-size:11px;margin-bottom:6px;">
+            <div class="slider-row">
+              <span class="sr-label">Fill %</span>
+              <input type="range" id="overlay-image-comp-pct" min="1" max="100" value="100">
+              <span class="sr-val" id="overlay-image-comp-pct-val">100%</span>
             </div>
-            <div class="form-group" style="margin:0;">
-              <label class="form-label" style="font-size:10px;">Clip End (sec)</label>
-              <input class="form-input" id="reel-clip-end" type="number" value="0" min="0">
-              <div class="form-hint" style="font-size:9px;">0 = until end</div>
-            </div>
-            <div class="form-group" style="margin:0;">
-              <label class="form-label" style="font-size:10px;">Part Duration (sec)</label>
-              <input class="form-input" id="reel-part-dur-clip" type="number" value="60" min="10">
+            <div class="slider-row">
+              <span class="sr-label">Zoom %</span>
+              <input type="range" id="overlay-image-zoom-pct" min="100" max="200" value="100">
+              <span class="sr-val" id="overlay-image-zoom-pct-val">100%</span>
             </div>
           </div>
-        </div>
-
-        <!-- Trailer Mode: multiple HH:MM:SS clip ranges -->
-        <div id="split-trailer-opts" style="display:none;margin-top:12px;border:1px solid var(--accent);border-radius:var(--radius-sm);padding:12px;background:var(--bg-card-2);">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;">⏱ Time Ranges — each row = one output clip</div>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="addYtClipRow()">+ Add Clip</button>
-          </div>
-          <table style="width:100%;text-align:left;font-size:12px;">
-            <thead>
-              <tr style="color:var(--text-muted);">
-                <th style="padding-bottom:4px;font-weight:600;">From (HH:MM:SS)</th>
-                <th style="padding-bottom:4px;font-weight:600;">To (HH:MM:SS)</th>
-                <th style="padding-bottom:4px;font-weight:600;">Label</th>
-                <th style="width:30px;"></th>
-              </tr>
-            </thead>
-            <tbody id="yt-clip-tbody">
-              <tr>
-                <td><input class="form-input mono" type="text" placeholder="00:00:00" name="from_1" style="width:100%;"></td>
-                <td><input class="form-input mono" type="text" placeholder="00:00:30" name="to_1" style="width:100%;"></td>
-                <td><input class="form-input" type="text" placeholder="Hook" name="label_1" style="width:100%;"></td>
-                <td style="text-align:right;"><button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('tr').remove()" style="padding:4px 8px;">✕</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Text Overlays -->
-    <div class="card">
-      <div class="card-header"><div class="card-title">✏ Text Overlays</div></div>
-      <div class="card-body">
-        <div style="display:flex;flex-direction:column;gap:10px;">
-
-          <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
-            <input type="checkbox" id="overlay-title" checked style="accent-color:var(--accent);margin-top:3px;">
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:600;">📌 Title (Centered Top Area)</div>
-              <div style="font-size:11px;color:var(--text-muted);">e.g. "Movie Name - Part 1"</div>
-              <input class="form-input" id="reel-title" type="text" placeholder="Video title (auto-filled from YouTube if blank)" style="margin-top:8px;font-size:12px;">
-              <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
-                <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Placement From Top:</span>
-                <input type="range" id="title-pos-pct" min="5" max="50" value="20" style="flex:1; accent-color:var(--accent);" oninput="document.getElementById('title-pos-val').textContent = this.value + '%'">
-                <span id="title-pos-val" style="font-size:11px; font-weight:600; min-width:30px; font-family:var(--font-mono)">20%</span>
-              </div>
-            </div>
-          </label>
-
-          <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
-            <input type="checkbox" id="overlay-part" checked style="accent-color:var(--accent);margin-top:3px;">
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:600;">🔢 Part Number (Centered Bottom Area)</div>
-              <div style="font-size:11px;color:var(--text-muted);">"Part -1", "Part -2" … auto-increments</div>
-              <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
-                <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Placement From Top:</span>
-                <input type="range" id="part-pos-pct" min="50" max="95" value="82" style="flex:1; accent-color:var(--accent);" oninput="document.getElementById('part-pos-val').textContent = this.value + '%'">
-                <span id="part-pos-val" style="font-size:11px; font-weight:600; min-width:30px; font-family:var(--font-mono)">82%</span>
-              </div>
-            </div>
-          </label>
-
-          <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
-            <input type="checkbox" id="overlay-watermark" style="accent-color:var(--accent);margin-top:3px;">
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:600;">💧 Watermark (bottom-right, semi-transparent)</div>
-              <input class="form-input" id="reel-watermark" type="text" placeholder="@YourChannel or channel name" style="margin-top:8px;font-size:12px;">
-            </div>
-          </label>
-
-          <!-- Bottom Overlay Image — 3 Modes -->
-          <div style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
-            <div style="font-size:13px;font-weight:600;margin-bottom:10px;">🖼 Bottom Overlay Image</div>
-
-            <!-- Mode Selector -->
-            <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;" id="overlay-mode-group">
-
-              <!-- None -->
-              <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);cursor:pointer;" onclick="setOverlayMode('none')">
-                <input type="radio" name="overlay-mode" value="none" id="overlay-mode-none" checked style="accent-color:var(--accent);">
-                <div>
-                  <div style="font-size:12px;font-weight:600;">🚫 None</div>
-                  <div style="font-size:10px;color:var(--text-muted);">No bottom overlay applied</div>
-                </div>
-              </label>
-
-              <!-- Manual -->
-              <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);cursor:pointer;" onclick="setOverlayMode('manual')">
-                <input type="radio" name="overlay-mode" value="manual" id="overlay-mode-manual" style="accent-color:var(--accent);">
-                <div>
-                  <div style="font-size:12px;font-weight:600;">🖼 Manual</div>
-                  <div style="font-size:10px;color:var(--text-muted);">Upload your own thumbnail image with full control</div>
-                </div>
-              </label>
-
-              <!-- Automated -->
-              <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);cursor:pointer;" onclick="setOverlayMode('auto')">
-                <input type="radio" name="overlay-mode" value="auto" id="overlay-mode-auto" style="accent-color:var(--accent);">
-                <div>
-                  <div style="font-size:12px;font-weight:600;">⚡ Automated</div>
-                  <div style="font-size:10px;color:var(--text-muted);">Uses the YouTube video thumbnail automatically</div>
-                </div>
-              </label>
-            </div>
-
-            <!-- Manual Controls (shown only for Manual mode) -->
-            <div id="overlay-manual-controls" style="display:none;">
-              <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Bottom compartment is fixed to the lower third of 9:16. At 100% the image is fitted as-is. Use Zoom to punch in up to 200%.</div>
-              <input class="form-input" id="overlay-image-file" type="file" accept="image/*" style="font-size:12px;margin-bottom:8px;">
-              <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
-                <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Fill</span>
-                <input type="range" id="overlay-image-comp-pct" min="1" max="100" value="100" style="flex:1;accent-color:var(--accent);">
-                <span id="overlay-image-comp-pct-val" style="font-size:11px;font-family:var(--font-mono);min-width:42px;">100%</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
-                <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Zoom</span>
-                <input type="range" id="overlay-image-zoom-pct" min="100" max="200" value="100" style="flex:1;accent-color:var(--accent);">
-                <span id="overlay-image-zoom-pct-val" style="font-size:11px;font-family:var(--font-mono);min-width:42px;">100%</span>
-              </div>
-            </div>
-
-            <!-- Automated Status (shown only for Auto mode) -->
-            <div id="overlay-auto-info" style="display:none;padding:8px 10px;border-radius:var(--radius-sm);background:var(--bg-card);border:1px solid var(--border);">
-              <div style="font-size:11px;color:var(--text-muted);">⚡ The video's YouTube thumbnail will be automatically downloaded and placed in the bottom compartment. Fill and Zoom are managed by the system.</div>
-            </div>
+          <div id="overlay-auto-info" style="display:none;font-size:11px;color:var(--text-muted);padding:6px 8px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:6px;">
+            &#x26A1; YouTube thumbnail auto-placed. Fill &amp; Zoom managed by system.
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Output folder -->
-    <div class="card">
-      <div class="card-header"><div class="card-title">📂 Output</div></div>
-      <div class="card-body">
-        <div class="form-group">
-          <label class="form-label">Output Folder (optional)</label>
-          <div style="display:flex;gap:8px;">
-            <input class="form-input mono" id="reel-out-dir" type="text" placeholder="Default: configured YouTube folder" value="{{ settings.get('dir_yt', '') }}" style="flex:1;">
-            <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
-          </div>
-        </div>
-        <div style="background:var(--bg-card-2);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);font-size:11px;color:var(--text-muted);margin-bottom:14px;">
-          <strong>Output format:</strong> 9:16 · 1080×1920 · H.264 · AAC · Cinemascope bars preserved<br>
-          Parts saved as: <code>videoname_part01.mp4</code>, <code>_part02.mp4</code>…
-        </div>
-        <!-- Output Size toggle -->
-        <div style="margin-bottom:4px;">
-          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:8px;">Output Size</div>
-          <div style="display:flex;gap:8px;">
-            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg-card-2);border:2px solid rgba(255,60,172,.4);border-radius:var(--radius-sm);cursor:pointer;" id="sz-ig-lbl">
+      <div class="card">
+        <div class="card-header"><div class="card-title">&#x1F4C2; Output</div></div>
+        <div class="card-body">
+          <div class="sec-label">Output Size</div>
+          <div class="radio-pills" style="margin-bottom:10px;">
+            <label class="radio-pill" id="sz-ig-lbl">
               <input type="radio" name="reel_output_size" id="sz-instagram" value="instagram" checked style="accent-color:var(--accent);">
-              <div><div style="font-weight:700;font-size:12px;">📱 Instagram 9:16</div><div style="font-size:10px;color:var(--text-muted);">Letterbox · no crop</div></div>
+              &#x1F4F1; Instagram 9:16
             </label>
-            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg-card-2);border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;" id="sz-orig-lbl">
+            <label class="radio-pill" id="sz-orig-lbl">
               <input type="radio" name="reel_output_size" id="sz-original" value="original" style="accent-color:var(--accent);">
-              <div><div style="font-weight:700;font-size:12px;">📐 Original Size</div><div style="font-size:10px;color:var(--text-muted);">Keep source dims</div></div>
+              &#x1F4D0; Original
             </label>
-            <label style="flex:1;display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg-card-2);border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;" id="sz-rot-lbl">
+            <label class="radio-pill" id="sz-rot-lbl">
               <input type="radio" name="reel_output_size" id="sz-rotated90" value="rotated90" style="accent-color:var(--accent);">
-              <div><div style="font-weight:700;font-size:12px;">🔄 Tilted Landscape</div><div style="font-size:10px;color:var(--text-muted);">Rotated 90° Right</div></div>
+              &#x1F504; Tilted
             </label>
           </div>
+          <div class="form-group" style="margin-bottom:8px;">
+            <label class="form-label">Output Folder <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+            <div style="display:flex;gap:6px;">
+              <input class="form-input mono" id="reel-out-dir" type="text" placeholder="Default YouTube folder" value="{{ settings.get('dir_yt', '') }}" style="flex:1;">
+              <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-out-dir')" style="white-space:nowrap;">Browse</button>
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;font-size:11px;">
+            <input type="checkbox" id="reel-delete-source" style="accent-color:var(--accent);">
+            Delete source after successful split
+          </label>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-top:10px;cursor:pointer;">
-          <input type="checkbox" id="reel-delete-source" style="accent-color:var(--accent);">
-          <span style="font-size:12px;">Delete source video after successful reel split</span>
-        </label>
       </div>
     </div>
+  </div><!-- /zone1 -->
 
-    <button class="btn btn-primary btn-full btn-lg" id="reel-btn" onclick="startReelConvert()"
-            style="background:linear-gradient(135deg,#ff3cac,#8250ff);">
-      📱 Download &amp; Convert to Reels
-    </button>
-  </div>
+  <!-- ZONE 2: EXECUTION (3-col) -->
+  <div class="yt-zone-exec">
 
-  <!-- Right: Progress + Results -->
-  <div style="display:flex;flex-direction:column;gap:16px;">
-
-    <!-- Preview card -->
+    <!-- START PANE -->
     <div class="card">
-      <div class="card-header"><div class="card-title">🖼 Output Preview</div></div>
-      <div class="card-body" style="display:flex;justify-content:center;align-items:center;padding:16px;">
-        <!-- 9:16 mockup -->
-        <div style="width:140px;height:249px;background:#000;border-radius:8px;border:2px solid var(--border);position:relative;overflow:hidden;flex-shrink:0;">
-          <div style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,.7);padding:6px;text-align:center;">
-            <div style="font-size:8px;color:#fff;font-weight:600;" id="mock-title">Title - Part 1</div>
-          </div>
-          <!-- Simulated letterbox video area -->
-          <div style="position:absolute;top:0;bottom:0;left:0;right:0;display:flex;align-items:center;">
-            <div id="mock-video-bg" style="background:linear-gradient(135deg,#1a1a2e,#16213e);height:78px;width:100%;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
-              <span id="mock-video-icon" style="font-size:24px;transition:all 0.3s ease;">🎬</span>
-            </div>
-          </div>
-          <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:6px;text-align:center;min-height:46px;">
-            <div style="height:84px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:4px;">
-              <img id="mock-overlay-image" alt="overlay preview" style="display:none;width:100%;height:100%;object-fit:contain;object-position:center center;margin:0 auto;">
-            </div>
-            <div style="font-size:10px;color:#fff;font-weight:700;" id="mock-part">Part -1</div>
-          </div>
-          <div style="position:absolute;bottom:4px;right:5px;font-size:6px;color:rgba(255,255,255,.5);" id="mock-wm"></div>
-        </div>
-        <div style="margin-left:16px;font-size:11px;color:var(--text-muted);line-height:1.8;">
-          <div>📐 <strong>1080×1920</strong></div>
-          <div>🎞 H.264 / AAC</div>
-          <div id="mock-crop-text">⬛ Letterbox bars preserved</div>
-          <div>✂ Equal parts</div>
+      <div class="card-body start-pane">
+        <button class="btn btn-primary btn-full btn-lg" id="reel-btn" onclick="startReelConvert()"
+          style="background:linear-gradient(135deg,#ff3cac,#8250ff);">
+          &#x1F4F1; Convert to Reels
+        </button>
+        <div style="font-size:10px;color:var(--text-muted);line-height:1.7;margin-top:4px;">
+          &#x1F4C4; 9:16 &#xB7; 1080&#xD7;1920 &#xB7; H.264<br>
+          Parts: <code>name_part01.mp4</code>
         </div>
       </div>
     </div>
 
-    <!-- Progress -->
-    <div class="card" id="reel-progress-card" style="display:none;">
+    <!-- PREVIEW PANE -->
+    <div class="card" id="reel-progress-card">
       <div class="card-header">
-        <div class="card-title">⏳ Processing</div>
-        <span class="badge badge-orange" id="reel-status">Running</span>
+        <div class="card-title">&#x1F5BC; Preview</div>
+        <span class="badge badge-gray" id="reel-status">Ready</span>
       </div>
-      <div class="card-body">
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:6px;">
-          <span id="reel-current">Starting…</span><span id="reel-pct">0%</span>
+      <div class="card-body" style="display:flex;align-items:center;gap:16px;padding:12px;">
+        <!-- 9:16 mock -->
+        <div style="width:90px;height:160px;background:#000;border-radius:6px;border:2px solid var(--border);position:relative;overflow:hidden;flex-shrink:0;">
+          <div style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,.7);padding:4px;text-align:center;">
+            <div style="font-size:6px;color:#fff;font-weight:600;" id="mock-title">Title - Part 1</div>
+          </div>
+          <div style="position:absolute;top:0;bottom:0;left:0;right:0;display:flex;align-items:center;">
+            <div id="mock-video-bg" style="background:linear-gradient(135deg,#1a1a2e,#16213e);height:50px;width:100%;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
+              <span id="mock-video-icon" style="font-size:16px;transition:all 0.3s ease;">&#x1F3AC;</span>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:4px;text-align:center;min-height:30px;">
+            <div style="height:54px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:3px;">
+              <img id="mock-overlay-image" alt="overlay" style="display:none;width:100%;height:100%;object-fit:contain;">
+            </div>
+            <div style="font-size:7px;color:#fff;font-weight:700;" id="mock-part">Part -1</div>
+          </div>
+          <div style="position:absolute;bottom:3px;right:4px;font-size:5px;color:rgba(255,255,255,.5);" id="mock-wm"></div>
         </div>
-        <div class="progress-wrap"><div class="progress-bar animated" id="reel-bar" style="width:0%;background:linear-gradient(90deg,#ff3cac,#8250ff);"></div></div>
-        <div class="sse-log" id="reel-log" style="margin-top:12px;max-height:200px;overflow-y:auto;"></div>
+        <div style="font-size:10px;color:var(--text-muted);line-height:1.9;">
+          <div>&#x1F4D0; <strong>1080&#xD7;1920</strong></div>
+          <div>&#x1F39E; H.264 / AAC</div>
+          <div id="mock-crop-text">&#x2B1B; Letterbox bars</div>
+        </div>
+      </div>
+      <div class="card-body" style="padding:8px 12px;border-top:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px;">
+          <span id="reel-current">&#x2014;</span><span id="reel-pct">0%</span>
+        </div>
+        <div class="progress-wrap prog-compact">
+          <div class="progress-bar animated" id="reel-bar" style="width:0%;background:linear-gradient(90deg,#ff3cac,#8250ff);"></div>
+        </div>
       </div>
     </div>
 
-    <!-- Results -->
+    <!-- CONSOLE PANE -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">&#x1F4BB; Console</div></div>
+      <div class="card-body" style="padding:8px;">
+        <div class="sse-log console-compact" id="reel-log"></div>
+      </div>
+    </div>
+  </div><!-- /zone2 -->
+
+  <!-- ZONE 3: RESULTS TABLE -->
+  <div class="yt-zone-table">
     <div class="card" id="reel-results-card" style="display:none;">
       <div class="card-header">
-        <div class="card-title">✅ Reel Parts Created</div>
+        <div class="card-title">&#x2705; Reel Parts Created</div>
         <span class="badge badge-green" id="reel-results-count">0 parts</span>
       </div>
       <div class="card-body" style="padding:0;">
-        <div id="reel-results-list"></div>
-        <div id="reel-output-dir" style="padding:12px;font-size:11px;color:var(--text-muted);border-top:1px solid var(--border);"></div>
+        <table class="yt-table">
+          <thead>
+            <tr><th>#</th><th>Output File</th><th>Status</th></tr>
+          </thead>
+          <tbody id="reel-results-list"></tbody>
+        </table>
+        <div id="reel-output-dir" style="padding:8px 12px;font-size:11px;color:var(--text-muted);border-top:1px solid var(--border);"></div>
       </div>
     </div>
+  </div><!-- /zone3 -->
 
-  </div>
-</div>
 </div><!-- /ytab-reel -->
+
 
 
 <!-- =====================================================
      TAB: BULK REELS
 ===================================================== -->
 <div id="ytab-bulkreel" style="display:none;">
-<div class="two-col">
 
-  <!-- LEFT: Settings -->
-  <div style="display:flex;flex-direction:column;gap:16px;">
+  <!-- ZONE 1: INPUTS (2-col) -->
+  <div class="yt-zone-inputs">
 
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">&#x25B6; Bulk YouTube URLs</div>
-        <span id="bulk-reel-url-count" class="badge badge-gray">0 URLs</span>
-      </div>
-      <div class="card-body">
-        <div class="form-group">
-          <label class="form-label">YouTube Links <span style="color:var(--text-muted);font-weight:400;">(one per line)</span></label>
-          <textarea class="form-textarea mono" id="bulk-reel-urls" rows="7"
+    <!-- LEFT: URLs + Split -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">&#x25B6; Bulk YouTube URLs</div>
+          <span id="bulk-reel-url-count" class="badge badge-gray">0 URLs</span>
+        </div>
+        <div class="card-body">
+          <textarea class="form-textarea mono" id="bulk-reel-urls" rows="8"
             placeholder="https://www.youtube.com/watch?v=XXXX&#10;https://youtu.be/YYYY&#10;..."
             oninput="document.getElementById('bulk-reel-url-count').textContent = this.value.split('\n').filter(l=>l.trim().startsWith('http')).length + ' URLs'"></textarea>
-          <div class="form-hint" style="margin-top:8px;">
-            &#x26A1; <b>Auto-Thumbnail:</b> Each video's own YouTube thumbnail is automatically downloaded and placed as the bottom overlay - no manual selection needed.
+          <div class="form-hint" style="margin-top:6px;">&#x26A1; Each video's YouTube thumbnail auto-placed as bottom overlay.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">&#x2702; Split Settings</div></div>
+        <div class="card-body">
+          <div class="slider-row" style="margin-bottom:10px;">
+            <span class="sr-label">Part Duration</span>
+            <input class="form-input" id="bulk-reel-part-dur" type="range" min="15" max="600" value="60"
+              oninput="document.getElementById('bulk-part-dur-val').textContent=this.value+'s'">
+            <span class="sr-val" id="bulk-part-dur-val">60s</span>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Quality</label>
+            <select class="form-select" id="bulk-reel-quality">
+              <option value="1080">1080p</option>
+              <option value="720">720p</option>
+              <option value="480">480p</option>
+              <option value="best">Best Available</option>
+            </select>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-header"><div class="card-title">&#x2702; Split Settings</div></div>
-      <div class="card-body">
-        <div class="form-group">
-          <label class="form-label">Part Duration
-            <span id="bulk-part-dur-val" style="font-family:var(--font-mono);color:var(--accent);margin-left:8px;">60s</span>
-          </label>
-          <input class="form-input" id="bulk-reel-part-dur" type="range" min="15" max="600" value="60"
-            oninput="document.getElementById('bulk-part-dur-val').textContent=this.value+'s'">
-        </div>
-        <div class="form-group" style="margin-top:10px;">
-          <label class="form-label">Quality</label>
-          <select class="form-select" id="bulk-reel-quality">
-            <option value="1080">1080p</option>
-            <option value="720">720p</option>
-            <option value="480">480p</option>
-            <option value="best">Best Available</option>
-          </select>
-        </div>
-      </div>
-    </div>
+    <!-- RIGHT: Overlays + Output -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
 
-    <div class="card">
-      <div class="card-header"><div class="card-title">&#x270F; Overlays</div></div>
-      <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
-
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;">
-          <input type="checkbox" id="bulk-overlay-title" checked style="accent-color:var(--accent);margin-top:3px;">
-          <div style="flex:1;">
-            <div style="font-size:13px;font-weight:600;">&#x1F4CC; Video Title (Top)</div>
-            <div style="font-size:11px;color:var(--text-muted);">Auto-harvested from YouTube metadata</div>
-            <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
-              <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Position from top</span>
-              <input type="range" id="bulk-title-pos-pct" min="5" max="50" value="20" style="flex:1;accent-color:var(--accent);"
-                oninput="document.getElementById('bulk-title-pos-val').textContent=this.value+'%'">
-              <span id="bulk-title-pos-val" style="font-size:11px;font-weight:600;min-width:32px;font-family:var(--font-mono)">20%</span>
-            </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">&#x270F; Overlays</div></div>
+        <div class="card-body">
+          <!-- Title overlay -->
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:6px;">
+            <input type="checkbox" id="bulk-overlay-title" checked style="accent-color:var(--accent);flex-shrink:0;">
+            <span style="font-size:12px;font-weight:600;">&#x1F4CC; Video Title (Top)</span>
           </div>
-        </label>
-
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;">
-          <input type="checkbox" id="bulk-overlay-part" checked style="accent-color:var(--accent);margin-top:3px;">
-          <div style="flex:1;">
-            <div style="font-size:13px;font-weight:600;">&#x1F522; Part Number (Bottom Area)</div>
-            <div style="font-size:11px;color:var(--text-muted);">"Part -1", "Part -2" &hellip;</div>
-            <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
-              <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Position from top</span>
-              <input type="range" id="bulk-part-pos-pct" min="50" max="95" value="82" style="flex:1;accent-color:var(--accent);"
-                oninput="document.getElementById('bulk-part-pos-val').textContent=this.value+'%'">
-              <span id="bulk-part-pos-val" style="font-size:11px;font-weight:600;min-width:32px;font-family:var(--font-mono)">82%</span>
-            </div>
+          <div class="slider-row" style="padding:0 4px;margin-bottom:8px;">
+            <span class="sr-label">Title from top</span>
+            <input type="range" id="bulk-title-pos-pct" min="5" max="50" value="20"
+              oninput="document.getElementById('bulk-title-pos-val').textContent=this.value+'%'">
+            <span class="sr-val" id="bulk-title-pos-val">20%</span>
           </div>
-        </label>
-
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;">
-          <input type="checkbox" id="bulk-overlay-watermark" style="accent-color:var(--accent);margin-top:3px;">
-          <div style="flex:1;">
-            <div style="font-size:13px;font-weight:600;">&#x1F4A7; Watermark</div>
-            <input class="form-input" id="bulk-reel-watermark" type="text" placeholder="@YourChannel" style="margin-top:8px;font-size:12px;">
+          <!-- Part overlay -->
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:6px;">
+            <input type="checkbox" id="bulk-overlay-part" checked style="accent-color:var(--accent);flex-shrink:0;">
+            <span style="font-size:12px;font-weight:600;">&#x1F522; Part Number (Bottom)</span>
           </div>
-        </label>
-
-        <div style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px;">&#x1F5BC; Thumbnail Overlay Constraints</div>
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-            <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;min-width:50px;">Fill %</span>
-            <input type="range" id="bulk-overlay-comp-pct" min="1" max="100" value="100" style="flex:1;accent-color:var(--accent);"
+          <div class="slider-row" style="padding:0 4px;margin-bottom:8px;">
+            <span class="sr-label">Part from top</span>
+            <input type="range" id="bulk-part-pos-pct" min="50" max="95" value="82"
+              oninput="document.getElementById('bulk-part-pos-val').textContent=this.value+'%'">
+            <span class="sr-val" id="bulk-part-pos-val">82%</span>
+          </div>
+          <!-- Watermark -->
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:10px;">
+            <input type="checkbox" id="bulk-overlay-watermark" style="accent-color:var(--accent);flex-shrink:0;">
+            <span style="font-size:12px;font-weight:600;flex:1;">&#x1F4A7; Watermark</span>
+            <input class="form-input" id="bulk-reel-watermark" type="text" placeholder="@YourChannel" style="flex:2;font-size:11px;">
+          </div>
+          <!-- Thumbnail constraints -->
+          <div class="sec-label">&#x1F5BC; Thumbnail Overlay Constraints</div>
+          <div class="slider-row">
+            <span class="sr-label">Fill %</span>
+            <input type="range" id="bulk-overlay-comp-pct" min="1" max="100" value="100"
               oninput="document.getElementById('bulk-overlay-comp-val').textContent=this.value+'%'">
-            <span id="bulk-overlay-comp-val" style="font-size:11px;font-weight:600;min-width:32px;font-family:var(--font-mono)">100%</span>
+            <span class="sr-val" id="bulk-overlay-comp-val">100%</span>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;min-width:50px;">Zoom %</span>
-            <input type="range" id="bulk-overlay-zoom-pct" min="100" max="200" value="100" style="flex:1;accent-color:var(--accent);"
+          <div class="slider-row">
+            <span class="sr-label">Zoom %</span>
+            <input type="range" id="bulk-overlay-zoom-pct" min="100" max="200" value="100"
               oninput="document.getElementById('bulk-overlay-zoom-val').textContent=this.value+'%'">
-            <span id="bulk-overlay-zoom-val" style="font-size:11px;font-weight:600;min-width:32px;font-family:var(--font-mono)">100%</span>
+            <span class="sr-val" id="bulk-overlay-zoom-val">100%</span>
           </div>
         </div>
+      </div>
 
+      <div class="card">
+        <div class="card-header"><div class="card-title">&#x1F4C2; Output</div></div>
+        <div class="card-body">
+          <div class="form-group" style="margin-bottom:8px;">
+            <label class="form-label">Output Folder <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+            <div style="display:flex;gap:6px;">
+              <input class="form-input mono" id="bulk-reel-out-dir" type="text" placeholder="Default YouTube folder" style="flex:1;">
+              <button class="btn btn-secondary btn-sm" onclick="browseFolder('bulk-reel-out-dir')" style="white-space:nowrap;">Browse</button>
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;font-size:11px;">
+            <input type="checkbox" id="bulk-reel-delete-source" style="accent-color:var(--accent);">
+            Delete source after successful split
+          </label>
+        </div>
       </div>
     </div>
+  </div><!-- /zone1 -->
 
+  <!-- ZONE 2: EXECUTION (3-col) -->
+  <div class="yt-zone-exec">
+
+    <!-- START PANE -->
     <div class="card">
-      <div class="card-header"><div class="card-title">&#x1F4C2; Output</div></div>
-      <div class="card-body">
-        <div class="form-group">
-          <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-          <div style="display:flex;gap:8px;">
-            <input class="form-input mono" id="bulk-reel-out-dir" type="text" placeholder="Leave blank to use default YouTube dir" style="flex:1;">
-            <button class="btn btn-secondary btn-sm" onclick="browseFolder('bulk-reel-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse&hellip;</button>
-          </div>
+      <div class="card-body start-pane">
+        <button class="btn btn-primary btn-full btn-lg" id="bulk-reel-btn" onclick="startBulkReelConvert()"
+          style="background:linear-gradient(135deg,#ff3cac,#8250ff);">
+          &#x1F3AC; Bulk Generate Reels
+        </button>
+        <div style="font-size:10px;color:var(--text-muted);line-height:1.7;margin-top:4px;">
+          &#x26A1; Auto-thumbnail per video<br>
+          &#x1F4F1; 9:16 &#xB7; 1080&#xD7;1920
         </div>
-        <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-top:10px;cursor:pointer;">
-          <input type="checkbox" id="bulk-reel-delete-source" style="accent-color:var(--accent);">
-          <span style="font-size:12px;">Delete source video after successful split</span>
-        </label>
       </div>
     </div>
 
-    <button class="btn btn-primary btn-full btn-lg" id="bulk-reel-btn" onclick="startBulkReelConvert()"
-            style="background:linear-gradient(135deg,#ff3cac,#8250ff);font-size:15px;padding:14px;">
-      &#x1F3AC; Start Bulk Reel Generation
-    </button>
-  </div>
-
-  <!-- RIGHT: Progress -->
-  <div style="display:flex;flex-direction:column;gap:16px;">
-    <div class="card" id="bulk-reel-progress-card" style="display:none;">
+    <!-- PROGRESS PANE -->
+    <div class="card" id="bulk-reel-progress-card">
       <div class="card-header">
         <div class="card-title">&#x23F3; Processing Queue</div>
-        <span class="badge badge-orange" id="bulk-reel-status">Running</span>
+        <span class="badge badge-gray" id="bulk-reel-status">Ready</span>
       </div>
       <div class="card-body">
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:6px;">
-          <span id="bulk-reel-current">Starting&hellip;</span>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:5px;">
+          <span id="bulk-reel-current">&#x2014;</span>
           <span id="bulk-reel-pct">0%</span>
         </div>
-        <div class="progress-wrap">
+        <div class="progress-wrap prog-compact">
           <div class="progress-bar animated" id="bulk-reel-bar" style="width:0%;background:linear-gradient(90deg,#ff3cac,#8250ff);"></div>
         </div>
-        <div class="sse-log" id="bulk-reel-log" style="margin-top:12px;max-height:500px;overflow-y:auto;"></div>
+        <div id="bulk-reel-placeholder" style="text-align:center;padding:20px 0;color:var(--text-muted);">
+          <div style="font-size:28px;margin-bottom:6px;">&#x1F4D1;</div>
+          <div style="font-size:12px;">Paste URLs and hit Start</div>
+        </div>
       </div>
     </div>
-    <div class="card" id="bulk-reel-placeholder" style="display:flex;align-items:center;justify-content:center;min-height:200px;border:2px dashed var(--border);">
-      <div style="text-align:center;color:var(--text-muted);">
-        <div style="font-size:36px;margin-bottom:12px;">&#x1F4D1;</div>
-        <div style="font-size:14px;">Paste URLs on the left and hit Start</div>
-        <div style="font-size:12px;margin-top:6px;">Each video's thumbnail is auto-placed in the bottom overlay</div>
-      </div>
-    </div>
-  </div>
 
-</div>
+    <!-- CONSOLE PANE -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">&#x1F4BB; Console</div></div>
+      <div class="card-body" style="padding:8px;">
+        <div class="sse-log console-compact" id="bulk-reel-log"></div>
+      </div>
+    </div>
+  </div><!-- /zone2 -->
+
 </div><!-- /ytab-bulkreel -->
+
 
 {% endblock %}
 
@@ -1192,16 +1386,32 @@ function showYTResults(results) {
   const ok = results.filter(r=>r.status==='ok' || r.status==='skipped').length;
   document.getElementById('yt-results-summary').textContent=`${ok} / ${results.length}`;
   document.getElementById('yt-results-card').style.display='block';
-  document.getElementById('yt-results-list').innerHTML=results.map(r=>`
-    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);">
-      <span style="font-size:22px;">🎬</span>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title||r.url}</div>
-        <div style="font-size:11px;color:var(--text-muted);">@${r.channel||'—'}${r.duration?' · '+Math.round(r.duration/60)+'m':''}</div>
-        ${r.error?`<div style="font-size:11px;color:var(--accent-red);">${r.error}</div>`:''}
-      </div>
-      <span class="badge ${r.status==='ok'?'badge-green':(r.status==='skipped'?'badge-orange':'badge-red')}">${r.status==='ok'?'OK':(r.status==='skipped'?'Skipped':'Error')}</span>
-    </div>`).join('');
+  window._ytResults = results; window._ytPage = 0; renderYTPage();
+}
+function renderYTPage() {
+  const results = window._ytResults || [];
+  const page = window._ytPage || 0; const perPage = 15;
+  const start = page * perPage; const total = Math.ceil(results.length / perPage);
+  document.getElementById('yt-results-list').innerHTML = results.slice(start, start+perPage).map((r,i) => `
+    <tr>
+      <td style="color:var(--text-muted);font-family:var(--font-mono);width:32px;">${start+i+1}</td>
+      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.title||r.url}">${r.title||r.url||'\u2014'}</td>
+      <td style="color:var(--text-muted);font-size:11px;">@${r.channel||'\u2014'}</td>
+      <td style="color:var(--text-muted);font-family:var(--font-mono);font-size:11px;">${r.duration?Math.round(r.duration/60)+'m':'\u2014'}</td>
+      <td><span class="badge ${r.status==='ok'?'badge-green':(r.status==='skipped'?'badge-orange':'badge-red')}">${r.status==='ok'?'OK':(r.status==='skipped'?'Skip':'Err')}</span></td>
+    </tr>`).join('');
+  const pag = document.getElementById('yt-pagination');
+  if (total > 1) {
+    pag.style.display='flex';
+    document.getElementById('yt-page-info').textContent=`Page ${page+1} of ${total}`;
+    document.getElementById('yt-prev').disabled = page===0;
+    document.getElementById('yt-next').disabled = page>=total-1;
+  } else { pag.style.display='none'; }
+}
+function ytPage(dir) {
+  const total = Math.ceil((window._ytResults||[]).length/15);
+  window._ytPage = Math.max(0, Math.min(total-1, (window._ytPage||0)+dir));
+  renderYTPage();
 }
 
 // ── Audio tab ─────────────────────────────────────────────────
@@ -1235,11 +1445,12 @@ async function startYTAudio() {
       const res=d.results||[];
       document.getElementById('yta-summary').textContent=res.filter(r=>r.status==='ok').length+'/'+res.length+' files';
       document.getElementById('yta-results-card').style.display='block';
-      document.getElementById('yta-results-list').innerHTML=res.map(r=>`
-        <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);">
-          <span>🎵</span><div style="flex:1;font-size:12px;">${r.output||r.url||'file'}</div>
-          <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
-        </div>`).join('');
+      document.getElementById('yta-results-list').innerHTML=res.map((r,i)=>`
+        <tr>
+          <td style="color:var(--text-muted);font-family:var(--font-mono);width:32px;">${i+1}</td>
+          <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.output||r.url||'file'}</td>
+          <td><span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span></td>
+        </tr>`).join('');
       loadYTAccounts();
     }
   });
