@@ -34,11 +34,29 @@
         </div>
         <div class="form-group">
           <label class="form-label">Resolution Format</label>
-          <select id="output_size" class="form-select">
-            <option value="instagram" selected>Instagram (9:16 Portrait)</option>
-            <option value="original">Original Size (Retain Aspect Ratio)</option>
-            <option value="rotated90">Tilted Landscape (Rotated 90°)</option>
-          </select>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="folder-card" onclick="document.getElementById('out_ig').checked=true">
+              <input type="radio" name="output_size" id="out_ig" value="instagram" checked style="margin-right:10px;">
+              <div class="folder-info">
+                <div class="folder-name">📱 Instagram 9:16</div>
+                <div class="folder-meta">Letterbox, no cropping</div>
+              </div>
+            </div>
+            <div class="folder-card" onclick="document.getElementById('out_orig').checked=true">
+              <input type="radio" name="output_size" id="out_orig" value="original" style="margin-right:10px;">
+              <div class="folder-info">
+                <div class="folder-name">📐 Original Size</div>
+                <div class="folder-meta">Retain Source Dimensions</div>
+              </div>
+            </div>
+            <div class="folder-card" onclick="document.getElementById('out_rot').checked=true">
+              <input type="radio" name="output_size" id="out_rot" value="rotated90" style="margin-right:10px;">
+              <div class="folder-info">
+                <div class="folder-name">🔄 Tilted Landscape</div>
+                <div class="folder-meta">Rotated 90° Right</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -162,7 +180,7 @@ async function startBulkLocal(e) {
   // Read inputs
   const master_folder = document.getElementById('master_folder').value.trim();
   const file_limit = document.getElementById('file_limit').value;
-  const output_size = document.getElementById('output_size').value;
+  const output_size = document.querySelector('input[name="output_size"]:checked').value;
   const split_mode = document.querySelector('input[name="split_mode"]:checked').value;
   const part_duration = document.getElementById('part_duration').value;
   const clip_start = document.getElementById('clip_start') ? document.getElementById('clip_start').value : 0;
