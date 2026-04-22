@@ -1387,10 +1387,12 @@ def api_browse_folder():
         return jsonify({'error': str(e)}), 500
 
 def api_test_gpu():
+    global CUDA_INFO
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     import modules.cuda_check
     modules.cuda_check._cache = None
     res = modules.cuda_check.detect_cuda()
+    CUDA_INFO = res
     return jsonify(res)
 
 # ══════════════════════════════════════════════════════════════
