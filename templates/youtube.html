@@ -374,6 +374,13 @@
                 <div style="font-size:11px;color:var(--text-muted);">Extract a section first, then split that section</div>
               </div>
             </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;" id="split-trailer-box" onclick="setSplitMode('trailer')">
+              <input type="radio" name="split-mode" value="trailer" style="accent-color:var(--accent);margin-top:2px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;">🎬 Trailer Mode</div>
+                <div style="font-size:11px;color:var(--text-muted);">Extract multiple specific clips (HH:MM:SS)</div>
+              </div>
+            </label>
           </div>
         </div>
 
@@ -403,6 +410,32 @@
               <input class="form-input" id="reel-part-dur-clip" type="number" value="60" min="10">
             </div>
           </div>
+        </div>
+
+        <!-- Trailer Mode: multiple HH:MM:SS clip ranges -->
+        <div id="split-trailer-opts" style="display:none;margin-top:12px;border:1px solid var(--accent);border-radius:var(--radius-sm);padding:12px;background:var(--bg-card-2);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;">⏱ Time Ranges — each row = one output clip</div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addYtClipRow()">+ Add Clip</button>
+          </div>
+          <table style="width:100%;text-align:left;font-size:12px;">
+            <thead>
+              <tr style="color:var(--text-muted);">
+                <th style="padding-bottom:4px;font-weight:600;">From (HH:MM:SS)</th>
+                <th style="padding-bottom:4px;font-weight:600;">To (HH:MM:SS)</th>
+                <th style="padding-bottom:4px;font-weight:600;">Label</th>
+                <th style="width:30px;"></th>
+              </tr>
+            </thead>
+            <tbody id="yt-clip-tbody">
+              <tr>
+                <td><input class="form-input mono" type="text" placeholder="00:00:00" name="from_1" style="width:100%;"></td>
+                <td><input class="form-input mono" type="text" placeholder="00:00:30" name="to_1" style="width:100%;"></td>
+                <td><input class="form-input" type="text" placeholder="Hook" name="label_1" style="width:100%;"></td>
+                <td style="text-align:right;"><button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('tr').remove()" style="padding:4px 8px;">✕</button></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -448,19 +481,60 @@
             </div>
           </label>
 
+          <!-- Bottom Overlay Image — 3 Modes -->
           <div style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
-            <div style="font-size:13px;font-weight:600;">🖼 Bottom Overlay Image (single file)</div>
-            <div style="font-size:11px;color:var(--text-muted);margin:4px 0 8px;">Bottom compartment is fixed to the lower third of 9:16. At 100% the image is fitted as-is into that container (no extra conversion/crop). Use Zoom to punch in up to 200%.</div>
-            <input class="form-input" id="overlay-image-file" type="file" accept="image/*" style="font-size:12px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
-              <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Fill</span>
-              <input type="range" id="overlay-image-comp-pct" min="1" max="100" value="100" style="flex:1;accent-color:var(--accent);">
-              <span id="overlay-image-comp-pct-val" style="font-size:11px;font-family:var(--font-mono);min-width:42px;">100%</span>
+            <div style="font-size:13px;font-weight:600;margin-bottom:10px;">🖼 Bottom Overlay Image</div>
+
+            <!-- Mode Selector -->
+            <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;" id="overlay-mode-group">
+
+              <!-- None -->
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);cursor:pointer;" onclick="setOverlayMode('none')">
+                <input type="radio" name="overlay-mode" value="none" id="overlay-mode-none" checked style="accent-color:var(--accent);">
+                <div>
+                  <div style="font-size:12px;font-weight:600;">🚫 None</div>
+                  <div style="font-size:10px;color:var(--text-muted);">No bottom overlay applied</div>
+                </div>
+              </label>
+
+              <!-- Manual -->
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);cursor:pointer;" onclick="setOverlayMode('manual')">
+                <input type="radio" name="overlay-mode" value="manual" id="overlay-mode-manual" style="accent-color:var(--accent);">
+                <div>
+                  <div style="font-size:12px;font-weight:600;">🖼 Manual</div>
+                  <div style="font-size:10px;color:var(--text-muted);">Upload your own thumbnail image with full control</div>
+                </div>
+              </label>
+
+              <!-- Automated -->
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);cursor:pointer;" onclick="setOverlayMode('auto')">
+                <input type="radio" name="overlay-mode" value="auto" id="overlay-mode-auto" style="accent-color:var(--accent);">
+                <div>
+                  <div style="font-size:12px;font-weight:600;">⚡ Automated</div>
+                  <div style="font-size:10px;color:var(--text-muted);">Uses the YouTube video thumbnail automatically</div>
+                </div>
+              </label>
             </div>
-            <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
-              <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Zoom</span>
-              <input type="range" id="overlay-image-zoom-pct" min="100" max="200" value="100" style="flex:1;accent-color:var(--accent);">
-              <span id="overlay-image-zoom-pct-val" style="font-size:11px;font-family:var(--font-mono);min-width:42px;">100%</span>
+
+            <!-- Manual Controls (shown only for Manual mode) -->
+            <div id="overlay-manual-controls" style="display:none;">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Bottom compartment is fixed to the lower third of 9:16. At 100% the image is fitted as-is. Use Zoom to punch in up to 200%.</div>
+              <input class="form-input" id="overlay-image-file" type="file" accept="image/*" style="font-size:12px;margin-bottom:8px;">
+              <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+                <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Fill</span>
+                <input type="range" id="overlay-image-comp-pct" min="1" max="100" value="100" style="flex:1;accent-color:var(--accent);">
+                <span id="overlay-image-comp-pct-val" style="font-size:11px;font-family:var(--font-mono);min-width:42px;">100%</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+                <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Zoom</span>
+                <input type="range" id="overlay-image-zoom-pct" min="100" max="200" value="100" style="flex:1;accent-color:var(--accent);">
+                <span id="overlay-image-zoom-pct-val" style="font-size:11px;font-family:var(--font-mono);min-width:42px;">100%</span>
+              </div>
+            </div>
+
+            <!-- Automated Status (shown only for Auto mode) -->
+            <div id="overlay-auto-info" style="display:none;padding:8px 10px;border-radius:var(--radius-sm);background:var(--bg-card);border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-muted);">⚡ The video's YouTube thumbnail will be automatically downloaded and placed in the bottom compartment. Fill and Zoom are managed by the system.</div>
             </div>
           </div>
         </div>
@@ -949,6 +1023,22 @@ function setSplitMode(m) {
   _splitMode = m;
   document.getElementById('split-equal-opts').style.display = m==='equal' ? 'block' : 'none';
   document.getElementById('split-clip-opts').style.display  = m==='clip'  ? 'block' : 'none';
+  if(document.getElementById('split-trailer-opts')) {
+    document.getElementById('split-trailer-opts').style.display = m==='trailer' ? 'block' : 'none';
+  }
+}
+
+function addYtClipRow() {
+  const tbody = document.getElementById('yt-clip-tbody');
+  const id = Date.now();
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="form-input mono" type="text" placeholder="00:00:00" name="from_${id}" style="width:100%;"></td>
+    <td><input class="form-input mono" type="text" placeholder="00:00:30" name="to_${id}" style="width:100%;"></td>
+    <td><input class="form-input" type="text" placeholder="Label" name="label_${id}" style="width:100%;"></td>
+    <td style="text-align:right;"><button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('tr').remove()" style="padding:4px 8px;">✕</button></td>
+  `;
+  tbody.appendChild(tr);
 }
 
 // ── Live mock preview ─────────────────────────────────────────
@@ -1030,6 +1120,23 @@ async function uploadOverlayImage() {
   _overlayImagePath = j.path;
 }
 document.getElementById('overlay-image-file')?.addEventListener('change', uploadOverlayImage);
+
+// ── Overlay Mode Switcher ──────────────────────────────────────
+let _overlayMode = 'none'; // 'none' | 'manual' | 'auto'
+
+function setOverlayMode(mode) {
+  _overlayMode = mode;
+  // Show/hide sub-panels
+  document.getElementById('overlay-manual-controls').style.display = mode === 'manual' ? 'block' : 'none';
+  document.getElementById('overlay-auto-info').style.display        = mode === 'auto'   ? 'block' : 'none';
+  // Reset path when switching away from manual
+  if (mode !== 'manual') {
+    _overlayImagePath = '';
+    const mockImg = document.getElementById('mock-overlay-image');
+    if (mockImg) { mockImg.src = ''; mockImg.style.display = 'none'; }
+  }
+  updateMock();
+}
 
 // ── Download tab ──────────────────────────────────────────────
 function countYTUrls(textarea) {
@@ -1226,6 +1333,7 @@ async function startReelConvert() {
                   title_pos_pct: titlePos, part_pos_pct: partPos,
                   clip_start: clipStart, clip_end: clipEnd, output_dir: outDir, quality,
                   output_size: outputSize,
+                  overlay_mode: _overlayMode,
                   overlay_image_path: _overlayImagePath,
                   overlay_image_zoom: overlayZoomPct / 100.0,
                   overlay_image_comp_pct: overlayCompPct,
@@ -1233,6 +1341,17 @@ async function startReelConvert() {
                   cookie_mode: 'file',
                   request_delay: parseFloat(document.getElementById('yt-delay').value),
                   use_rotation: _ytRotationActive};
+
+  if (_splitMode === 'trailer') {
+    let clipsArr = [];
+    document.querySelectorAll('#yt-clip-tbody tr').forEach(tr => {
+      const from = tr.querySelector('input[name^="from_"]').value.trim();
+      const to = tr.querySelector('input[name^="to_"]').value.trim();
+      const label = tr.querySelector('input[name^="label_"]').value.trim();
+      if (from || to) { clipsArr.push({from, to, label}); }
+    });
+    payload.clips = clipsArr;
+  }
 
   let endpoint;
   if(_reelSource === 'yt') {

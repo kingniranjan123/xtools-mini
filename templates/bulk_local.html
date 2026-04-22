@@ -63,20 +63,29 @@
       <!-- Split Rules -->
       <div class="form-group" style="margin-top:20px;">
         <label class="form-label">✂️ Split Mode</label>
-        <div class="folder-card" onclick="document.getElementById('mode_equal').checked=true">
+        <div class="folder-card" onclick="document.getElementById('mode_equal').checked=true;document.getElementById('mode_equal').dispatchEvent(new Event('change'))">
           <input type="radio" name="split_mode" id="mode_equal" value="equal" checked style="margin-right:10px;">
           <div class="folder-info">
             <div class="folder-name">Equal Duration Parts</div>
             <div class="folder-meta">Splits entire video into equal segments</div>
           </div>
         </div>
-        <div class="folder-card" onclick="document.getElementById('mode_clip').checked=true">
+        <div class="folder-card" onclick="document.getElementById('mode_clip').checked=true;document.getElementById('mode_clip').dispatchEvent(new Event('change'))">
           <input type="radio" name="split_mode" id="mode_clip" value="clip" style="margin-right:10px;">
           <div class="folder-info">
             <div class="folder-name">Clip Specific Range + Split</div>
             <div class="folder-meta">Extract a section first, then split that section</div>
           </div>
         </div>
+        <div class="folder-card" onclick="document.getElementById('mode_trailer').checked=true;document.getElementById('mode_trailer').dispatchEvent(new Event('change'))">
+          <input type="radio" name="split_mode" id="mode_trailer" value="trailer" style="margin-right:10px;">
+          <div class="folder-info">
+            <div class="folder-name">🎬 Trailer Mode</div>
+            <div class="folder-meta">Extract multiple specific clips (HH:MM:SS) — each clip becomes one output file</div>
+          </div>
+        </div>
+
+        <!-- Clip range sub-panel -->
         <div id="clip_inputs" style="display:none; margin-top:10px; padding-left:10px; border-left:2px solid var(--accent);">
           <div class="two-col">
             <div class="form-group">
@@ -90,15 +99,57 @@
             </div>
           </div>
         </div>
+
+        <!-- Trailer mode sub-panel -->
+        <div id="trailer_inputs" style="display:none; margin-top:12px; padding:12px; border:1px solid var(--accent); border-radius:var(--radius-sm); background:var(--bg-card-2);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Time Ranges</div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addBulkClipRow()">+ Add Clip</button>
+          </div>
+          <table style="width:100%;text-align:left;font-size:12px;">
+            <thead>
+              <tr style="color:var(--text-muted);">
+                <th style="padding-bottom:4px;font-weight:600;">From</th>
+                <th style="padding-bottom:4px;font-weight:600;">To</th>
+                <th style="padding-bottom:4px;font-weight:600;">Label</th>
+                <th style="width:30px;"></th>
+              </tr>
+            </thead>
+            <tbody id="bulk-clip-tbody">
+              <tr>
+                <td><input class="form-input mono" type="text" placeholder="00:00:00" name="from_1" style="width:100%;"></td>
+                <td><input class="form-input mono" type="text" placeholder="00:00:30" name="to_1" style="width:100%;"></td>
+                <td><input class="form-input" type="text" placeholder="Hook" name="label_1" style="width:100%;"></td>
+                <td style="text-align:right;"><button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('tr').remove()" style="padding:4px 8px;">✕</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
 <script>
   document.getElementById('mode_equal').addEventListener('change', (e) => {
-    if(e.target.checked) document.getElementById('clip_inputs').style.display = 'none';
+    if(e.target.checked) { document.getElementById('clip_inputs').style.display = 'none'; document.getElementById('trailer_inputs').style.display = 'none'; }
   });
   document.getElementById('mode_clip').addEventListener('change', (e) => {
-    if(e.target.checked) document.getElementById('clip_inputs').style.display = 'block';
+    if(e.target.checked) { document.getElementById('clip_inputs').style.display = 'block'; document.getElementById('trailer_inputs').style.display = 'none'; }
   });
+  document.getElementById('mode_trailer').addEventListener('change', (e) => {
+    if(e.target.checked) { document.getElementById('clip_inputs').style.display = 'none'; document.getElementById('trailer_inputs').style.display = 'block'; }
+  });
+
+  function addBulkClipRow() {
+    const tbody = document.getElementById('bulk-clip-tbody');
+    const id = Date.now();
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input class="form-input mono" type="text" placeholder="00:00:00" name="from_${id}" style="width:100%;"></td>
+      <td><input class="form-input mono" type="text" placeholder="00:00:30" name="to_${id}" style="width:100%;"></td>
+      <td><input class="form-input" type="text" placeholder="Label" name="label_${id}" style="width:100%;"></td>
+      <td style="text-align:right;"><button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('tr').remove()" style="padding:4px 8px;">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
 </script>
 
       <div class="form-group">
@@ -210,6 +261,17 @@ async function startBulkLocal(e) {
   formData.append('show_title', show_title);
   formData.append('show_part', show_part);
   formData.append('show_watermark', show_watermark);
+
+  if (split_mode === 'trailer') {
+    let clipsArr = [];
+    document.querySelectorAll('#bulk-clip-tbody tr').forEach(tr => {
+      const from = tr.querySelector('input[name^="from_"]').value.trim();
+      const to = tr.querySelector('input[name^="to_"]').value.trim();
+      const label = tr.querySelector('input[name^="label_"]').value.trim();
+      if (from || to) { clipsArr.push({from, to, label}); }
+    });
+    formData.append('clips', JSON.stringify(clipsArr));
+  }
   if (thumb_file) {
     formData.append('thumbnail', thumb_file);
   }

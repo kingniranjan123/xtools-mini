@@ -373,6 +373,7 @@ def convert_to_reels(
     # Optional: clip a specific range before splitting
     clip_start_sec: float = 0.0,
     clip_end_sec:   float = 0.0,   # 0 = full video
+    clips: list = None,
     use_cuda: bool = False,
     progress_cb=None,
 ) -> dict:
@@ -403,6 +404,63 @@ def convert_to_reels(
     else:
         bottom_compartment_px = max(0, int(in_h * 0.18))
 
+    parts  = []
+    errors = []
+    base_name = os.path.splitext(os.path.basename(input_path))[0]
+    rotate_90 = output_size == 'rotated90'
+
+    if clips and len(clips) > 0:
+        if progress_cb:
+            progress_cb(f'🎬 Trailer Mode: Extracting {len(clips)} specific clips')
+            
+        def hms_to_sec(s):
+            try:
+                p = s.split(':')
+                if len(p) == 3: return int(p[0])*3600 + int(p[1])*60 + float(p[2])
+                if len(p) == 2: return int(p[0])*60 + float(p[1])
+                return float(s)
+            except: return 0.0
+
+        for i, clip in enumerate(clips):
+            part_num = i + 1
+            seg_start = hms_to_sec(clip.get('from', '00:00:00'))
+            seg_end = hms_to_sec(clip.get('to', '00:00:30'))
+            seg_dur = max(0, seg_end - seg_start)
+            if seg_dur <= 0: continue
+            
+            raw_label = clip.get('label', '')
+            safe_label = _safe_filename(raw_label) if raw_label else f"part{part_num:02d}"
+            out_name = f"{_safe_filename(base_name)}_{safe_label}.mp4"
+            out_path = os.path.join(output_dir, out_name)
+
+            vf, t_files = build_filters(
+                in_w, in_h, part_num, title, watermark,
+                show_title, show_part_label, show_watermark,
+                title_pos_pct, part_pos_pct, output_size=output_size,
+                temp_dir=output_dir,
+                rotate_90=rotate_90
+            )
+
+            if progress_cb:
+                progress_cb(f'🎬 Encoding Clip {part_num}/{len(clips)} → {out_name}')
+
+            ok = encode_part(
+                input_path, out_path, seg_start, seg_dur, vf,
+                overlay_image_path=overlay_image_path,
+                overlay_image_zoom=overlay_image_zoom,
+                overlay_image_comp_pct=overlay_image_comp_pct,
+                bottom_compartment_px=bottom_compartment_px,
+                output_size=output_size,
+                temp_files=t_files,
+                progress_cb=progress_cb,
+                use_cuda=use_cuda
+            )
+            if ok: parts.append(out_path)
+            for t in t_files:
+                if os.path.exists(t): os.remove(t)
+                
+        return {'parts': parts, 'errors': errors}
+
     # Apply optional clip range
     work_start = clip_start_sec if clip_start_sec > 0 else 0.0
     work_end   = clip_end_sec   if clip_end_sec   > 0 else total
@@ -414,10 +472,6 @@ def convert_to_reels(
     if progress_cb:
         progress_cb(f'🔪 Splitting into {num_parts} parts of ~{part_duration_sec}s each')
 
-    parts  = []
-    errors = []
-
-    base_name = os.path.splitext(os.path.basename(input_path))[0]
 
     for i in range(num_parts):
         part_num  = i + 1

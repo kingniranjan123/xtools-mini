@@ -2570,10 +2570,12 @@ def api_youtube_reel_convert():
     quality      = data.get('quality', '1080')
     title_pos_pct = float(data.get('title_pos_pct', 20.0))
     part_pos_pct  = float(data.get('part_pos_pct', 82.0))
-    output_size   = data.get('output_size', 'instagram')  # 'instagram' | 'original'
+    output_size   = data.get('output_size', 'instagram')
+    clips         = data.get('clips', [])  # 'instagram' | 'original'
     overlay_image_path = (data.get('overlay_image_path') or '').strip()
     overlay_image_zoom = float(data.get('overlay_image_zoom', 1.0) or 1.0)
     overlay_image_comp_pct = max(1.0, min(100.0, float(data.get('overlay_image_comp_pct', 100.0) or 100.0)))
+    overlay_mode   = data.get('overlay_mode', 'none')  # 'none' | 'manual' | 'auto'
     delete_source = bool(data.get('delete_source', False))
     browser       = data.get('browser')
     cookie_mode   = data.get('cookie_mode', 'file')  # default: always use uploaded cookie
@@ -2666,6 +2668,43 @@ def api_youtube_reel_convert():
 
         _emit(job, f'✅ Downloaded: {os.path.basename(video_path)}', 30)
 
+        # ── Step 1b: Auto Thumbnail Overlay ──────────────────────────
+        final_overlay_path = ''
+        final_overlay_zoom = 1.0
+        final_overlay_comp = 100.0
+
+        if overlay_mode == 'manual' and overlay_image_path and os.path.isfile(overlay_image_path):
+            final_overlay_path = overlay_image_path
+            final_overlay_zoom = overlay_image_zoom
+            final_overlay_comp = overlay_image_comp_pct
+        elif overlay_mode == 'auto':
+            # Download the YT thumbnail and use it automatically
+            try:
+                import glob as _gt
+                thumb_tmpl = os.path.join(TEMP_DIR, f'yt_auto_thumb_{uuid.uuid4().hex[:8]}.%(ext)s')
+                ytdlp_bin = _get_ytdlp_binary()
+                thumb_cmd = ytdlp_bin + [
+                    '--write-thumbnail', '--skip-download',
+                    '--convert-thumbnails', 'jpg',
+                    '--output', thumb_tmpl
+                ]
+                if cookie_file and os.path.isfile(cookie_file):
+                    thumb_cmd += ['--cookies', cookie_file]
+                thumb_cmd.append(url)
+                subprocess.run(thumb_cmd, capture_output=True, timeout=30)
+                # Find the downloaded thumbnail
+                pattern = thumb_tmpl.replace('%(ext)s', '*')
+                found = sorted(_gt.glob(pattern), key=os.path.getmtime, reverse=True)
+                if found:
+                    final_overlay_path = found[0]
+                    final_overlay_zoom = 1.0   # System-managed
+                    final_overlay_comp = 100.0  # System-managed
+                    _emit(job, f'🖼 Auto thumbnail: {os.path.basename(final_overlay_path)}')
+                else:
+                    _emit(job, '⚠ Could not download auto thumbnail — skipping overlay')
+            except Exception as te:
+                _emit(job, f'⚠ Auto thumbnail error: {te}')
+
         # ── Step 2: Convert → Reel parts ─────────────────
         reel_dir = output_dir or os.path.join(os.path.dirname(video_path), '_reels')
         os.makedirs(reel_dir, exist_ok=True)
@@ -2684,11 +2723,12 @@ def api_youtube_reel_convert():
             title_pos_pct   = title_pos_pct,
             part_pos_pct    = part_pos_pct,
             output_size     = output_size,
-            overlay_image_path = overlay_image_path,
-            overlay_image_zoom = overlay_image_zoom,
-            overlay_image_comp_pct = overlay_image_comp_pct,
+            overlay_image_path = final_overlay_path,
+            overlay_image_zoom = final_overlay_zoom,
+            overlay_image_comp_pct = final_overlay_comp,
             clip_start_sec  = clip_start,
             clip_end_sec    = clip_end,
+            clips           = clips,
             use_cuda        = CUDA_INFO.get('available', False),
             progress_cb     = lambda line: _emit(job, line),
         )
@@ -2882,7 +2922,8 @@ def api_youtube_reel_convert_local():
     clip_end     = float(data.get('clip_end', 0))
     title_pos_pct = float(data.get('title_pos_pct', 20.0))
     part_pos_pct  = float(data.get('part_pos_pct', 82.0))
-    output_size   = data.get('output_size', 'instagram')  # 'instagram' | 'original'
+    output_size   = data.get('output_size', 'instagram')
+    clips         = data.get('clips', [])  # 'instagram' | 'original'
     overlay_image_path = (data.get('overlay_image_path') or '').strip()
     overlay_image_zoom = float(data.get('overlay_image_zoom', 1.0) or 1.0)
     overlay_image_comp_pct = max(1.0, min(100.0, float(data.get('overlay_image_comp_pct', 100.0) or 100.0)))
@@ -2906,7 +2947,7 @@ def api_youtube_reel_convert_local():
             overlay_image_path=overlay_image_path,
             overlay_image_zoom=overlay_image_zoom,
             overlay_image_comp_pct=overlay_image_comp_pct,
-            clip_start_sec=clip_start, clip_end_sec=clip_end,
+            clip_start_sec=clip_start, clip_end_sec=clip_end, clips=clips,
             progress_cb=lambda line: _emit(job, line),
         )
         parts  = conv.get('parts', [])
@@ -3592,6 +3633,13 @@ def api_local_bulk_convert():
         clip_end = float(request.form.get('clip_end', 0))
     except:
         clip_end = 0.0
+
+    clips_json = request.form.get('clips', '[]')
+    try:
+        import json
+        clips = json.loads(clips_json)
+    except:
+        clips = []
 
     show_title = request.form.get('show_title') == 'true'
     show_part = request.form.get('show_part') == 'true'
