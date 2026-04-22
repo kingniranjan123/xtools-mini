@@ -3606,7 +3606,7 @@ def api_local_bulk_convert():
             thumb_path = os.path.join(TEMP_DIR, f"bulk_local_thumb_{uuid.uuid4().hex[:8]}{t_ext}")
             t_file.save(thumb_path)
 
-    watermark_text = get_setting('watermark_text', '') if show_watermark else ''
+    watermark_text = _read_setting('watermark_text', '') if show_watermark else ''
 
     def generate():
         import glob
