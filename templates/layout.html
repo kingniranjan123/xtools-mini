@@ -49,6 +49,9 @@
       <a class="nav-item {% if request.endpoint == 'split_equal_page' %}active{% endif %}" href="{{ url_for('split_equal_page') }}">
         <span class="nav-icon">⊟</span> Equal Split
       </a>
+      <a class="nav-item {% if request.endpoint == 'bulk_local_page' %}active{% endif %}" href="{{ url_for('bulk_local_page') }}">
+        <span class="nav-icon">📁</span> Bulk Local
+      </a>
       <a class="nav-item {% if request.endpoint == 'split_trailer_page' %}active{% endif %}" href="{{ url_for('split_trailer_page') }}">
         <span class="nav-icon">▷</span> Trailer Clip
       </a>

@@ -26,6 +26,13 @@ CREATE TABLE IF NOT EXISTS reels (
   is_posted     INTEGER DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS local_bulk_history (
+  folder_path TEXT,
+  file_name TEXT,
+  processed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (folder_path, file_name)
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL

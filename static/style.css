@@ -210,7 +210,7 @@ img { max-width: 100%; }
 }
 
 .cuda-dot.active { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); }
-.cuda-dot.inactive { background: var(--accent-gold); }
+.cuda-dot.inactive { background: var(--accent-red); box-shadow: 0 0 6px var(--accent-red); }
 
 .cuda-label { color: var(--text-secondary); font-weight: 500; flex: 1; }
 .cuda-status { color: var(--text-muted); font-family: var(--font-mono); font-size: 10px; }

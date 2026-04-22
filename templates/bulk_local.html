@@ -1,0 +1,228 @@
+{% extends "layout.html" %}
+{% block title %}Bulk Local Reel Converter{% endblock %}
+
+{% block breadcrumb %}Bulk Local Converter{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">📁 Bulk Local Reels</h1>
+  <p class="page-subtitle">Mass convert local videos into segmented reels. Automatically deduplicates processing runs.</p>
+</div>
+
+<div class="card" style="max-width: 800px; margin: 0 auto;">
+  <div class="card-header">
+    <div class="card-title">▶ Configuration</div>
+  </div>
+  <div class="card-body">
+    <form id="bulk-local-form" onsubmit="startBulkLocal(event)">
+      <!-- Master Folder -->
+      <div class="form-group">
+        <label class="form-label">Master Folder Path</label>
+        <input type="text" id="master_folder" class="form-input" placeholder="e.g. C:\Users\Videos\Source" required>
+        <div class="form-hint">Only video files inside this folder will be processed (no subfolders). Converted files are saved to a 'processed-file' subfolder.</div>
+      </div>
+
+      <!-- Conversion Limits -->
+      <div class="two-col" style="margin-bottom:20px;">
+        <div class="form-group">
+          <label class="form-label">Total Files to Process</label>
+          <input type="number" id="file_limit" class="form-input" value="10" min="1" required>
+          <div class="form-hint">Maximum number of non-duplicate files to convert per run.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Resolution Format</label>
+          <select id="output_size" class="form-select">
+            <option value="instagram" selected>Instagram (9:16 Portrait)</option>
+            <option value="original">Original Size (Retain Aspect Ratio)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Split Rules -->
+      <div class="form-group" style="margin-top:20px;">
+        <label class="form-label">✂️ Split Mode</label>
+        <div class="folder-card" onclick="document.getElementById('mode_equal').checked=true">
+          <input type="radio" name="split_mode" id="mode_equal" value="equal" checked style="margin-right:10px;">
+          <div class="folder-info">
+            <div class="folder-name">Equal Duration Parts</div>
+            <div class="folder-meta">Splits entire video into equal segments</div>
+          </div>
+        </div>
+        <div class="folder-card" onclick="document.getElementById('mode_clip').checked=true">
+          <input type="radio" name="split_mode" id="mode_clip" value="clip" style="margin-right:10px;">
+          <div class="folder-info">
+            <div class="folder-name">Clip Specific Range + Split</div>
+            <div class="folder-meta">Extract a section first, then split that section</div>
+          </div>
+        </div>
+        <div id="clip_inputs" style="display:none; margin-top:10px; padding-left:10px; border-left:2px solid var(--accent);">
+          <div class="two-col">
+            <div class="form-group">
+              <label class="form-label">Clip Start (seconds)</label>
+              <input type="number" id="clip_start" class="form-input" value="0" min="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Clip End (seconds)</label>
+              <input type="number" id="clip_end" class="form-input" value="0" min="0">
+              <div class="form-hint">0 = to the end of video</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+<script>
+  document.getElementById('mode_equal').addEventListener('change', (e) => {
+    if(e.target.checked) document.getElementById('clip_inputs').style.display = 'none';
+  });
+  document.getElementById('mode_clip').addEventListener('change', (e) => {
+    if(e.target.checked) document.getElementById('clip_inputs').style.display = 'block';
+  });
+</script>
+
+      <div class="form-group">
+        <label class="form-label">Part Duration (Seconds)</label>
+        <input type="number" id="part_duration" class="form-input" value="60" min="5" required>
+      </div>
+
+      <!-- Overlays -->
+      <div class="section-heading" style="margin-top:30px;">— Overlays</div>
+
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" id="show_title" checked style="margin-right:6px;"> Title (Centered Top Area)
+        </label>
+        <div class="form-hint">Uses the raw filename as the title automatically.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" id="show_part" checked style="margin-right:6px;"> Part Number (Centered Bottom Area)
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">
+          <input type="checkbox" id="show_watermark" style="margin-right:6px;"> Global Watermark (Bottom-Right)
+        </label>
+      </div>
+
+      <div class="form-group" style="margin-top:20px;">
+        <label class="form-label">🖼️ Manual Thumbnail Integration (Bottom Overlay)</label>
+        <input type="file" id="thumb_file" class="form-input" accept="image/*">
+        <div class="form-hint">Upload an image to embed at the bottom of all converted reels (only applies if Output Format is Instagram 9:16).</div>
+      </div>
+
+      <div class="divider"></div>
+      <button type="submit" id="btn-start" class="btn btn-primary btn-lg btn-full">
+        ⚡ Start Bulk Conversion
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- SSE Console Output -->
+<div class="card" id="console-card" style="max-width: 800px; margin: 24px auto; display: none;">
+  <div class="card-header">
+    <div class="card-title">Live Terminal</div>
+    <div class="badge badge-green" id="status-badge">Processing</div>
+  </div>
+  <div class="card-body">
+    <div class="sse-log" id="sse-log" style="height:300px;"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function startBulkLocal(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-start');
+  const consoleCard = document.getElementById('console-card');
+  const logBox = document.getElementById('sse-log');
+  const badge = document.getElementById('status-badge');
+  
+  // Read inputs
+  const master_folder = document.getElementById('master_folder').value.trim();
+  const file_limit = document.getElementById('file_limit').value;
+  const output_size = document.getElementById('output_size').value;
+  const split_mode = document.querySelector('input[name="split_mode"]:checked').value;
+  const part_duration = document.getElementById('part_duration').value;
+  const clip_start = document.getElementById('clip_start') ? document.getElementById('clip_start').value : 0;
+  const clip_end = document.getElementById('clip_end') ? document.getElementById('clip_end').value : 0;
+  const show_title = document.getElementById('show_title').checked;
+  const show_part = document.getElementById('show_part').checked;
+  const show_watermark = document.getElementById('show_watermark').checked;
+  const thumb_file = document.getElementById('thumb_file').files[0];
+
+  if(!master_folder) return;
+
+  btn.disabled = true;
+  btn.innerHTML = 'Starting...';
+  consoleCard.style.display = 'block';
+  logBox.innerHTML = '';
+  badge.className = 'badge badge-green';
+  badge.innerText = 'Initializing';
+
+  const formData = new FormData();
+  formData.append('master_folder', master_folder);
+  formData.append('file_limit', file_limit);
+  formData.append('output_size', output_size);
+  formData.append('split_mode', split_mode);
+  formData.append('part_duration', part_duration);
+  formData.append('clip_start', clip_start);
+  formData.append('clip_end', clip_end);
+  formData.append('show_title', show_title);
+  formData.append('show_part', show_part);
+  formData.append('show_watermark', show_watermark);
+  if (thumb_file) {
+    formData.append('thumbnail', thumb_file);
+  }
+
+  try {
+    const response = await fetch('/api/local/bulk-convert', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+
+    badge.innerText = 'Processing...';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+
+      for (let line of lines) {
+        if (line.startsWith('data: ')) {
+          const payload = line.substring(6).trim();
+          if (payload === '[DONE]') {
+            badge.className = 'badge badge-blue';
+            badge.innerText = 'Completed';
+            btn.disabled = false;
+            btn.innerHTML = '⚡ Start Bulk Conversion';
+            return;
+          }
+          if (payload) {
+            logBox.appendChild(document.createTextNode(payload + '\n'));
+            logBox.scrollTop = logBox.scrollHeight;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    logBox.appendChild(document.createTextNode(`\n\n[ERROR] Connection failed: ${err.message}`));
+    badge.className = 'badge badge-red';
+    badge.innerText = 'Error';
+    btn.disabled = false;
+    btn.innerHTML = '⚡ Start Bulk Conversion';
+  }
+}
+</script>
+{% endblock %}

@@ -2673,6 +2673,7 @@ def api_youtube_reel_convert():
             overlay_image_comp_pct = overlay_image_comp_pct,
             clip_start_sec  = clip_start,
             clip_end_sec    = clip_end,
+            use_cuda        = CUDA_INFO.get('available', False),
             progress_cb     = lambda line: _emit(job, line),
         )
 
@@ -2819,6 +2820,7 @@ def api_youtube_bulk_reel_convert():
                 overlay_image_comp_pct = overlay_comp,
                 clip_start_sec     = 0,
                 clip_end_sec       = 0,
+                use_cuda           = CUDA_INFO.get('available', False),
                 progress_cb        = lambda line: _emit(job, '  ' + line),
             )
 
@@ -3568,3 +3570,144 @@ if __name__ == '__main__':
     print(f'  GPU: {cuda_str}')
     print(f'  Starting on http://localhost:5056\n')
     app.run(host='0.0.0.0', port=5056, debug=False)
+
+# ══════════════════════════════════════════════════════════════
+#  Bulk Local Reels
+# ══════════════════════════════════════════════════════════════
+@app.route('/process/bulk-local')
+def bulk_local_page():
+    if not session.get('logged_in'): return redirect(url_for('login'))
+    return render_template('bulk_local.html')
+
+@app.route('/api/local/bulk-convert', methods=['POST'])
+def api_local_bulk_convert():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+
+    master_folder = request.form.get('master_folder', '').strip()
+    try:
+        file_limit = int(request.form.get('file_limit', 10))
+    except:
+        file_limit = 10
+    output_size = request.form.get('output_size', 'instagram')
+    split_mode = request.form.get('split_mode', 'equal')
+    try:
+        part_duration = int(request.form.get('part_duration', 60))
+    except:
+        part_duration = 60
+
+    try:
+        clip_start = float(request.form.get('clip_start', 0))
+    except:
+        clip_start = 0.0
+    try:
+        clip_end = float(request.form.get('clip_end', 0))
+    except:
+        clip_end = 0.0
+
+    show_title = request.form.get('show_title') == 'true'
+    show_part = request.form.get('show_part') == 'true'
+    show_watermark = request.form.get('show_watermark') == 'true'
+
+    # Handle Thumbnail Upload
+    thumb_path = ''
+    if 'thumbnail' in request.files:
+        t_file = request.files['thumbnail']
+        if t_file and t_file.filename:
+            t_ext = os.path.splitext(t_file.filename)[1]
+            thumb_path = os.path.join(TEMP_DIR, f"bulk_local_thumb_{uuid.uuid4().hex[:8]}{t_ext}")
+            t_file.save(thumb_path)
+
+    watermark_text = get_setting('watermark_text', '') if show_watermark else ''
+
+    def generate():
+        import glob
+        db = get_db()
+        
+        if not os.path.isdir(master_folder):
+            yield f"data: [ERROR] Master folder not found: {master_folder}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+            
+        yield f"data: 📁 Scanning folder: {master_folder}\n\n"
+        
+        # Output folder (processed-file) inside the master folder
+        output_parent = os.path.join(master_folder, "processed-file")
+        os.makedirs(output_parent, exist_ok=True)
+        
+        # Only scan non-recursive
+        files = []
+        for ext in ('*.mp4', '*.mov', '*.mkv'):
+            files.extend(glob.glob(os.path.join(master_folder, ext)))
+            
+        yield f"data: Found {len(files)} video files.\n\n"
+        
+        processed_count = 0
+        for fpath in files:
+            if processed_count >= file_limit:
+                yield f"data: 🛑 Reached file limit ({file_limit}). Stopping.\n\n"
+                break
+                
+            fname = os.path.basename(fpath)
+            
+            # Check Deduplication
+            if db.execute('SELECT 1 FROM local_bulk_history WHERE folder_path=? AND file_name=?', (master_folder, fname)).fetchone():
+                yield f"data: ⏭️ Skipping duplicate: {fname}\n\n"
+                continue
+                
+            yield f"data: \ndata: ⏳ Processing ({processed_count+1}): {fname}\n\n"
+            
+            # Auto-title uses filename without extension
+            title_val = os.path.splitext(fname)[0] if show_title else ''
+            
+            # Call Converter
+            from modules.reel_converter import convert_to_reels
+            
+            def update_status(line):
+                # We yield each log line back to frontend
+                pass # Generator can't be easily called from within nested callback directly without queue. We'll capture it via a mutable list.
+                
+            logs_queue = []
+            def queue_log(line):
+                logs_queue.append(line)
+                
+            # Actually, since convert_to_reels is synchronous, we cannot stream its internal logs perfectly during execution unless we run it in a thread.
+            # To keep it simple and stable, we'll just run it and then yield a completion message per file.
+            yield "data:   [Encoding started... please wait]\n\n"
+            
+            try:
+                res = convert_to_reels(
+                    input_path=fpath,
+                    output_dir=output_parent,
+                    title=title_val,
+                    watermark=watermark_text,
+                    part_duration_sec=part_duration,
+                    show_title=show_title,
+                    show_part_label=show_part,
+                    show_watermark=show_watermark,
+                    title_pos_pct=28.0,
+                    part_pos_pct=82.0,
+                    output_size=output_size,
+                    overlay_image_path=thumb_path,
+                    overlay_image_zoom=1.0,
+                    overlay_image_comp_pct=100.0,
+                    clip_start_sec=clip_start if split_mode == 'clip' else 0.0,
+                    clip_end_sec=clip_end if split_mode == 'clip' else 0.0,
+                    use_cuda=CUDA_INFO.get('available', False),
+                    progress_cb=None
+                )
+                
+                if res.get('parts'):
+                    db.execute('INSERT INTO local_bulk_history (folder_path, file_name) VALUES (?, ?)', (master_folder, fname))
+                    db.commit()
+                    yield f"data: ✅ Successfully generated {len(res['parts'])} parts.\n\n"
+                    processed_count += 1
+                else:
+                    errs = ', '.join(res.get('errors', []))
+                    yield f"data: ❌ Failed: {errs}\n\n"
+            except Exception as e:
+                yield f"data: ❌ Exception: {str(e)}\n\n"
+
+        yield f"data: \ndata: 🎉 Batch complete! Processed {processed_count} files.\n\n"
+        yield "data: [DONE]\n\n"
+
+    return Response(generate(), mimetype='text/event-stream')

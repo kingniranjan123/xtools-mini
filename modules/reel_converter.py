@@ -259,7 +259,9 @@ def encode_part(input_path: str, output_path: str,
                 bottom_compartment_px: int = 0,
                 output_size: str = 'instagram',
                 temp_files: list = None,
-                progress_cb=None) -> bool:
+                progress_cb=None,
+                use_cuda: bool = False,
+                _is_fallback: bool = False) -> bool:
     overlay = (overlay_image_path or '').strip()
     comp_pct = max(1.0, min(100.0, float(overlay_image_comp_pct or 100.0)))
     zoom = max(1.0, min(2.0, float(overlay_image_zoom or 1.0)))
@@ -267,7 +269,8 @@ def encode_part(input_path: str, output_path: str,
     input_path = input_path.replace('\\', '/')
     output_path = output_path.replace('\\', '/')
     
-    cmd = [FFMPEG, '-y', '-ss', str(start_sec), '-t', str(duration_sec), '-i', input_path]
+    hwaccel_args = ['-hwaccel', 'cuda'] if use_cuda else []
+    cmd = [FFMPEG, '-y'] + hwaccel_args + ['-ss', str(start_sec), '-t', str(duration_sec), '-i', input_path]
     if overlay and os.path.isfile(overlay):
         base_expr = vf if vf and vf != 'copy' else 'null'
         base_bottom_px = max(2, int(bottom_compartment_px or 0))
@@ -302,10 +305,8 @@ def encode_part(input_path: str, output_path: str,
         ]
     else:
         cmd += ['-vf', vf]
-    cmd += [
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '23',
+    vcodec_args = ['-c:v', 'h264_nvenc', '-preset', 'p4', '-cq', '26'] if use_cuda else ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23']
+    cmd += vcodec_args + [
         '-c:a', 'aac',
         '-b:a', '128k',
         '-movflags', '+faststart',
@@ -329,9 +330,17 @@ def encode_part(input_path: str, output_path: str,
             except: pass
 
     if result.returncode != 0:
+        stderr_text = (result.stderr or b'').decode('utf-8', errors='replace')
+        
+        # Fallback to CPU if CUDA fails
+        if use_cuda and not _is_fallback:
+            if progress_cb: progress_cb('  \u26A0 GPU (CUDA) encode failed, falling back to CPU (libx264)')
+            return encode_part(input_path, output_path, start_sec, duration_sec, vf,
+                               overlay_image_path, overlay_image_zoom, overlay_image_comp_pct,
+                               bottom_compartment_px, output_size, temp_files, progress_cb,
+                               use_cuda=False, _is_fallback=True)
+                               
         if progress_cb:
-            # Safely decode stderr — ignore any undecodable bytes
-            stderr_text = (result.stderr or b'').decode('utf-8', errors='replace')
             progress_cb(f'  \u2717 ffmpeg error: {stderr_text[-400:]}')
         return False
     return True
@@ -358,6 +367,7 @@ def convert_to_reels(
     # Optional: clip a specific range before splitting
     clip_start_sec: float = 0.0,
     clip_end_sec:   float = 0.0,   # 0 = full video
+    use_cuda: bool = False,
     progress_cb=None,
 ) -> dict:
     """
@@ -434,7 +444,8 @@ def convert_to_reels(
             bottom_compartment_px=bottom_compartment_px,
             output_size=output_size,
             temp_files=t_files,
-            progress_cb=progress_cb
+            progress_cb=progress_cb,
+            use_cuda=use_cuda
         )
         if ok:
             parts.append(out_path)

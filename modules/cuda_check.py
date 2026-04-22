@@ -40,8 +40,19 @@ def detect_cuda() -> dict:
             stderr=subprocess.STDOUT, text=True, timeout=10
         )
         if 'h264_nvenc' in out:
-            result['available'] = True
-            result['encoder']   = 'h264_nvenc'
+            # 3. Perform an actual test encode to verify NVENC is functioning
+            try:
+                subprocess.check_call(
+                    ['ffmpeg', '-y', '-hwaccel', 'cuda', '-f', 'lavfi', '-i', 'color=c=black:s=128x128:d=1', '-c:v', 'h264_nvenc', '-f', 'null', '-'],
+                    stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=5
+                )
+                result['available'] = True
+                result['encoder']   = 'h264_nvenc'
+            except Exception:
+                # NVENC failed to encode (driver issue or missing dependencies)
+                result['available'] = False
+                result['encoder'] = 'libx264'
+                result['note'] = 'GPU detected but test encode failed. Check NVIDIA drivers.'
     except Exception:
         pass
 
