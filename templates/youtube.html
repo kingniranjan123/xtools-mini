@@ -131,6 +131,31 @@
 @media (max-width: 900px) {
   .yt-zone-inputs, .yt-zone-exec { grid-template-columns: 1fr; }
 }
+
+/* ── Inline-row: checkbox/label + slider + value all on one line ── */
+.irow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  min-height: 26px;
+}
+.irow-lbl {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  min-width: 40px;
+}
+.irow-val {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  min-width: 36px;
+  text-align: right;
+  color: var(--accent);
+}
+.irow input[type=range] { flex: 1; accent-color: var(--accent); height: 4px; }
 </style>
 {% endblock %}
 
@@ -539,271 +564,255 @@
 ═══════════════════════════════════ -->
 <div id="ytab-reel" style="display:none;">
 
-  <!-- ZONE 1: INPUTS (2-col) -->
-  <div class="yt-zone-inputs">
+  <!-- TOP: 2-col (URLs/source left | All settings right) -->
+  <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:14px;margin-bottom:14px;">
 
-    <!-- LEFT: Source + Split Mode -->
-    <div style="display:flex;flex-direction:column;gap:14px;">
+    <!-- LEFT: Source input -->
+    <div class="card" style="display:flex;flex-direction:column;">
+      <div class="card-header"><div class="card-title">&#x1F4F9; Source</div></div>
+      <div class="card-body" style="flex:1;display:flex;flex-direction:column;">
 
-      <div class="card">
-        <div class="card-header"><div class="card-title">&#x1F4F9; Source</div></div>
-        <div class="card-body">
-          <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:12px;">
-            <button class="btn btn-sm active" id="src-yt-btn" onclick="setReelSource('yt')" style="background:var(--bg-card);border:1px solid var(--border);">&#x25B6; YouTube URL</button>
-            <button class="btn btn-sm btn-ghost" id="src-local-btn" onclick="setReelSource('local')">&#x1F4C1; Local File</button>
+        <!-- Source toggle -->
+        <div style="display:flex;gap:4px;background:var(--bg-card-2);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:12px;">
+          <button class="btn btn-sm active" id="src-yt-btn" onclick="setReelSource('yt')" style="background:var(--bg-card);border:1px solid var(--border);">&#x25B6; YouTube URL</button>
+          <button class="btn btn-sm btn-ghost" id="src-local-btn" onclick="setReelSource('local')">&#x1F4C1; Local File</button>
+        </div>
+
+        <!-- YouTube source -->
+        <div id="reel-src-yt" style="flex:1;display:flex;flex-direction:column;gap:8px;">
+          <input class="form-input mono" id="reel-yt-url" type="text" placeholder="https://www.youtube.com/watch?v=...">
+          <div class="irow" style="margin:0;">
+            <span class="irow-lbl" style="min-width:46px;">Quality</span>
+            <select class="form-select" id="reel-quality" style="flex:1;height:28px;padding:2px 6px;font-size:11px;">
+              <option value="1080" selected>1080p</option>
+              <option value="720">720p</option>
+              <option value="best">Best</option>
+            </select>
           </div>
-          <div id="reel-src-yt">
-            <div class="form-group" style="margin-bottom:8px;">
-              <label class="form-label">YouTube URL</label>
-              <input class="form-input mono" id="reel-yt-url" type="text" placeholder="https://www.youtube.com/watch?v=...">
-            </div>
-            <div class="form-group" style="margin:0;">
-              <label class="form-label">Quality</label>
-              <select class="form-select" id="reel-quality">
-                <option value="1080" selected>1080p (recommended)</option>
-                <option value="720">720p</option>
-                <option value="best">Best available</option>
-              </select>
-            </div>
-            <div class="form-hint" style="margin-top:6px;">&#x1F36A; Cookie managed in <a href="#" onclick="switchYTab('cookies');return false;" style="color:var(--accent);">Cookies tab &#x2192;</a></div>
-          </div>
-          <div id="reel-src-local" style="display:none;">
-            <div class="form-group" style="margin:0;">
-              <label class="form-label">Video File Path</label>
-              <div style="display:flex;gap:6px;">
-                <input class="form-input mono" id="reel-local-path" type="text" placeholder="C:\videos\movie.mp4" style="flex:1;">
-                <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-local-path')" style="white-space:nowrap;">Browse</button>
-              </div>
-            </div>
+          <div class="form-hint">&#x1F36A; <a href="#" onclick="switchYTab('cookies');return false;" style="color:var(--accent);">Cookies tab &#x2192;</a></div>
+        </div>
+
+        <!-- Local source -->
+        <div id="reel-src-local" style="display:none;flex:1;display:flex;flex-direction:column;gap:8px;">
+          <div class="irow" style="margin:0;">
+            <input class="form-input mono" id="reel-local-path" type="text" placeholder="C:\videos\movie.mp4" style="flex:1;height:28px;font-size:11px;padding:4px 8px;">
+            <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-local-path')" style="white-space:nowrap;height:28px;">Browse</button>
           </div>
         </div>
-      </div>
 
-      <div class="card">
-        <div class="card-header"><div class="card-title">&#x2702; Split Mode</div></div>
-        <div class="card-body">
-          <div class="radio-pills" style="margin-bottom:10px;">
-            <label class="radio-pill" id="split-equal-box" onclick="setSplitMode('equal')">
-              <input type="radio" name="split-mode" value="equal" checked style="accent-color:var(--accent);">
-              &#x26A1; Equal Parts
-            </label>
-            <label class="radio-pill" id="split-clip-box" onclick="setSplitMode('clip')">
-              <input type="radio" name="split-mode" value="clip" style="accent-color:var(--accent);">
-              &#x2702; Clip Range
-            </label>
-            <label class="radio-pill" id="split-trailer-box" onclick="setSplitMode('trailer')">
-              <input type="radio" name="split-mode" value="trailer" style="accent-color:var(--accent);">
-              &#x1F3AC; Trailer
-            </label>
-          </div>
-          <!-- Equal opts -->
-          <div id="split-equal-opts">
-            <div class="form-group" style="margin:0;">
-              <label class="form-label">Part Duration (sec)</label>
-              <input class="form-input" id="reel-part-dur" type="number" value="60" min="10" max="3600">
-              <div class="form-hint">60s = Instagram max. 30s for Shorts.</div>
-            </div>
-          </div>
-          <!-- Clip opts -->
-          <div id="split-clip-opts" style="display:none;">
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-              <div class="form-group" style="margin:0;">
-                <label class="form-label" style="font-size:10px;">Clip Start (sec)</label>
-                <input class="form-input" id="reel-clip-start" type="number" value="0" min="0">
-              </div>
-              <div class="form-group" style="margin:0;">
-                <label class="form-label" style="font-size:10px;">Clip End (sec)</label>
-                <input class="form-input" id="reel-clip-end" type="number" value="0" min="0">
-                <div class="form-hint" style="font-size:9px;">0 = end</div>
-              </div>
-              <div class="form-group" style="margin:0;">
-                <label class="form-label" style="font-size:10px;">Part Dur (sec)</label>
-                <input class="form-input" id="reel-part-dur-clip" type="number" value="60" min="10">
-              </div>
-            </div>
-          </div>
-          <!-- Trailer opts -->
-          <div id="split-trailer-opts" style="display:none;margin-top:8px;border:1px solid var(--accent);border-radius:var(--radius-sm);padding:10px;background:var(--bg-card-2);">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-              <div class="sec-label">&#x23F1; Time Ranges — each row = one clip</div>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="addYtClipRow()">+ Add Clip</button>
-            </div>
-            <table style="width:100%;text-align:left;font-size:12px;">
-              <thead>
-                <tr style="color:var(--text-muted);">
-                  <th style="padding-bottom:4px;font-weight:600;">From (HH:MM:SS)</th>
-                  <th style="padding-bottom:4px;font-weight:600;">To (HH:MM:SS)</th>
-                  <th style="padding-bottom:4px;font-weight:600;">Label</th>
-                  <th style="width:30px;"></th>
-                </tr>
-              </thead>
-              <tbody id="yt-clip-tbody">
-                <tr>
-                  <td><input class="form-input mono" type="text" placeholder="00:00:00" name="from_1" style="width:100%;"></td>
-                  <td><input class="form-input mono" type="text" placeholder="00:00:30" name="to_1" style="width:100%;"></td>
-                  <td><input class="form-input" type="text" placeholder="Hook" name="label_1" style="width:100%;"></td>
-                  <td style="text-align:right;"><button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('tr').remove()" style="padding:4px 8px;">&#x2715;</button></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- RIGHT: Overlays + Output -->
-    <div style="display:flex;flex-direction:column;gap:14px;">
-
-      <div class="card">
-        <div class="card-header"><div class="card-title">&#x270F; Overlays</div></div>
-        <div class="card-body">
-          <!-- Title overlay -->
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:6px;">
-            <input type="checkbox" id="overlay-title" checked style="accent-color:var(--accent);flex-shrink:0;">
-            <span style="font-size:12px;font-weight:600;flex:1;">&#x1F4CC; Title</span>
-            <input class="form-input" id="reel-title" type="text" placeholder="Auto-filled from YouTube" style="flex:2;font-size:11px;">
-          </div>
-          <div class="slider-row" style="padding:0 4px;margin-bottom:8px;">
-            <span class="sr-label">Title from top</span>
-            <input type="range" id="title-pos-pct" min="5" max="50" value="20" oninput="document.getElementById('title-pos-val').textContent=this.value+'%'">
-            <span class="sr-val" id="title-pos-val">20%</span>
-          </div>
-          <!-- Part overlay -->
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:6px;">
-            <input type="checkbox" id="overlay-part" checked style="accent-color:var(--accent);flex-shrink:0;">
-            <span style="font-size:12px;font-weight:600;">&#x1F522; Part Number</span>
-          </div>
-          <div class="slider-row" style="padding:0 4px;margin-bottom:8px;">
-            <span class="sr-label">Part from top</span>
-            <input type="range" id="part-pos-pct" min="50" max="95" value="82" oninput="document.getElementById('part-pos-val').textContent=this.value+'%'">
-            <span class="sr-val" id="part-pos-val">82%</span>
-          </div>
-          <!-- Watermark -->
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:10px;">
-            <input type="checkbox" id="overlay-watermark" style="accent-color:var(--accent);flex-shrink:0;">
-            <span style="font-size:12px;font-weight:600;flex:1;">&#x1F4A7; Watermark</span>
-            <input class="form-input" id="reel-watermark" type="text" placeholder="@YourChannel" style="flex:2;font-size:11px;">
-          </div>
-          <!-- Bottom overlay mode -->
-          <div class="sec-label">&#x1F5BC; Bottom Overlay Image</div>
-          <div class="overlay-mode-pills">
-            <label class="radio-pill" onclick="setOverlayMode('none')">
-              <input type="radio" name="overlay-mode" value="none" id="overlay-mode-none" checked style="accent-color:var(--accent);">
-              &#x1F6AB; None
-            </label>
-            <label class="radio-pill" onclick="setOverlayMode('manual')">
-              <input type="radio" name="overlay-mode" value="manual" id="overlay-mode-manual" style="accent-color:var(--accent);">
-              &#x1F5BC; Manual
-            </label>
-            <label class="radio-pill" onclick="setOverlayMode('auto')">
-              <input type="radio" name="overlay-mode" value="auto" id="overlay-mode-auto" style="accent-color:var(--accent);">
-              &#x26A1; Auto
-            </label>
-          </div>
-          <div id="overlay-manual-controls" style="display:none;margin-top:8px;">
-            <input class="form-input" id="overlay-image-file" type="file" accept="image/*" style="font-size:11px;margin-bottom:6px;">
-            <div class="slider-row">
-              <span class="sr-label">Fill %</span>
-              <input type="range" id="overlay-image-comp-pct" min="1" max="100" value="100">
-              <span class="sr-val" id="overlay-image-comp-pct-val">100%</span>
-            </div>
-            <div class="slider-row">
-              <span class="sr-label">Zoom %</span>
-              <input type="range" id="overlay-image-zoom-pct" min="100" max="200" value="100">
-              <span class="sr-val" id="overlay-image-zoom-pct-val">100%</span>
-            </div>
-          </div>
-          <div id="overlay-auto-info" style="display:none;font-size:11px;color:var(--text-muted);padding:6px 8px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:6px;">
-            &#x26A1; YouTube thumbnail auto-placed. Fill &amp; Zoom managed by system.
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header"><div class="card-title">&#x1F4C2; Output</div></div>
-        <div class="card-body">
-          <div class="sec-label">Output Size</div>
-          <div class="radio-pills" style="margin-bottom:10px;">
-            <label class="radio-pill" id="sz-ig-lbl">
-              <input type="radio" name="reel_output_size" id="sz-instagram" value="instagram" checked style="accent-color:var(--accent);">
-              &#x1F4F1; Instagram 9:16
-            </label>
-            <label class="radio-pill" id="sz-orig-lbl">
-              <input type="radio" name="reel_output_size" id="sz-original" value="original" style="accent-color:var(--accent);">
-              &#x1F4D0; Original
-            </label>
-            <label class="radio-pill" id="sz-rot-lbl">
-              <input type="radio" name="reel_output_size" id="sz-rotated90" value="rotated90" style="accent-color:var(--accent);">
-              &#x1F504; Tilted
-            </label>
-          </div>
-          <div class="form-group" style="margin-bottom:8px;">
-            <label class="form-label">Output Folder <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-            <div style="display:flex;gap:6px;">
-              <input class="form-input mono" id="reel-out-dir" type="text" placeholder="Default YouTube folder" value="{{ settings.get('dir_yt', '') }}" style="flex:1;">
-              <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-out-dir')" style="white-space:nowrap;">Browse</button>
-            </div>
-          </div>
-          <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;font-size:11px;">
-            <input type="checkbox" id="reel-delete-source" style="accent-color:var(--accent);">
-            Delete source after successful split
+        <!-- Split mode pills -->
+        <div class="sec-label" style="margin-top:14px;margin-bottom:6px;">&#x2702; Split Mode</div>
+        <div class="radio-pills" style="margin-bottom:10px;">
+          <label class="radio-pill" id="split-equal-box" onclick="setSplitMode('equal')">
+            <input type="radio" name="split-mode" value="equal" checked style="accent-color:var(--accent);">&#x26A1; Equal
+          </label>
+          <label class="radio-pill" id="split-clip-box" onclick="setSplitMode('clip')">
+            <input type="radio" name="split-mode" value="clip" style="accent-color:var(--accent);">&#x2702; Clip
+          </label>
+          <label class="radio-pill" id="split-trailer-box" onclick="setSplitMode('trailer')">
+            <input type="radio" name="split-mode" value="trailer" style="accent-color:var(--accent);">&#x1F3AC; Trailer
           </label>
         </div>
-      </div>
-    </div>
-  </div><!-- /zone1 -->
 
-  <!-- ZONE 2: EXECUTION (3-col) -->
-  <div class="yt-zone-exec">
-
-    <!-- START PANE -->
-    <div class="card">
-      <div class="card-body start-pane">
-        <button class="btn btn-primary btn-full btn-lg" id="reel-btn" onclick="startReelConvert()"
-          style="background:linear-gradient(135deg,#ff3cac,#8250ff);">
-          &#x1F4F1; Convert to Reels
-        </button>
-        <div style="font-size:10px;color:var(--text-muted);line-height:1.7;margin-top:4px;">
-          &#x1F4C4; 9:16 &#xB7; 1080&#xD7;1920 &#xB7; H.264<br>
-          Parts: <code>name_part01.mp4</code>
+        <!-- Equal opts -->
+        <div id="split-equal-opts">
+          <div class="irow" style="margin:0;">
+            <span class="irow-lbl" style="min-width:58px;">Part Dur</span>
+            <input class="form-input" id="reel-part-dur" type="number" value="60" min="10" max="3600" style="flex:1;height:28px;font-size:11px;padding:4px 8px;">
+            <span class="irow-lbl" style="min-width:16px;">sec</span>
+          </div>
+          <div class="form-hint" style="margin-top:4px;">60s = Instagram max. 30s for Shorts.</div>
         </div>
-      </div>
-    </div>
 
-    <!-- PREVIEW PANE -->
-    <div class="card" id="reel-progress-card">
-      <div class="card-header">
-        <div class="card-title">&#x1F5BC; Preview</div>
-        <span class="badge badge-gray" id="reel-status">Ready</span>
+        <!-- Clip opts -->
+        <div id="split-clip-opts" style="display:none;">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+            <div>
+              <div class="sec-label">Start (sec)</div>
+              <input class="form-input" id="reel-clip-start" type="number" value="0" min="0" style="height:28px;font-size:11px;padding:4px 6px;">
+            </div>
+            <div>
+              <div class="sec-label">End (sec)</div>
+              <input class="form-input" id="reel-clip-end" type="number" value="0" min="0" style="height:28px;font-size:11px;padding:4px 6px;">
+            </div>
+            <div>
+              <div class="sec-label">Part (sec)</div>
+              <input class="form-input" id="reel-part-dur-clip" type="number" value="60" min="10" style="height:28px;font-size:11px;padding:4px 6px;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Trailer opts -->
+        <div id="split-trailer-opts" style="display:none;margin-top:8px;border:1px solid var(--accent);border-radius:var(--radius-sm);padding:8px;background:var(--bg-card-2);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div class="sec-label">&#x23F1; Time Ranges</div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addYtClipRow()">+ Add Clip</button>
+          </div>
+          <table style="width:100%;text-align:left;font-size:11px;">
+            <thead>
+              <tr style="color:var(--text-muted);">
+                <th style="padding-bottom:3px;">From</th><th>To</th><th>Label</th><th style="width:24px;"></th>
+              </tr>
+            </thead>
+            <tbody id="yt-clip-tbody">
+              <tr>
+                <td><input class="form-input mono" type="text" placeholder="00:00:00" name="from_1" style="width:100%;height:26px;font-size:11px;"></td>
+                <td><input class="form-input mono" type="text" placeholder="00:00:30" name="to_1" style="width:100%;height:26px;font-size:11px;"></td>
+                <td><input class="form-input" type="text" placeholder="Hook" name="label_1" style="width:100%;height:26px;font-size:11px;"></td>
+                <td><button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('tr').remove()" style="padding:2px 6px;">&#x2715;</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
       </div>
-      <div class="card-body" style="display:flex;align-items:center;gap:16px;padding:12px;">
-        <!-- 9:16 mock -->
-        <div style="width:90px;height:160px;background:#000;border-radius:6px;border:2px solid var(--border);position:relative;overflow:hidden;flex-shrink:0;">
-          <div style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,.7);padding:4px;text-align:center;">
-            <div style="font-size:6px;color:#fff;font-weight:600;" id="mock-title">Title - Part 1</div>
+    </div><!-- /left -->
+
+    <!-- RIGHT: All overlay+output settings in ONE card -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">&#x2699; Overlays &amp; Output</div></div>
+      <div class="card-body">
+
+        <!-- Overlay rows -->
+        <div class="sec-label" style="margin-bottom:5px;">&#x270F; Text Overlays</div>
+
+        <!-- Title row -->
+        <div class="irow">
+          <input type="checkbox" id="overlay-title" checked style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">&#x1F4CC; Title</span>
+          <input class="form-input" id="reel-title" type="text" placeholder="Auto-filled from YouTube" style="flex:1.5;height:26px;font-size:10px;padding:3px 6px;">
+          <input type="range" id="title-pos-pct" min="5" max="50" value="20" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('title-pos-val').textContent=this.value+'%'">
+          <span class="irow-val" id="title-pos-val">20%</span>
+        </div>
+
+        <!-- Part row -->
+        <div class="irow">
+          <input type="checkbox" id="overlay-part" checked style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">&#x1F522; Part#</span>
+          <span style="flex:1.5;font-size:10px;color:var(--text-muted);">Auto-increments</span>
+          <input type="range" id="part-pos-pct" min="50" max="95" value="82" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('part-pos-val').textContent=this.value+'%'">
+          <span class="irow-val" id="part-pos-val">82%</span>
+        </div>
+
+        <!-- Watermark row -->
+        <div class="irow" style="margin-bottom:10px;">
+          <input type="checkbox" id="overlay-watermark" style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">&#x1F4A7; Wmk</span>
+          <input class="form-input" id="reel-watermark" type="text" placeholder="@YourChannel" style="flex:1;height:26px;font-size:11px;padding:3px 6px;">
+        </div>
+
+        <!-- Bottom overlay mode (horizontal pills) -->
+        <div class="sec-label" style="margin-bottom:5px;">&#x1F5BC; Bottom Overlay Image</div>
+        <div class="overlay-mode-pills" style="margin-bottom:8px;">
+          <label class="radio-pill" onclick="setOverlayMode('none')">
+            <input type="radio" name="overlay-mode" value="none" id="overlay-mode-none" checked style="accent-color:var(--accent);">&#x1F6AB; None
+          </label>
+          <label class="radio-pill" onclick="setOverlayMode('manual')">
+            <input type="radio" name="overlay-mode" value="manual" id="overlay-mode-manual" style="accent-color:var(--accent);">&#x1F5BC; Manual
+          </label>
+          <label class="radio-pill" onclick="setOverlayMode('auto')">
+            <input type="radio" name="overlay-mode" value="auto" id="overlay-mode-auto" style="accent-color:var(--accent);">&#x26A1; Auto
+          </label>
+        </div>
+
+        <div id="overlay-manual-controls" style="display:none;margin-bottom:8px;">
+          <input class="form-input" id="overlay-image-file" type="file" accept="image/*" style="font-size:11px;margin-bottom:5px;">
+          <div class="irow" style="margin:0;">
+            <span class="irow-lbl" style="min-width:28px;">Fill</span>
+            <input type="range" id="overlay-image-comp-pct" min="1" max="100" value="100" style="flex:1;accent-color:var(--accent);"
+              oninput="document.getElementById('overlay-image-comp-pct-val').textContent=this.value+'%'">
+            <span class="irow-val" id="overlay-image-comp-pct-val">100%</span>
+            <span class="irow-lbl" style="min-width:30px;margin-left:8px;">Zoom</span>
+            <input type="range" id="overlay-image-zoom-pct" min="100" max="200" value="100" style="flex:1;accent-color:var(--accent);"
+              oninput="document.getElementById('overlay-image-zoom-pct-val').textContent=this.value+'%'">
+            <span class="irow-val" id="overlay-image-zoom-pct-val">100%</span>
+          </div>
+        </div>
+
+        <div id="overlay-auto-info" style="display:none;font-size:10px;color:var(--text-muted);padding:5px 8px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;">
+          &#x26A1; YouTube thumbnail auto-placed. Fill &amp; Zoom managed by system.
+        </div>
+
+        <div style="border-top:1px solid var(--border);margin:8px 0;"></div>
+
+        <!-- Output size pills -->
+        <div class="sec-label" style="margin-bottom:5px;">&#x1F4D0; Output Size</div>
+        <div class="radio-pills" style="margin-bottom:8px;">
+          <label class="radio-pill" id="sz-ig-lbl">
+            <input type="radio" name="reel_output_size" id="sz-instagram" value="instagram" checked style="accent-color:var(--accent);">&#x1F4F1; 9:16
+          </label>
+          <label class="radio-pill" id="sz-orig-lbl">
+            <input type="radio" name="reel_output_size" id="sz-original" value="original" style="accent-color:var(--accent);">&#x1F4D0; Original
+          </label>
+          <label class="radio-pill" id="sz-rot-lbl">
+            <input type="radio" name="reel_output_size" id="sz-rotated90" value="rotated90" style="accent-color:var(--accent);">&#x1F504; Tilted
+          </label>
+        </div>
+
+        <!-- Output folder -->
+        <div class="irow" style="margin-bottom:8px;">
+          <span class="irow-lbl" style="min-width:42px;">Output</span>
+          <input class="form-input mono" id="reel-out-dir" type="text" placeholder="Default YouTube folder"
+            value="{{ settings.get('dir_yt', '') }}" style="flex:1;height:28px;font-size:11px;padding:4px 8px;">
+          <button class="btn btn-secondary btn-sm" onclick="browseFolder('reel-out-dir')" style="white-space:nowrap;height:28px;">Browse</button>
+        </div>
+
+        <!-- Delete + Start on same row -->
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="reel-delete-source" style="accent-color:var(--accent);">
+            Delete source
+          </label>
+          <button class="btn btn-primary btn-full" id="reel-btn" onclick="startReelConvert()"
+            style="flex:1;background:linear-gradient(135deg,#ff3cac,#8250ff);padding:8px 0;font-weight:700;">
+            &#x1F4F1; Convert to Reels
+          </button>
+        </div>
+
+      </div>
+    </div><!-- /right -->
+  </div><!-- /top -->
+
+  <!-- BOTTOM: 3-col (Preview | Progress | Console) -->
+  <div style="display:grid;grid-template-columns:120px 1fr 1fr;gap:14px;">
+
+    <!-- 9:16 mock preview -->
+    <div class="card">
+      <div class="card-header" style="padding:8px 12px;"><div class="card-title" style="font-size:11px;">&#x1F5BC; Preview</div></div>
+      <div class="card-body" style="padding:8px;display:flex;flex-direction:column;align-items:center;gap:6px;">
+        <div style="width:60px;height:107px;background:#000;border-radius:5px;border:1.5px solid var(--border);position:relative;overflow:hidden;">
+          <div style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,.7);padding:3px;text-align:center;">
+            <div style="font-size:4px;color:#fff;font-weight:600;" id="mock-title">Title</div>
           </div>
           <div style="position:absolute;top:0;bottom:0;left:0;right:0;display:flex;align-items:center;">
-            <div id="mock-video-bg" style="background:linear-gradient(135deg,#1a1a2e,#16213e);height:50px;width:100%;display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
-              <span id="mock-video-icon" style="font-size:16px;transition:all 0.3s ease;">&#x1F3AC;</span>
+            <div id="mock-video-bg" style="background:linear-gradient(135deg,#1a1a2e,#16213e);height:34px;width:100%;display:flex;align-items:center;justify-content:center;">
+              <span id="mock-video-icon" style="font-size:12px;">&#x1F3AC;</span>
             </div>
           </div>
-          <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:4px;text-align:center;min-height:30px;">
-            <div style="height:54px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:3px;">
-              <img id="mock-overlay-image" alt="overlay" style="display:none;width:100%;height:100%;object-fit:contain;">
+          <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:3px;text-align:center;">
+            <div style="height:36px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:2px;">
+              <img id="mock-overlay-image" alt="" style="display:none;width:100%;height:100%;object-fit:contain;">
             </div>
-            <div style="font-size:7px;color:#fff;font-weight:700;" id="mock-part">Part -1</div>
+            <div style="font-size:5px;color:#fff;font-weight:700;" id="mock-part">Part -1</div>
           </div>
-          <div style="position:absolute;bottom:3px;right:4px;font-size:5px;color:rgba(255,255,255,.5);" id="mock-wm"></div>
+          <div style="position:absolute;bottom:2px;right:3px;font-size:4px;color:rgba(255,255,255,.4);" id="mock-wm"></div>
         </div>
-        <div style="font-size:10px;color:var(--text-muted);line-height:1.9;">
-          <div>&#x1F4D0; <strong>1080&#xD7;1920</strong></div>
-          <div>&#x1F39E; H.264 / AAC</div>
-          <div id="mock-crop-text">&#x2B1B; Letterbox bars</div>
-        </div>
+        <div id="mock-crop-text" style="font-size:9px;color:var(--text-muted);">Letterbox</div>
       </div>
-      <div class="card-body" style="padding:8px 12px;border-top:1px solid var(--border);">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px;">
-          <span id="reel-current">&#x2014;</span><span id="reel-pct">0%</span>
+    </div>
+
+    <!-- Progress pane -->
+    <div class="card" id="reel-progress-card">
+      <div class="card-header">
+        <div class="card-title">&#x23F3; Progress</div>
+        <span class="badge badge-gray" id="reel-status">Ready</span>
+      </div>
+      <div class="card-body">
+        <div class="irow" style="margin-bottom:5px;">
+          <span style="flex:1;font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="reel-current">&#x2014;</span>
+          <span style="font-size:11px;font-family:var(--font-mono);font-weight:700;" id="reel-pct">0%</span>
         </div>
         <div class="progress-wrap prog-compact">
           <div class="progress-bar animated" id="reel-bar" style="width:0%;background:linear-gradient(90deg,#ff3cac,#8250ff);"></div>
@@ -811,17 +820,18 @@
       </div>
     </div>
 
-    <!-- CONSOLE PANE -->
+    <!-- Console pane -->
     <div class="card">
       <div class="card-header"><div class="card-title">&#x1F4BB; Console</div></div>
       <div class="card-body" style="padding:8px;">
         <div class="sse-log console-compact" id="reel-log"></div>
       </div>
     </div>
-  </div><!-- /zone2 -->
+
+  </div><!-- /bottom -->
 
   <!-- ZONE 3: RESULTS TABLE -->
-  <div class="yt-zone-table">
+  <div class="yt-zone-table" style="margin-top:14px;">
     <div class="card" id="reel-results-card" style="display:none;">
       <div class="card-header">
         <div class="card-title">&#x2705; Reel Parts Created</div>
@@ -829,17 +839,16 @@
       </div>
       <div class="card-body" style="padding:0;">
         <table class="yt-table">
-          <thead>
-            <tr><th>#</th><th>Output File</th><th>Status</th></tr>
-          </thead>
+          <thead><tr><th>#</th><th>Output File</th><th>Status</th></tr></thead>
           <tbody id="reel-results-list"></tbody>
         </table>
-        <div id="reel-output-dir" style="padding:8px 12px;font-size:11px;color:var(--text-muted);border-top:1px solid var(--border);"></div>
+        <div id="reel-output-dir" style="padding:6px 12px;font-size:11px;color:var(--text-muted);border-top:1px solid var(--border);"></div>
       </div>
     </div>
-  </div><!-- /zone3 -->
+  </div>
 
 </div><!-- /ytab-reel -->
+
 
 
 
@@ -848,165 +857,152 @@
 ===================================================== -->
 <div id="ytab-bulkreel" style="display:none;">
 
-  <!-- ZONE 1: INPUTS (2-col) -->
-  <div class="yt-zone-inputs">
+  <!-- TOP: 2-col  (URLs left | All settings right) -->
+  <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:14px;margin-bottom:14px;">
 
-    <!-- LEFT: URLs + Split -->
-    <div style="display:flex;flex-direction:column;gap:14px;">
-
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">&#x25B6; Bulk YouTube URLs</div>
-          <span id="bulk-reel-url-count" class="badge badge-gray">0 URLs</span>
-        </div>
-        <div class="card-body">
-          <textarea class="form-textarea mono" id="bulk-reel-urls" rows="8"
-            placeholder="https://www.youtube.com/watch?v=XXXX&#10;https://youtu.be/YYYY&#10;..."
-            oninput="document.getElementById('bulk-reel-url-count').textContent = this.value.split('\n').filter(l=>l.trim().startsWith('http')).length + ' URLs'"></textarea>
-          <div class="form-hint" style="margin-top:6px;">&#x26A1; Each video's YouTube thumbnail auto-placed as bottom overlay.</div>
-        </div>
+    <!-- LEFT: URL textarea -->
+    <div class="card" style="display:flex;flex-direction:column;">
+      <div class="card-header">
+        <div class="card-title">&#x25B6; Bulk YouTube URLs</div>
+        <span id="bulk-reel-url-count" class="badge badge-gray">0 URLs</span>
       </div>
+      <div class="card-body" style="flex:1;display:flex;flex-direction:column;">
+        <textarea class="form-textarea mono" id="bulk-reel-urls" style="flex:1;min-height:260px;resize:vertical;"
+          placeholder="https://www.youtube.com/watch?v=XXXX&#10;https://youtu.be/YYYY&#10;..."
+          oninput="document.getElementById('bulk-reel-url-count').textContent=this.value.split('\n').filter(l=>l.trim().startsWith('http')).length+' URLs'"></textarea>
+        <div class="form-hint" style="margin-top:6px;">&#x26A1; Each video's YouTube thumbnail auto-placed as bottom overlay.</div>
+      </div>
+    </div>
 
-      <div class="card">
-        <div class="card-header"><div class="card-title">&#x2702; Split Settings</div></div>
-        <div class="card-body">
-          <div class="slider-row" style="margin-bottom:10px;">
-            <span class="sr-label">Part Duration</span>
-            <input class="form-input" id="bulk-reel-part-dur" type="range" min="15" max="600" value="60"
-              oninput="document.getElementById('bulk-part-dur-val').textContent=this.value+'s'">
-            <span class="sr-val" id="bulk-part-dur-val">60s</span>
+    <!-- RIGHT: All settings in ONE card -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">&#x2699; Settings &amp; Overlays</div></div>
+      <div class="card-body">
+
+        <!-- OVERLAY ROWS: each on one line -->
+        <div class="sec-label" style="margin-bottom:6px;">&#x270F; Text Overlays</div>
+
+        <!-- Title row -->
+        <div class="irow">
+          <input type="checkbox" id="bulk-overlay-title" checked style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">&#x1F4CC; Title</span>
+          <input type="range" id="bulk-title-pos-pct" min="5" max="50" value="20" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('bulk-title-pos-val').textContent=this.value+'%'">
+          <span class="irow-val" id="bulk-title-pos-val">20%</span>
+        </div>
+
+        <!-- Part Number row -->
+        <div class="irow">
+          <input type="checkbox" id="bulk-overlay-part" checked style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">&#x1F522; Part#</span>
+          <input type="range" id="bulk-part-pos-pct" min="50" max="95" value="82" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('bulk-part-pos-val').textContent=this.value+'%'">
+          <span class="irow-val" id="bulk-part-pos-val">82%</span>
+        </div>
+
+        <!-- Watermark row -->
+        <div class="irow" style="margin-bottom:10px;">
+          <input type="checkbox" id="bulk-overlay-watermark" style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">&#x1F4A7; Wmk</span>
+          <input class="form-input" id="bulk-reel-watermark" type="text" placeholder="@YourChannel" style="flex:1;height:28px;font-size:11px;padding:4px 8px;">
+        </div>
+
+        <!-- Fill + Zoom: both on same row split 50/50 -->
+        <div class="sec-label" style="margin-bottom:4px;">&#x1F5BC; Thumbnail Overlay</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div class="irow" style="margin:0;">
+            <span class="irow-lbl" style="min-width:28px;">Fill</span>
+            <input type="range" id="bulk-overlay-comp-pct" min="1" max="100" value="100" style="flex:1;accent-color:var(--accent);"
+              oninput="document.getElementById('bulk-overlay-comp-val').textContent=this.value+'%'">
+            <span class="irow-val" id="bulk-overlay-comp-val">100%</span>
           </div>
-          <div class="form-group" style="margin:0;">
-            <label class="form-label">Quality</label>
-            <select class="form-select" id="bulk-reel-quality">
+          <div class="irow" style="margin:0;">
+            <span class="irow-lbl" style="min-width:30px;">Zoom</span>
+            <input type="range" id="bulk-overlay-zoom-pct" min="100" max="200" value="100" style="flex:1;accent-color:var(--accent);"
+              oninput="document.getElementById('bulk-overlay-zoom-val').textContent=this.value+'%'">
+            <span class="irow-val" id="bulk-overlay-zoom-val">100%</span>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border);margin:8px 0;"></div>
+
+        <!-- Part Duration + Quality: both on same row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div class="irow" style="margin:0;">
+            <span class="irow-lbl" style="min-width:50px;">Part Dur</span>
+            <input id="bulk-reel-part-dur" type="range" min="15" max="600" value="60" style="flex:1;accent-color:var(--accent);"
+              oninput="document.getElementById('bulk-part-dur-val').textContent=this.value+'s'">
+            <span class="irow-val" id="bulk-part-dur-val">60s</span>
+          </div>
+          <div class="irow" style="margin:0;">
+            <span class="irow-lbl" style="min-width:42px;">Quality</span>
+            <select class="form-select" id="bulk-reel-quality" style="flex:1;height:28px;padding:2px 6px;font-size:11px;">
               <option value="1080">1080p</option>
               <option value="720">720p</option>
               <option value="480">480p</option>
-              <option value="best">Best Available</option>
+              <option value="best">Best</option>
             </select>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- RIGHT: Overlays + Output -->
-    <div style="display:flex;flex-direction:column;gap:14px;">
-
-      <div class="card">
-        <div class="card-header"><div class="card-title">&#x270F; Overlays</div></div>
-        <div class="card-body">
-          <!-- Title overlay -->
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:6px;">
-            <input type="checkbox" id="bulk-overlay-title" checked style="accent-color:var(--accent);flex-shrink:0;">
-            <span style="font-size:12px;font-weight:600;">&#x1F4CC; Video Title (Top)</span>
-          </div>
-          <div class="slider-row" style="padding:0 4px;margin-bottom:8px;">
-            <span class="sr-label">Title from top</span>
-            <input type="range" id="bulk-title-pos-pct" min="5" max="50" value="20"
-              oninput="document.getElementById('bulk-title-pos-val').textContent=this.value+'%'">
-            <span class="sr-val" id="bulk-title-pos-val">20%</span>
-          </div>
-          <!-- Part overlay -->
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:6px;">
-            <input type="checkbox" id="bulk-overlay-part" checked style="accent-color:var(--accent);flex-shrink:0;">
-            <span style="font-size:12px;font-weight:600;">&#x1F522; Part Number (Bottom)</span>
-          </div>
-          <div class="slider-row" style="padding:0 4px;margin-bottom:8px;">
-            <span class="sr-label">Part from top</span>
-            <input type="range" id="bulk-part-pos-pct" min="50" max="95" value="82"
-              oninput="document.getElementById('bulk-part-pos-val').textContent=this.value+'%'">
-            <span class="sr-val" id="bulk-part-pos-val">82%</span>
-          </div>
-          <!-- Watermark -->
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);margin-bottom:10px;">
-            <input type="checkbox" id="bulk-overlay-watermark" style="accent-color:var(--accent);flex-shrink:0;">
-            <span style="font-size:12px;font-weight:600;flex:1;">&#x1F4A7; Watermark</span>
-            <input class="form-input" id="bulk-reel-watermark" type="text" placeholder="@YourChannel" style="flex:2;font-size:11px;">
-          </div>
-          <!-- Thumbnail constraints -->
-          <div class="sec-label">&#x1F5BC; Thumbnail Overlay Constraints</div>
-          <div class="slider-row">
-            <span class="sr-label">Fill %</span>
-            <input type="range" id="bulk-overlay-comp-pct" min="1" max="100" value="100"
-              oninput="document.getElementById('bulk-overlay-comp-val').textContent=this.value+'%'">
-            <span class="sr-val" id="bulk-overlay-comp-val">100%</span>
-          </div>
-          <div class="slider-row">
-            <span class="sr-label">Zoom %</span>
-            <input type="range" id="bulk-overlay-zoom-pct" min="100" max="200" value="100"
-              oninput="document.getElementById('bulk-overlay-zoom-val').textContent=this.value+'%'">
-            <span class="sr-val" id="bulk-overlay-zoom-val">100%</span>
-          </div>
+        <!-- Output folder row -->
+        <div class="irow" style="margin-bottom:8px;">
+          <span class="irow-lbl" style="min-width:42px;">Output</span>
+          <input class="form-input mono" id="bulk-reel-out-dir" type="text" placeholder="Default YouTube folder" style="flex:1;height:28px;font-size:11px;padding:4px 8px;">
+          <button class="btn btn-secondary btn-sm" onclick="browseFolder('bulk-reel-out-dir')" style="white-space:nowrap;height:28px;">Browse</button>
         </div>
-      </div>
 
-      <div class="card">
-        <div class="card-header"><div class="card-title">&#x1F4C2; Output</div></div>
-        <div class="card-body">
-          <div class="form-group" style="margin-bottom:8px;">
-            <label class="form-label">Output Folder <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-            <div style="display:flex;gap:6px;">
-              <input class="form-input mono" id="bulk-reel-out-dir" type="text" placeholder="Default YouTube folder" style="flex:1;">
-              <button class="btn btn-secondary btn-sm" onclick="browseFolder('bulk-reel-out-dir')" style="white-space:nowrap;">Browse</button>
-            </div>
-          </div>
-          <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);cursor:pointer;font-size:11px;">
+        <!-- Delete source + Start button on same row -->
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;white-space:nowrap;">
             <input type="checkbox" id="bulk-reel-delete-source" style="accent-color:var(--accent);">
-            Delete source after successful split
+            Delete source
           </label>
+          <button class="btn btn-primary btn-full" id="bulk-reel-btn" onclick="startBulkReelConvert()"
+            style="flex:1;background:linear-gradient(135deg,#ff3cac,#8250ff);padding:8px 0;font-weight:700;">
+            &#x1F3AC; Start Bulk Reels
+          </button>
         </div>
+
       </div>
     </div>
-  </div><!-- /zone1 -->
+  </div><!-- /top -->
 
-  <!-- ZONE 2: EXECUTION (3-col) -->
-  <div class="yt-zone-exec">
+  <!-- BOTTOM: 2-col (Progress | Console) always visible -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
 
-    <!-- START PANE -->
-    <div class="card">
-      <div class="card-body start-pane">
-        <button class="btn btn-primary btn-full btn-lg" id="bulk-reel-btn" onclick="startBulkReelConvert()"
-          style="background:linear-gradient(135deg,#ff3cac,#8250ff);">
-          &#x1F3AC; Bulk Generate Reels
-        </button>
-        <div style="font-size:10px;color:var(--text-muted);line-height:1.7;margin-top:4px;">
-          &#x26A1; Auto-thumbnail per video<br>
-          &#x1F4F1; 9:16 &#xB7; 1080&#xD7;1920
-        </div>
-      </div>
-    </div>
-
-    <!-- PROGRESS PANE -->
+    <!-- Progress pane -->
     <div class="card" id="bulk-reel-progress-card">
       <div class="card-header">
         <div class="card-title">&#x23F3; Processing Queue</div>
         <span class="badge badge-gray" id="bulk-reel-status">Ready</span>
       </div>
       <div class="card-body">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:5px;">
-          <span id="bulk-reel-current">&#x2014;</span>
-          <span id="bulk-reel-pct">0%</span>
+        <div class="irow" style="margin-bottom:5px;">
+          <span style="flex:1;font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="bulk-reel-current">&#x2014;</span>
+          <span style="font-size:11px;font-family:var(--font-mono);font-weight:700;" id="bulk-reel-pct">0%</span>
         </div>
-        <div class="progress-wrap prog-compact">
+        <div class="progress-wrap prog-compact" style="margin-bottom:8px;">
           <div class="progress-bar animated" id="bulk-reel-bar" style="width:0%;background:linear-gradient(90deg,#ff3cac,#8250ff);"></div>
         </div>
-        <div id="bulk-reel-placeholder" style="text-align:center;padding:20px 0;color:var(--text-muted);">
-          <div style="font-size:28px;margin-bottom:6px;">&#x1F4D1;</div>
-          <div style="font-size:12px;">Paste URLs and hit Start</div>
+        <div id="bulk-reel-placeholder" style="text-align:center;padding:12px 0;color:var(--text-muted);font-size:12px;">
+          &#x1F4D1; Paste URLs above and hit Start
         </div>
       </div>
     </div>
 
-    <!-- CONSOLE PANE -->
+    <!-- Console pane -->
     <div class="card">
       <div class="card-header"><div class="card-title">&#x1F4BB; Console</div></div>
       <div class="card-body" style="padding:8px;">
         <div class="sse-log console-compact" id="bulk-reel-log"></div>
       </div>
     </div>
-  </div><!-- /zone2 -->
+
+  </div><!-- /bottom -->
 
 </div><!-- /ytab-bulkreel -->
+
 
 
 {% endblock %}
