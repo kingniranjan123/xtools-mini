@@ -43,7 +43,7 @@ def detect_cuda() -> dict:
             # 3. Perform an actual test encode to verify NVENC is functioning
             try:
                 subprocess.check_call(
-                    ['ffmpeg', '-y', '-hwaccel', 'cuda', '-f', 'lavfi', '-i', 'color=c=black:s=128x128:d=1', '-c:v', 'h264_nvenc', '-f', 'null', '-'],
+                    ['ffmpeg', '-y', '-hwaccel', 'cuda', '-f', 'lavfi', '-i', 'color=c=black:s=256x256:d=1', '-c:v', 'h264_nvenc', '-f', 'null', '-'],
                     stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=5
                 )
                 result['available'] = True
