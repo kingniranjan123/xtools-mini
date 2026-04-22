@@ -18,7 +18,10 @@
       <!-- Master Folder -->
       <div class="form-group">
         <label class="form-label">Master Folder Path</label>
-        <input type="text" id="master_folder" class="form-input" placeholder="e.g. C:\Users\Videos\Source" required>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="master_folder" class="form-input" placeholder="e.g. C:\Users\Videos\Source" required style="flex:1;">
+          <button type="button" class="btn btn-secondary" onclick="browseFolder()" style="flex-shrink:0;">📁 Browse...</button>
+        </div>
         <div class="form-hint">Only video files inside this folder will be processed (no subfolders). Converted files are saved to a 'processed-file' subfolder.</div>
       </div>
 
@@ -134,6 +137,20 @@
 
 {% block scripts %}
 <script>
+async function browseFolder() {
+  try {
+    const res = await fetch('/api/utils/browse-folder');
+    const data = await res.json();
+    if (data.path) {
+      document.getElementById('master_folder').value = data.path;
+    } else if (data.error) {
+      alert("Error picking folder: " + data.error);
+    }
+  } catch(e) {
+    alert("Could not open folder picker.");
+  }
+}
+
 async function startBulkLocal(e) {
   e.preventDefault();
   const btn = document.getElementById('btn-start');

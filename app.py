@@ -1513,6 +1513,19 @@ def api_pick_file():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/utils/test-gpu')
+@app.route('/api/utils/browse-folder', methods=['GET'])
+def api_browse_folder():
+    if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
+    
+    # Run tkinter folder picker in a separate process to avoid thread-blocking
+    import subprocess, sys
+    script = "import tkinter as tk; from tkinter import filedialog; root = tk.Tk(); root.withdraw(); root.attributes('-topmost', True); print(filedialog.askdirectory())"
+    try:
+        res = subprocess.check_output([sys.executable, '-c', script], text=True).strip()
+        return jsonify({'path': res})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 def api_test_gpu():
     if not session.get('logged_in'): return jsonify({'error': 'Unauthorized'}), 401
     import modules.cuda_check
