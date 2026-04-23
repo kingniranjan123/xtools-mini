@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="page-header">
-  <h1 class="page-title"><span class="grad-text">Download Reels</span></h1>
+  <h1 class="page-title"><span class="grad-text">Instagram Downloads</span></h1>
   <p class="page-subtitle">Download by pasting links, or auto-download all videos from an Instagram user ID.</p>
 </div>
 
@@ -19,271 +19,516 @@
      TAB 1 — By Links (original page)
      ════════════════════════════════════════════════════════ -->
 <div id="tab-links">
-<div class="two-col">
-  <div style="display:flex;flex-direction:column;gap:16px;">
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">↓ Reel URLs</div>
-        <span id="url-count" class="badge badge-gray">0 URLs detected</span>
-      </div>
-      <div class="card-body">
-        <form id="download-form">
-          <div class="form-group">
-            <label class="form-label" for="urls">Instagram Reel URLs</label>
-            <textarea class="form-textarea mono" id="urls" name="urls" rows="8"
-              placeholder="https://www.instagram.com/reel/ABC123/&#10;https://www.instagram.com/reel/XYZ456/&#10;…"
-              oninput="countURLs(this, 'url-count')"></textarea>
-            <div class="form-hint">One URL per line. Paste any number of Reel URLs.</div>
+
+  <!-- ZONE 1: INPUTS (2-col) -->
+  <div class="yt-zone-inputs">
+
+    <!-- LEFT: URLs + Split -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🔗 Instagram URLs</div>
+          <span id="url-count" class="badge badge-gray">0 URLs</span>
+        </div>
+        <div class="card-body" style="flex:1;display:flex;flex-direction:column;">
+          <textarea class="form-textarea mono" id="urls" name="urls" style="flex:1;min-height:160px;resize:vertical;"
+            placeholder="https://www.instagram.com/reel/ABC123/&#10;https://www.instagram.com/reel/XYZ456/&#10;..."
+            oninput="countURLs(this, 'url-count')"></textarea>
+          <div class="form-hint" style="margin-top:6px;">One URL per line. Uses provided Cookies file if private.</div>
+          <div class="irow" style="margin-top:10px;margin-bottom:0;">
+            <span class="irow-lbl" style="min-width:46px;">Cookies</span>
+            <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);height:28px;">
+              <span style="font-size:11px;color:var(--text-secondary);font-family:var(--font-mono);">cookies.txt</span>
+              {% if system.cookies_ok %}
+                <span class="badge badge-green" style="font-size:9px;padding:2px 4px;">✓ Loaded</span>
+              {% else %}
+                <span class="badge badge-red" style="font-size:9px;padding:2px 4px;">✗ Missing <a href="{{ url_for('settings_page') }}" style="color:inherit;">(Upload)</a></span>
+              {% endif %}
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Video Quality</label>
-            <select class="form-select" name="quality" id="quality">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">✂ Split & Format</div></div>
+        <div class="card-body">
+          <div class="sec-label" style="margin-bottom:6px;">Extract Format</div>
+          <div class="radio-pills" style="margin-bottom:12px;">
+            <label class="radio-pill" onclick="document.getElementById('video-settings').style.display='block'">
+              <input type="radio" name="format" id="fmt-video" value="video" checked style="accent-color:var(--accent);">🎬 Video (MP4)
+            </label>
+            <label class="radio-pill" onclick="document.getElementById('video-settings').style.display='none'">
+              <input type="radio" name="format" id="fmt-audio" value="audio" style="accent-color:var(--accent);">🎵 Audio (MP3)
+            </label>
+          </div>
+
+          <div id="video-settings">
+            <div class="sec-label" style="margin-bottom:6px;">Split Mode</div>
+            <div class="radio-pills" style="margin-bottom:10px;">
+              <label class="radio-pill" id="split-none-box" onclick="setDlSplitMode('none')">
+                <input type="radio" name="split-mode" value="none" checked style="accent-color:var(--accent);">🚫 None
+              </label>
+              <label class="radio-pill" id="split-equal-box" onclick="setDlSplitMode('equal')">
+                <input type="radio" name="split-mode" value="equal" style="accent-color:var(--accent);">⚡ Equal
+              </label>
+            </div>
+            <!-- Equal opts -->
+            <div id="split-equal-opts" style="display:none;">
+              <div class="irow" style="margin:0;">
+                <span class="irow-lbl" style="min-width:58px;">Part Dur</span>
+                <input class="form-input" id="dl-part-dur" type="number" value="60" min="10" max="3600" style="flex:1;height:28px;font-size:11px;padding:4px 8px;">
+                <span class="irow-lbl" style="min-width:16px;">sec</span>
+              </div>
+              <div class="form-hint" style="margin-top:4px;">Each output piece will be exactly this long.</div>
+            </div>
+          </div>
+
+          <div class="irow" style="margin-top:10px;margin-bottom:0;">
+            <span class="irow-lbl" style="min-width:46px;">Quality</span>
+            <select class="form-select" id="quality" name="quality" style="flex:1;height:28px;padding:2px 6px;font-size:11px;">
               <option value="best">Best available</option>
               <option value="1080">1080p</option>
               <option value="720" selected>720p</option>
               <option value="480">480p</option>
-              <option value="360">360p</option>
             </select>
           </div>
-          <div class="form-group">
-            <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-            <div style="display:flex;gap:8px;">
-              <input class="form-input mono" id="links-out-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_ig', '') }}" />
-              <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolder('links-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
-            </div>
-            <div class="form-hint">Defaults to the location in Settings.</div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Cookies File</label>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
-              <span style="font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);">cookies.txt</span>
-              {% if system.cookies_ok %}
-                <span class="badge badge-green">✓ Loaded</span>
-              {% else %}
-                <span class="badge badge-red">✗ Missing — <a href="{{ url_for('settings_page') }}" style="color:inherit;">Upload in Settings</a></span>
-              {% endif %}
-            </div>
-          </div>
-          
-          <div class="section-heading" style="margin-top:24px; margin-bottom:12px;">Automated Processing Options</div>
-          <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; background:var(--bg-card-2); padding:14px; border-radius:var(--radius-sm); border:1px solid var(--border);">
-             <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
-                <input type="checkbox" id="dl-opt-watermark" name="opt_watermark">
-                Apply master <strong>Watermark</strong>
-             </label>
-             <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
-                <input type="checkbox" id="dl-opt-split" name="opt_split">
-                Split videos into <strong>Equal Parts</strong>
-             </label>
-             <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
-                <input type="checkbox" id="dl-opt-parts" name="opt_parts">
-                Overlay sequence numbers (e.g., <strong>PART - 1</strong>)
-             </label>
-             <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
-                <input type="checkbox" id="dl-delete-source" name="delete_source">
-                Delete <strong>source video</strong> after successful split/conversion
-             </label>
-          </div>
-          
-          <button type="submit" class="btn btn-primary btn-full btn-lg" id="dl-btn">↓ Start Download</button>
-        </form>
+        </div>
       </div>
     </div>
 
+    <!-- RIGHT: Settings & Overlays -->
     <div class="card">
-      <div class="card-header"><div class="card-title">ℹ Setup Guide</div></div>
-      <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
-        {% for n,h,b in [
-          ('1','Install cookies extension','Get "Get cookies.txt LOCALLY" for Chrome / Firefox.'),
-          ('2','Export while on Instagram','Log in to instagram.com, click the extension, export.'),
-          ('3','Upload in Settings','Go to Settings → Cookies and paste/upload the file.'),
-          ('4','Paste URLs & download','The app passes cookies automatically.')
-        ] %}
-        <div style="display:flex;gap:12px;">
-          <div style="width:24px;height:24px;border-radius:50%;background:rgba(255,60,172,.15);border:1px solid rgba(255,60,172,.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--accent);flex-shrink:0;">{{ n }}</div>
-          <div>
-            <div style="font-size:13px;font-weight:600;margin-bottom:2px;">{{ h }}</div>
-            <div style="font-size:12px;color:var(--text-muted);">{{ b }}</div>
+      <div class="card-header"><div class="card-title">⚙ Settings & Overlays</div></div>
+      <div class="card-body">
+
+        <!-- OVERLAY ROWS -->
+        <div class="sec-label" style="margin-bottom:6px;">✏ Text Overlays</div>
+
+        <!-- Title row -->
+        <div class="irow">
+          <input type="checkbox" id="dl-opt-title" checked style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">📌 Title</span>
+          <input type="range" id="dl-title-pos-pct" min="5" max="50" value="20" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('dl-title-pos-val').textContent=this.value+'%'">
+          <span class="irow-val" id="dl-title-pos-val">20%</span>
+        </div>
+
+        <!-- Part row -->
+        <div class="irow">
+          <input type="checkbox" id="dl-opt-parts" checked style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">🔢 Part#</span>
+          <input type="range" id="dl-part-pos-pct" min="50" max="95" value="82" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('dl-part-pos-val').textContent=this.value+'%'">
+          <span class="irow-val" id="dl-part-pos-val">82%</span>
+        </div>
+
+        <!-- Watermark row -->
+        <div class="irow" style="margin-bottom:10px;">
+          <input type="checkbox" id="dl-opt-watermark" style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">💧 Wmk</span>
+          <input class="form-input" id="dl-watermark-text" type="text" placeholder="@YourChannel" style="flex:1;height:28px;font-size:11px;padding:4px 8px;">
+        </div>
+
+        <div style="border-top:1px solid var(--border);margin:10px 0;"></div>
+
+        <!-- Bottom overlay mode (horizontal pills) -->
+        <div class="sec-label" style="margin-bottom:6px;">🖼 Bottom Overlay Image</div>
+        <div class="overlay-mode-pills" style="margin-bottom:8px;">
+          <label class="radio-pill" onclick="setDlOverlayMode('none')">
+            <input type="radio" name="dl-overlay-mode" value="none" id="dl-overlay-mode-none" checked style="accent-color:var(--accent);">🚫 None
+          </label>
+          <label class="radio-pill" onclick="setDlOverlayMode('manual')">
+            <input type="radio" name="dl-overlay-mode" value="manual" id="dl-overlay-mode-manual" style="accent-color:var(--accent);">🖼 Manual
+          </label>
+          <label class="radio-pill" onclick="setDlOverlayMode('auto')">
+            <input type="radio" name="dl-overlay-mode" value="auto" id="dl-overlay-mode-auto" style="accent-color:var(--accent);">⚡ Auto
+          </label>
+        </div>
+
+        <div id="dl-overlay-manual-controls" style="display:none;margin-bottom:8px;">
+          <input class="form-input" id="dl-overlay-image-file" type="file" accept="image/*" style="font-size:11px;margin-bottom:5px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="irow" style="margin:0;">
+              <span class="irow-lbl" style="min-width:28px;">Fill</span>
+              <input type="range" id="dl-overlay-comp-pct" min="1" max="100" value="100" style="flex:1;accent-color:var(--accent);"
+                oninput="document.getElementById('dl-overlay-comp-val').textContent=this.value+'%'">
+              <span class="irow-val" id="dl-overlay-comp-val">100%</span>
+            </div>
+            <div class="irow" style="margin:0;">
+              <span class="irow-lbl" style="min-width:30px;">Zoom</span>
+              <input type="range" id="dl-overlay-zoom-pct" min="100" max="200" value="100" style="flex:1;accent-color:var(--accent);"
+                oninput="document.getElementById('dl-overlay-zoom-val').textContent=this.value+'%'">
+              <span class="irow-val" id="dl-overlay-zoom-val">100%</span>
+            </div>
           </div>
         </div>
-        {% endfor %}
+
+        <div id="dl-overlay-auto-info" style="display:none;font-size:10px;color:var(--text-muted);padding:5px 8px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;">
+          ⚡ Video thumbnail auto-placed. Fill & Zoom managed by system.
+        </div>
+
+        <div style="border-top:1px solid var(--border);margin:10px 0;"></div>
+
+        <!-- Output size pills -->
+        <div class="sec-label" style="margin-bottom:6px;">📐 Output Size</div>
+        <div class="radio-pills" style="margin-bottom:10px;">
+          <label class="radio-pill">
+            <input type="radio" name="dl_output_size" value="instagram" checked style="accent-color:var(--accent);">📱 9:16
+          </label>
+          <label class="radio-pill">
+            <input type="radio" name="dl_output_size" value="original" style="accent-color:var(--accent);">📐 Original
+          </label>
+        </div>
+
+        <!-- Output folder -->
+        <div class="irow" style="margin-bottom:10px;">
+          <span class="irow-lbl" style="min-width:46px;">Folder</span>
+          <input class="form-input mono" id="links-out-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_ig', '') }}" style="flex:1;height:28px;font-size:11px;padding:4px 8px;">
+          <button class="btn btn-secondary btn-sm" type="button" onclick="browseFolder('links-out-dir')" style="white-space:nowrap;height:28px;">Browse</button>
+        </div>
+
+        <!-- Delete source + Start -->
+        <div style="display:flex;align-items:center;gap:10px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="dl-delete-source" style="accent-color:var(--accent);">
+            Delete source
+          </label>
+          <button type="button" class="btn btn-primary btn-full" id="dl-btn" onclick="startLinksDownload()"
+            style="flex:1;background:linear-gradient(135deg,#ff3cac,#8250ff);padding:8px 0;font-weight:700;">
+            ↓ Start Process
+          </button>
+        </div>
+
+      </div>
+    </div><!-- /right -->
+
+  </div><!-- /zone1 -->
+
+  <!-- ZONE 2 & 3: EXECUTION & RESULTS (Bottom) -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+
+    <!-- Progress pane -->
+    <div class="card" id="progress-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">⏳ Processing Queue</div>
+        <span class="badge badge-orange" id="dl-status">Running</span>
+      </div>
+      <div class="card-body">
+        <div class="irow" style="margin-bottom:5px;">
+          <span style="flex:1;font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="dl-current-file">Initialising…</span>
+          <span style="font-size:11px;font-family:var(--font-mono);font-weight:700;" id="dl-pct">0%</span>
+        </div>
+        <div class="progress-wrap prog-compact" style="margin-bottom:8px;">
+          <div class="progress-bar animated" id="dl-bar" style="width:0%;background:linear-gradient(90deg,#ff3cac,#8250ff);"></div>
+        </div>
+        <button class="btn btn-ghost btn-sm btn-full" style="margin-top:12px;color:var(--text-muted);" onclick="cancelDownload()">✕ Cancel</button>
+      </div>
+    </div>
+
+    <!-- Console pane -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">💻 Console</div></div>
+      <div class="card-body" style="padding:8px;">
+        <div class="sse-log console-compact" id="dl-log"></div>
       </div>
     </div>
   </div>
 
-  <!-- Right: Progress -->
-  <div style="display:flex;flex-direction:column;gap:16px;">
-    <div class="card" id="progress-card" style="display:none;">
-      <div class="card-header">
-        <div class="card-title">⏳ Download Progress</div>
-        <span class="badge badge-orange" id="dl-status">Running</span>
-      </div>
-      <div class="card-body">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px;color:var(--text-secondary);">
-          <span id="dl-current-file">Initialising…</span>
-          <span id="dl-pct">0%</span>
-        </div>
-        <div class="progress-wrap"><div class="progress-bar animated" id="dl-bar" style="width:0%"></div></div>
-        <div style="margin-top:14px;">
-          <div class="section-heading">Live Log</div>
-          <div class="sse-log" id="dl-log"></div>
-        </div>
-        <button class="btn btn-ghost btn-sm btn-full" style="margin-top:12px;" onclick="cancelDownload()">✕ Cancel</button>
-      </div>
-    </div>
-
+  <div class="yt-zone-table" style="margin-top:14px;">
     <div class="card" id="results-card" style="display:none;">
       <div class="card-header">
         <div class="card-title">✅ Completed</div>
         <a href="{{ url_for('metadata_page') }}" class="btn btn-primary btn-sm">View Metadata →</a>
       </div>
-      <div class="card-body">
-        <div id="results-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div class="card-body" style="padding:0;">
+        <table class="yt-table">
+          <thead><tr><th>#</th><th>Reel Item</th><th>Status</th></tr></thead>
+          <tbody id="results-list"></tbody>
+        </table>
       </div>
     </div>
   </div>
-</div>
-</div>
+
+</div><!-- /tab-links -->
+
 
 <!-- ════════════════════════════════════════════════════════
      TAB 2 — By User ID
      ════════════════════════════════════════════════════════ -->
 <div id="tab-userid" style="display:none;">
-<div class="two-col">
-  <div style="display:flex;flex-direction:column;gap:16px;">
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">👤 Download by User ID</div>
-        <!-- Rate badge -->
-        <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:20px;">
-          <div style="width:7px;height:7px;border-radius:50%;background:var(--accent-green);box-shadow:0 0 5px var(--accent-green);" id="uid-rate-dot"></div>
-          <span style="font-size:11px;font-family:var(--font-mono);" id="uid-rate-text">0 / 10 used</span>
+
+  <!-- ZONE 1: INPUTS (2-col) -->
+  <div class="yt-zone-inputs">
+
+    <!-- LEFT: Inputs & User Details -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">👤 By User ID</div>
+          <!-- Rate badge -->
+          <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:20px;">
+            <div style="width:7px;height:7px;border-radius:50%;background:var(--accent-green);box-shadow:0 0 5px var(--accent-green);" id="uid-rate-dot"></div>
+            <span style="font-size:11px;font-family:var(--font-mono);" id="uid-rate-text">0 / 10 used</span>
+          </div>
+        </div>
+        <div class="card-body">
+
+          <!-- Cooldown shield -->
+          <div id="uid-cooldown-block" style="display:none;margin-bottom:16px;">
+            <div class="cooldown-shield">
+              <div style="font-size:32px;">🧊</div>
+              <div style="font-size:14px;font-weight:700;color:var(--accent-gold);">Cooling Period Active</div>
+              <div style="font-size:12px;color:var(--text-muted);">10 reels downloaded in this 2-hour window.</div>
+              <div style="font-family:var(--font-mono);font-size:28px;font-weight:800;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:10px;padding:8px 24px;" id="uid-countdown">2:00:00</div>
+              <div style="font-size:11px;color:var(--text-muted);">Resets automatically.</div>
+            </div>
+          </div>
+
+          <!-- Batch gauge -->
+          <div style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:6px;">
+              <span>Batch Usage (10 reels / 2 hours)</span>
+              <span id="uid-window-label">Window: fresh</span>
+            </div>
+            <div class="batch-gauge">
+              <div class="batch-gauge-fill" id="uid-gauge-fill" style="width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-gold));"></div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;" id="uid-gauge-sub">0 of 10 slots used · 10 remaining</div>
+          </div>
+
+          <div class="irow" style="margin-bottom:12px;">
+            <span class="irow-lbl" style="min-width:60px;">Username</span>
+            <div style="flex:1;display:flex;gap:8px;">
+              <div style="position:relative;flex:1;">
+                <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:11px;">@</span>
+                <input class="form-input" id="ig-userid" type="text" placeholder="username or numeric ID" style="padding-left:22px;height:28px;font-size:11px;">
+              </div>
+              <button class="btn btn-ghost btn-sm" id="uid-lookup-btn" onclick="lookupUserPreview()" style="height:28px;white-space:nowrap;">🔍 Lookup</button>
+            </div>
+          </div>
+
+          <!-- User preview -->
+          <div id="uid-user-preview" style="display:none;padding:12px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--grad-from),var(--grad-to));display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👤</div>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:700;" id="uid-display-name">—</div>
+                <div style="font-size:11px;color:var(--text-muted);" id="uid-tag">—</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:10px;color:var(--text-muted);">Posts</div>
+                <div style="font-weight:700;font-family:var(--font-mono);" id="uid-post-count">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="padding:10px;background:rgba(255,170,0,0.06);border:1px solid rgba(255,170,0,0.2);border-radius:var(--radius-sm);font-size:11px;color:var(--text-secondary);">
+            <strong style="color:var(--accent-gold);">Rate Limit:</strong> Max 10 reels per 2-hour window. Same safety rules as Auto-Follow.
+          </div>
+
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">✂ Split & Format</div></div>
+        <div class="card-body">
+          <div class="sec-label" style="margin-bottom:6px;">Extract Format</div>
+          <div class="radio-pills" style="margin-bottom:12px;">
+            <label class="radio-pill" onclick="document.getElementById('uid-video-settings').style.display='block'">
+              <input type="radio" name="uid-format" id="uid-fmt-video" value="video" checked style="accent-color:var(--accent);">🎬 Video (MP4)
+            </label>
+            <label class="radio-pill" onclick="document.getElementById('uid-video-settings').style.display='none'">
+              <input type="radio" name="uid-format" id="uid-fmt-audio" value="audio" style="accent-color:var(--accent);">🎵 Audio (MP3)
+            </label>
+          </div>
+
+          <div id="uid-video-settings">
+            <div class="sec-label" style="margin-bottom:6px;">Split Mode</div>
+            <div class="radio-pills" style="margin-bottom:10px;">
+              <label class="radio-pill" onclick="document.getElementById('uid-split-equal-opts').style.display='none'">
+                <input type="radio" name="uid-split-mode" value="none" checked style="accent-color:var(--accent);">🚫 None
+              </label>
+              <label class="radio-pill" onclick="document.getElementById('uid-split-equal-opts').style.display='block'">
+                <input type="radio" name="uid-split-mode" value="equal" style="accent-color:var(--accent);">⚡ Equal
+              </label>
+            </div>
+            <!-- Equal opts -->
+            <div id="uid-split-equal-opts" style="display:none;">
+              <div class="irow" style="margin:0;">
+                <span class="irow-lbl" style="min-width:58px;">Part Dur</span>
+                <input class="form-input" id="uid-part-dur" type="number" value="60" min="10" max="3600" style="flex:1;height:28px;font-size:11px;padding:4px 8px;">
+                <span class="irow-lbl" style="min-width:16px;">sec</span>
+              </div>
+              <div class="form-hint" style="margin-top:4px;">Each output piece will be exactly this long.</div>
+            </div>
+          </div>
+
+          <div class="irow" style="margin-top:10px;margin-bottom:0;">
+            <span class="irow-lbl" style="min-width:46px;">Quality</span>
+            <select class="form-select" id="uid-quality" style="flex:1;height:28px;padding:2px 6px;font-size:11px;">
+              <option value="best">Best available</option>
+              <option value="1080">1080p</option>
+              <option value="720" selected>720p</option>
+              <option value="480">480p</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div><!-- /left -->
+
+    <!-- RIGHT: Settings & Overlays -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">⚙ Settings & Overlays</div></div>
       <div class="card-body">
 
-        <!-- Cooldown shield -->
-        <div id="uid-cooldown-block" style="display:none;margin-bottom:16px;">
-          <div class="cooldown-shield">
-            <div style="font-size:32px;">🧊</div>
-            <div style="font-size:14px;font-weight:700;color:var(--accent-gold);">Cooling Period Active</div>
-            <div style="font-size:12px;color:var(--text-muted);">10 reels downloaded in this 2-hour window.</div>
-            <div style="font-family:var(--font-mono);font-size:28px;font-weight:800;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:10px;padding:8px 24px;" id="uid-countdown">2:00:00</div>
-            <div style="font-size:11px;color:var(--text-muted);">Resets automatically.</div>
-          </div>
+        <!-- OVERLAY ROWS -->
+        <div class="sec-label" style="margin-bottom:6px;">✏ Text Overlays</div>
+
+        <!-- Title row -->
+        <div class="irow">
+          <input type="checkbox" id="uid-opt-title" checked style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">📌 Title</span>
+          <input type="range" id="uid-title-pos-pct" min="5" max="50" value="20" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('uid-title-pos-val').textContent=this.value+'%'">
+          <span class="irow-val" id="uid-title-pos-val">20%</span>
         </div>
 
-        <!-- Batch gauge -->
-        <div style="margin-bottom:16px;">
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:6px;">
-            <span>Batch Usage (10 reels / 2 hours)</span>
-            <span id="uid-window-label">Window: fresh</span>
-          </div>
-          <div class="batch-gauge">
-            <div class="batch-gauge-fill" id="uid-gauge-fill" style="width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-gold));"></div>
-          </div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;" id="uid-gauge-sub">0 of 10 slots used · 10 remaining</div>
+        <!-- Part row -->
+        <div class="irow">
+          <input type="checkbox" id="uid-opt-parts" checked style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">🔢 Part#</span>
+          <input type="range" id="uid-part-pos-pct" min="50" max="95" value="82" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('uid-part-pos-val').textContent=this.value+'%'">
+          <span class="irow-val" id="uid-part-pos-val">82%</span>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Instagram Username / User ID</label>
-          <div style="display:flex;gap:8px;">
-            <div style="position:relative;flex:1;">
-              <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);">@</span>
-              <input class="form-input" id="ig-userid" type="text" placeholder="username or numeric ID" style="padding-left:26px;" />
+        <!-- Watermark row -->
+        <div class="irow" style="margin-bottom:10px;">
+          <input type="checkbox" id="uid-opt-watermark" style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl">💧 Wmk</span>
+          <input class="form-input" id="uid-watermark-text" type="text" placeholder="@YourChannel" style="flex:1;height:28px;font-size:11px;padding:4px 8px;">
+        </div>
+
+        <div style="border-top:1px solid var(--border);margin:10px 0;"></div>
+
+        <!-- Bottom overlay mode -->
+        <div class="sec-label" style="margin-bottom:6px;">🖼 Bottom Overlay Image</div>
+        <div class="overlay-mode-pills" style="margin-bottom:8px;">
+          <label class="radio-pill" onclick="setUidOverlayMode('none')">
+            <input type="radio" name="uid-overlay-mode" value="none" id="uid-overlay-mode-none" checked style="accent-color:var(--accent);">🚫 None
+          </label>
+          <label class="radio-pill" onclick="setUidOverlayMode('manual')">
+            <input type="radio" name="uid-overlay-mode" value="manual" id="uid-overlay-mode-manual" style="accent-color:var(--accent);">🖼 Manual
+          </label>
+          <label class="radio-pill" onclick="setUidOverlayMode('auto')">
+            <input type="radio" name="uid-overlay-mode" value="auto" id="uid-overlay-mode-auto" style="accent-color:var(--accent);">⚡ Auto
+          </label>
+        </div>
+
+        <div id="uid-overlay-manual-controls" style="display:none;margin-bottom:8px;">
+          <input class="form-input" id="uid-overlay-image-file" type="file" accept="image/*" style="font-size:11px;margin-bottom:5px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="irow" style="margin:0;">
+              <span class="irow-lbl" style="min-width:28px;">Fill</span>
+              <input type="range" id="uid-overlay-comp-pct" min="1" max="100" value="100" style="flex:1;accent-color:var(--accent);"
+                oninput="document.getElementById('uid-overlay-comp-val').textContent=this.value+'%'">
+              <span class="irow-val" id="uid-overlay-comp-val">100%</span>
             </div>
-            <button class="btn btn-ghost btn-sm" id="uid-lookup-btn" onclick="lookupUserPreview()">🔍 Lookup</button>
-          </div>
-        </div>
-
-        <!-- User preview -->
-        <div id="uid-user-preview" style="display:none;padding:12px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--grad-from),var(--grad-to));display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👤</div>
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:700;" id="uid-display-name">—</div>
-              <div style="font-size:11px;color:var(--text-muted);" id="uid-tag">—</div>
-            </div>
-            <div style="text-align:right;">
-              <div style="font-size:10px;color:var(--text-muted);">Posts</div>
-              <div style="font-weight:700;font-family:var(--font-mono);" id="uid-post-count">—</div>
+            <div class="irow" style="margin:0;">
+              <span class="irow-lbl" style="min-width:30px;">Zoom</span>
+              <input type="range" id="uid-overlay-zoom-pct" min="100" max="200" value="100" style="flex:1;accent-color:var(--accent);"
+                oninput="document.getElementById('uid-overlay-zoom-val').textContent=this.value+'%'">
+              <span class="irow-val" id="uid-overlay-zoom-val">100%</span>
             </div>
           </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Quality</label>
-          <select class="form-select" id="uid-quality">
-            <option value="best">Best available</option>
-            <option value="720">720p</option>
-            <option value="480">480p</option>
-          </select>
+        <div id="uid-overlay-auto-info" style="display:none;font-size:10px;color:var(--text-muted);padding:5px 8px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;">
+          ⚡ Video thumbnail auto-placed. Fill & Zoom managed by system.
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Output Folder <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-          <div style="display:flex;gap:8px;">
-            <input class="form-input mono" id="uid-out-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_ig', '') }}" />
-            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolder('uid-out-dir')" style="white-space:nowrap;padding:8px 16px;">Browse...</button>
-          </div>
-          <div class="form-hint">Defaults to the location in Settings.</div>
+        <div style="border-top:1px solid var(--border);margin:10px 0;"></div>
+
+        <!-- Output size pills -->
+        <div class="sec-label" style="margin-bottom:6px;">📐 Output Size</div>
+        <div class="radio-pills" style="margin-bottom:10px;">
+          <label class="radio-pill">
+            <input type="radio" name="uid_output_size" value="instagram" checked style="accent-color:var(--accent);">📱 9:16
+          </label>
+          <label class="radio-pill">
+            <input type="radio" name="uid_output_size" value="original" style="accent-color:var(--accent);">📐 Original
+          </label>
         </div>
 
-        <div style="padding:12px;background:rgba(255,170,0,0.06);border:1px solid rgba(255,170,0,0.2);border-radius:var(--radius-sm);margin-bottom:16px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
-          <strong style="color:var(--accent-gold);">Rate Limit:</strong> Max 10 reels per 2-hour window. Same safety rules as Auto-Follow.
-        </div>
-        
-        <div class="section-heading" style="margin-top:24px; margin-bottom:12px;">Automated Processing Options</div>
-        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; background:var(--bg-card-2); padding:14px; border-radius:var(--radius-sm); border:1px solid var(--border);">
-           <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" id="uid-opt-watermark">
-              Apply master <strong>Watermark</strong>
-           </label>
-           <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" id="uid-opt-split">
-              Split videos into <strong>Equal Parts</strong>
-           </label>
-           <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" id="uid-opt-parts">
-              Overlay sequence numbers (e.g., <strong>PART - 1</strong>)
-           </label>
-           <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" id="uid-delete-source">
-              Delete <strong>source video</strong> after successful split/conversion
-           </label>
+        <!-- Output folder -->
+        <div class="irow" style="margin-bottom:10px;">
+          <span class="irow-lbl" style="min-width:46px;">Folder</span>
+          <input class="form-input mono" id="uid-out-dir" type="text" placeholder="Leave blank for default" value="{{ settings.get('dir_ig', '') }}" style="flex:1;height:28px;font-size:11px;padding:4px 8px;">
+          <button class="btn btn-secondary btn-sm" type="button" onclick="browseFolder('uid-out-dir')" style="white-space:nowrap;height:28px;">Browse</button>
         </div>
 
-        <button class="btn btn-primary btn-full btn-lg" id="uid-dl-btn" onclick="startUserIDDownload()">
-          ↓ Download 10 Reels
-        </button>
+        <!-- Delete source + Start -->
+        <div style="display:flex;align-items:center;gap:10px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="uid-delete-source" style="accent-color:var(--accent);">
+            Delete source
+          </label>
+          <button type="button" class="btn btn-primary btn-full" id="uid-dl-btn" onclick="startUserIDDownload()"
+            style="flex:1;background:linear-gradient(135deg,#ff3cac,#8250ff);padding:8px 0;font-weight:700;">
+            ↓ Download 10 Reels
+          </button>
+        </div>
+
       </div>
-    </div>
-  </div>
+    </div><!-- /right -->
 
-  <!-- Right: progress -->
-  <div style="display:flex;flex-direction:column;gap:16px;">
+  </div><!-- /zone1 -->
+
+  <!-- ZONE 2 & 3: EXECUTION & RESULTS (Bottom) -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+
+    <!-- Progress pane -->
     <div class="card" id="uid-progress-card" style="display:none;">
       <div class="card-header">
         <div class="card-title">⏳ Downloading from Profile</div>
         <span class="badge badge-orange" id="uid-status">Running</span>
       </div>
       <div class="card-body">
-        <div class="progress-wrap"><div class="progress-bar animated" id="uid-bar" style="width:5%"></div></div>
-        <div class="sse-log" id="uid-log" style="margin-top:12px;"></div>
+        <div class="progress-wrap prog-compact" style="margin-bottom:8px;">
+          <div class="progress-bar animated" id="uid-bar" style="width:0%;background:linear-gradient(90deg,#ff3cac,#8250ff);"></div>
+        </div>
+        <button class="btn btn-ghost btn-sm btn-full" style="margin-top:12px;color:var(--text-muted);" onclick="cancelUidDownload()">✕ Cancel</button>
       </div>
     </div>
-    <div class="card" id="uid-results-card" style="display:none;">
-      <div class="card-header">
-        <div class="card-title">✅ Downloaded</div>
-        <a href="{{ url_for('metadata_page') }}" class="btn btn-primary btn-sm">View Metadata →</a>
-      </div>
-      <div class="card-body">
-        <div id="uid-results-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+
+    <!-- Console pane -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">💻 Console</div></div>
+      <div class="card-body" style="padding:8px;">
+        <div class="sse-log console-compact" id="uid-log"></div>
       </div>
     </div>
   </div>
-</div>
-</div>
+
+  <div class="yt-zone-table" style="margin-top:14px;">
+    <div class="card" id="uid-results-card" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">✅ Completed</div>
+        <a href="{{ url_for('metadata_page') }}" class="btn btn-primary btn-sm">View Metadata →</a>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <table class="yt-table">
+          <thead><tr><th>#</th><th>Reel Item</th><th>Status</th></tr></thead>
+          <tbody id="uid-results-list"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /tab-userid -->
+
 {% endblock %}
 
 {% block scripts %}
@@ -302,20 +547,52 @@ function switchDLTab(t) {
   if (t === 'userid') refreshUIDStatus();
 }
 
+function setDlOverlayMode(m) {
+  document.getElementById('dl-overlay-manual-controls').style.display = (m === 'manual') ? 'block' : 'none';
+  document.getElementById('dl-overlay-auto-info').style.display = (m === 'auto') ? 'block' : 'none';
+}
+
+function setUidOverlayMode(m) {
+  document.getElementById('uid-overlay-manual-controls').style.display = (m === 'manual') ? 'block' : 'none';
+  document.getElementById('uid-overlay-auto-info').style.display = (m === 'auto') ? 'block' : 'none';
+}
+
+function setDlSplitMode(m) {
+  document.getElementById('split-equal-opts').style.display = (m === 'equal') ? 'block' : 'none';
+}
+
 // ── By Links download ─────────────────────────────────────
 let currentESS = null;
 
-document.getElementById('download-form').addEventListener('submit', async function(e) {
-  e.preventDefault();
+async function startLinksDownload() {
   const urlsArea = document.getElementById('urls');
   const urls = urlsArea.value.split('\n').filter(l => l.trim().startsWith('http'));
   if (urls.length === 0) { urlsArea.focus(); return; }
+
+  const format  = document.querySelector('input[name="format"]:checked').value;
   const quality = document.getElementById('quality').value;
   const outDir  = document.getElementById('links-out-dir').value.trim();
 
+  // Split options
+  const splitMode = document.querySelector('input[name="split-mode"]:checked').value;
+  const partDur   = document.getElementById('dl-part-dur').value;
+
+  // Text Overlays
+  const optTitle = document.getElementById('dl-opt-title').checked;
+  const titlePos = document.getElementById('dl-title-pos-pct').value;
+  const optParts = document.getElementById('dl-opt-parts').checked;
+  const partPos  = document.getElementById('dl-part-pos-pct').value;
   const optWatermark = document.getElementById('dl-opt-watermark').checked;
-  const optSplit     = document.getElementById('dl-opt-split').checked;
-  const optParts     = document.getElementById('dl-opt-parts').checked;
+  const wmkText  = document.getElementById('dl-watermark-text').value;
+
+  // Bottom Overlay
+  const overlayMode = document.querySelector('input[name="dl-overlay-mode"]:checked').value;
+  const fillPct = document.getElementById('dl-overlay-comp-pct').value;
+  const zoomPct = document.getElementById('dl-overlay-zoom-pct').value;
+  
+  // Output Size
+  const outSize = document.querySelector('input[name="dl_output_size"]:checked').value;
+  
   const deleteSource = document.getElementById('dl-delete-source').checked;
 
   document.getElementById('progress-card').style.display = 'block';
@@ -325,11 +602,17 @@ document.getElementById('download-form').addEventListener('submit', async functi
   document.getElementById('dl-btn').disabled             = true;
   document.getElementById('dl-btn').textContent          = 'Downloading…';
 
-  const resp = await postJSON('/api/download', { 
-      urls: urls, quality: quality, output_dir: outDir,
-      opt_watermark: optWatermark, opt_split: optSplit, opt_parts: optParts,
-      delete_source: deleteSource
-  });
+  const payload = { 
+      urls: urls, format: format, quality: quality, output_dir: outDir,
+      split_mode: splitMode, part_dur: partDur,
+      opt_title: optTitle, title_pos: titlePos,
+      opt_parts: optParts, part_pos: partPos,
+      opt_watermark: optWatermark, watermark_text: wmkText,
+      overlay_mode: overlayMode, fill_pct: fillPct, zoom_pct: zoomPct,
+      output_size: outSize, delete_source: deleteSource
+  };
+
+  const resp = await postJSON('/api/download', payload);
 
   if (!resp.job_id) {
     showToast(resp.error || 'Failed to start download', 'error');
@@ -349,12 +632,12 @@ document.getElementById('download-form').addEventListener('submit', async functi
       showResults(d.results || []);
     }
   });
-});
+}
 
 function resetDLBtn() {
   const btn = document.getElementById('dl-btn');
   btn.disabled = false;
-  btn.textContent = '↓ Start Download';
+  btn.textContent = '↓ Start Process';
 }
 
 function cancelDownload() {
@@ -368,14 +651,14 @@ function showResults(results) {
   document.getElementById('results-card').style.display = 'block';
   const list = document.getElementById('results-list');
   list.innerHTML = results.map(r => `
-    <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
-      <span style="font-size:20px;">🎬</span>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title||r.id}</div>
+    <tr>
+      <td>🎬</td>
+      <td>
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;">${r.title||r.id}</div>
         <div style="font-size:11px;color:var(--text-muted);">@${r.account||'—'} · ${r.duration||'?'}s</div>
-      </div>
-      <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
-    </div>
+      </td>
+      <td><span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span></td>
+    </tr>
   `).join('');
 }
 
@@ -449,15 +732,36 @@ async function lookupUserPreview() {
   document.getElementById('uid-post-count').textContent     = resp.media_count || '—';
 }
 
+let uidESS = null;
+
 async function startUserIDDownload() {
   const username = document.getElementById('ig-userid').value.trim().replace('@','');
   if (!username) { showToast('Enter a username first', 'warn'); return; }
+
+  const format  = document.querySelector('input[name="uid-format"]:checked').value;
   const quality = document.getElementById('uid-quality').value;
   const outDir  = document.getElementById('uid-out-dir').value.trim();
 
+  // Split options
+  const splitMode = document.querySelector('input[name="uid-split-mode"]:checked').value;
+  const partDur   = document.getElementById('uid-part-dur').value;
+
+  // Text Overlays
+  const optTitle = document.getElementById('uid-opt-title').checked;
+  const titlePos = document.getElementById('uid-title-pos-pct').value;
+  const optParts = document.getElementById('uid-opt-parts').checked;
+  const partPos  = document.getElementById('uid-part-pos-pct').value;
   const optWatermark = document.getElementById('uid-opt-watermark').checked;
-  const optSplit     = document.getElementById('uid-opt-split').checked;
-  const optParts     = document.getElementById('uid-opt-parts').checked;
+  const wmkText  = document.getElementById('uid-watermark-text').value;
+
+  // Bottom Overlay
+  const overlayMode = document.querySelector('input[name="uid-overlay-mode"]:checked').value;
+  const fillPct = document.getElementById('uid-overlay-comp-pct').value;
+  const zoomPct = document.getElementById('uid-overlay-zoom-pct').value;
+  
+  // Output Size
+  const outSize = document.querySelector('input[name="uid_output_size"]:checked').value;
+  
   const deleteSource = document.getElementById('uid-delete-source').checked;
 
   document.getElementById('uid-progress-card').style.display = 'block';
@@ -467,11 +771,17 @@ async function startUserIDDownload() {
   document.getElementById('uid-dl-btn').disabled             = true;
   document.getElementById('uid-dl-btn').textContent          = 'Downloading…';
 
-  const resp = await postJSON('/api/download/userid', { 
-      username, quality, output_dir: outDir,
-      opt_watermark: optWatermark, opt_split: optSplit, opt_parts: optParts,
-      delete_source: deleteSource
-  });
+  const payload = { 
+      username: username, format: format, quality: quality, output_dir: outDir,
+      split_mode: splitMode, part_dur: partDur,
+      opt_title: optTitle, title_pos: titlePos,
+      opt_parts: optParts, part_pos: partPos,
+      opt_watermark: optWatermark, watermark_text: wmkText,
+      overlay_mode: overlayMode, fill_pct: fillPct, zoom_pct: zoomPct,
+      output_size: outSize, delete_source: deleteSource
+  };
+
+  const resp = await postJSON('/api/download/userid', payload);
 
   if (!resp.job_id) {
     if (resp.in_cooldown) {
@@ -485,7 +795,7 @@ async function startUserIDDownload() {
     return;
   }
 
-  startSSEProgress({
+  uidESS = startSSEProgress({
     url: '/api/download/progress/' + resp.job_id,
     logId: 'uid-log',
     barId: 'uid-bar',
@@ -494,6 +804,7 @@ async function startUserIDDownload() {
       document.getElementById('uid-dl-btn').disabled = false;
       document.getElementById('uid-dl-btn').textContent = '↓ Download 10 Reels';
       document.getElementById('uid-status').className = 'badge badge-green';
+      document.getElementById('uid-status').textContent = 'Done';
       if (d.in_cooldown) {
         showToast(`Done! Cooling period started — ${fmtDur(d.seconds_left)} until next batch.`, 'warn');
       } else {
@@ -505,17 +816,25 @@ async function startUserIDDownload() {
   });
 }
 
+function cancelUidDownload() {
+  if (uidESS) { uidESS.close(); uidESS = null; }
+  document.getElementById('uid-dl-btn').disabled = false;
+  document.getElementById('uid-dl-btn').textContent = '↓ Download 10 Reels';
+  document.getElementById('uid-progress-card').style.display = 'none';
+  showToast('Download cancelled', 'warn');
+}
+
 function showUIDResults(results) {
   document.getElementById('uid-results-card').style.display = 'block';
   document.getElementById('uid-results-list').innerHTML = results.map(r => `
-    <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card-2);">
-      <span>🎬</span>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title||r.id||'Reel'}</div>
+    <tr>
+      <td>🎬</td>
+      <td>
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;">${r.title||r.id||'Reel'}</div>
         <div style="font-size:11px;color:var(--text-muted);">${r.duration ? Math.round(r.duration) + 's' : ''}</div>
-      </div>
-      <span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span>
-    </div>
+      </td>
+      <td><span class="badge ${r.status==='ok'?'badge-green':'badge-red'}">${r.status==='ok'?'OK':'Error'}</span></td>
+    </tr>
   `).join('');
 }
 
@@ -535,5 +854,6 @@ async function browseFolder(inputId) {
 
 // Init
 refreshUIDStatus();
+
 </script>
 {% endblock %}
