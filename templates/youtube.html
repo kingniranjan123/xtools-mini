@@ -688,12 +688,50 @@
 
         <!-- Part row -->
         <div class="irow">
-          <input type="checkbox" id="overlay-part" checked style="accent-color:var(--accent);flex-shrink:0;">
+          <input type="checkbox" id="overlay-part" style="accent-color:var(--accent);flex-shrink:0;" disabled>
           <span class="irow-lbl">&#x1F522; Part#</span>
           <span style="flex:1.5;font-size:10px;color:var(--text-muted);">Auto-increments</span>
           <input type="range" id="part-pos-pct" min="50" max="95" value="82" style="flex:1;accent-color:var(--accent);"
             oninput="document.getElementById('part-pos-val').textContent=this.value+'%'">
           <span class="irow-val" id="part-pos-val">82%</span>
+        </div>
+        
+        <!-- Cinemascope Crop row -->
+        <div class="irow" style="margin-bottom:2px;">
+          <input type="checkbox" id="overlay-cinemascope" style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl" style="min-width:130px;">&#x1F3AC; Cinemascope Crop</span>
+          <select id="overlay-cinemascope-mode" style="background:#222;color:#fff;border:1px solid #444;border-radius:4px;padding:2px;font-size:11px;" onchange="document.getElementById('overlay-cinemascope-px').style.display = this.value === 'manual' ? 'inline-block' : 'none'">
+            <option value="auto">Auto (130px)</option>
+            <option value="manual">Manual</option>
+          </select>
+          <input type="number" id="overlay-cinemascope-px" value="130" style="display:none;width:50px;background:#222;color:#fff;border:1px solid #444;border-radius:4px;padding:2px;font-size:11px;margin-left:5px;" title="Pixels to crop (top & bottom)">
+        </div>
+        
+        <!-- Zoom Video (50%) row -->
+        <div class="irow" style="margin-bottom:2px;">
+          <input type="checkbox" id="overlay-zoom50" checked style="accent-color:var(--accent);flex-shrink:0;"
+            onchange="const p=document.getElementById('overlay-part'); const f=document.getElementById('overlay-zoom-fill'); if(this.checked){p.checked=false;p.disabled=true;if(f)f.checked=false;}else if(!f||!f.checked){p.disabled=false;}">
+          <span class="irow-lbl" style="min-width:130px;">&#x1F50E; Zoom Video (50%)</span>
+          <span style="flex:1;font-size:10px;color:var(--text-muted);">Scales video to half-height</span>
+        </div>
+        
+        <!-- Zoom Video (Fill Width) row -->
+        <div class="irow" style="margin-bottom:2px;">
+          <input type="checkbox" id="overlay-zoom-fill" style="accent-color:var(--accent);flex-shrink:0;"
+            onchange="const p=document.getElementById('overlay-part'); const z=document.getElementById('overlay-zoom50'); if(this.checked){p.checked=false;p.disabled=true;if(z)z.checked=false;}else if(!z||!z.checked){p.disabled=false;}">
+          <span class="irow-lbl" style="min-width:130px;">&#x1F50E; Zoom (Fill Width)</span>
+          <span style="font-size:10px;color:var(--text-muted);margin-right:5px;">Side Crop:</span>
+          <input type="range" id="overlay-zoom-fill-pct" min="0" max="25" value="10" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('overlay-zoom-fill-val').textContent=this.value+'%'">
+          <span class="irow-val" id="overlay-zoom-fill-val" style="width:30px;text-align:right;">10%</span>
+        </div>
+
+        <!-- Vertical Lift row -->
+        <div class="irow">
+          <span class="irow-lbl" style="min-width:130px;margin-left:20px;">&#x2B06;&#xFE0F; Vertical Lift (px)</span>
+          <input type="range" id="overlay-vertical-lift" min="0" max="600" value="300" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('overlay-vertical-lift-val').textContent=this.value+'px'">
+          <span class="irow-val" id="overlay-vertical-lift-val" style="width:40px;text-align:right;">300px</span>
         </div>
 
         <!-- Watermark row -->
@@ -893,11 +931,49 @@
 
         <!-- Part Number row -->
         <div class="irow">
-          <input type="checkbox" id="bulk-overlay-part" checked style="accent-color:var(--accent);flex-shrink:0;">
+          <input type="checkbox" id="bulk-overlay-part" style="accent-color:var(--accent);flex-shrink:0;" disabled>
           <span class="irow-lbl">&#x1F522; Part#</span>
           <input type="range" id="bulk-part-pos-pct" min="50" max="95" value="82" style="flex:1;accent-color:var(--accent);"
             oninput="document.getElementById('bulk-part-pos-val').textContent=this.value+'%'">
           <span class="irow-val" id="bulk-part-pos-val">82%</span>
+        </div>
+        
+        <!-- Cinemascope Crop row -->
+        <div class="irow" style="margin-bottom:2px;">
+          <input type="checkbox" id="bulk-overlay-cinemascope" style="accent-color:var(--accent);flex-shrink:0;">
+          <span class="irow-lbl" style="min-width:130px;">&#x1F3AC; Cinemascope Crop</span>
+          <select id="bulk-overlay-cinemascope-mode" style="background:#222;color:#fff;border:1px solid #444;border-radius:4px;padding:2px;font-size:11px;" onchange="document.getElementById('bulk-overlay-cinemascope-px').style.display = this.value === 'manual' ? 'inline-block' : 'none'">
+            <option value="auto">Auto (130px)</option>
+            <option value="manual">Manual</option>
+          </select>
+          <input type="number" id="bulk-overlay-cinemascope-px" value="130" style="display:none;width:50px;background:#222;color:#fff;border:1px solid #444;border-radius:4px;padding:2px;font-size:11px;margin-left:5px;" title="Pixels to crop (top & bottom)">
+        </div>
+        
+        <!-- Zoom Video (50%) row -->
+        <div class="irow" style="margin-bottom:2px;">
+          <input type="checkbox" id="bulk-overlay-zoom50" checked style="accent-color:var(--accent);flex-shrink:0;"
+            onchange="const p=document.getElementById('bulk-overlay-part'); const f=document.getElementById('bulk-overlay-zoom-fill'); if(this.checked){p.checked=false;p.disabled=true;if(f)f.checked=false;}else if(!f||!f.checked){p.disabled=false;}">
+          <span class="irow-lbl" style="min-width:130px;">&#x1F50E; Zoom Video (50%)</span>
+          <span style="flex:1;font-size:10px;color:var(--text-muted);">Scales video to half-height</span>
+        </div>
+        
+        <!-- Zoom Video (Fill Width) row -->
+        <div class="irow" style="margin-bottom:2px;">
+          <input type="checkbox" id="bulk-overlay-zoom-fill" style="accent-color:var(--accent);flex-shrink:0;"
+            onchange="const p=document.getElementById('bulk-overlay-part'); const z=document.getElementById('bulk-overlay-zoom50'); if(this.checked){p.checked=false;p.disabled=true;if(z)z.checked=false;}else if(!z||!z.checked){p.disabled=false;}">
+          <span class="irow-lbl" style="min-width:130px;">&#x1F50E; Zoom (Fill Width)</span>
+          <span style="font-size:10px;color:var(--text-muted);margin-right:5px;">Side Crop:</span>
+          <input type="range" id="bulk-overlay-zoom-fill-pct" min="0" max="25" value="10" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('bulk-overlay-zoom-fill-val').textContent=this.value+'%'">
+          <span class="irow-val" id="bulk-overlay-zoom-fill-val" style="width:30px;text-align:right;">10%</span>
+        </div>
+
+        <!-- Vertical Lift row -->
+        <div class="irow">
+          <span class="irow-lbl" style="min-width:130px;margin-left:20px;">&#x2B06;&#xFE0F; Vertical Lift (px)</span>
+          <input type="range" id="bulk-overlay-vertical-lift" min="0" max="600" value="300" style="flex:1;accent-color:var(--accent);"
+            oninput="document.getElementById('bulk-overlay-vertical-lift-val').textContent=this.value+'px'">
+          <span class="irow-val" id="bulk-overlay-vertical-lift-val" style="width:40px;text-align:right;">300px</span>
         </div>
 
         <!-- Watermark row -->
@@ -1472,12 +1548,27 @@ async function startBulkReelConvert() {
   const zoomPct   = parseInt(document.getElementById('bulk-overlay-zoom-pct').value) || 100;
   const deleteSrc = document.getElementById('bulk-reel-delete-source').checked;
 
+  const zoom50    = document.getElementById('bulk-overlay-zoom50') ? document.getElementById('bulk-overlay-zoom50').checked : false;
+  const zoomFill  = document.getElementById('bulk-overlay-zoom-fill') ? document.getElementById('bulk-overlay-zoom-fill').checked : false;
+  const zoomFillPct = document.getElementById('bulk-overlay-zoom-fill-pct') ? parseInt(document.getElementById('bulk-overlay-zoom-fill-pct').value) : 10;
+  const cinemascopeCrop = document.getElementById('bulk-overlay-cinemascope') ? document.getElementById('bulk-overlay-cinemascope').checked : false;
+  const cinemascopeMode = document.getElementById('bulk-overlay-cinemascope-mode') ? document.getElementById('bulk-overlay-cinemascope-mode').value : 'auto';
+  const cinemascopePx = document.getElementById('bulk-overlay-cinemascope-px') ? parseInt(document.getElementById('bulk-overlay-cinemascope-px').value) : 130;
+  const verticalLift = document.getElementById('bulk-overlay-vertical-lift') ? parseInt(document.getElementById('bulk-overlay-vertical-lift').value) : 300;
+
   const payload = {
     urls, part_duration: partDur, quality,
     show_title: showTitle, show_part_label: showPart, show_watermark: showWm,
     watermark: wm,
     title_pos_pct: titlePos, part_pos_pct: partPos,
     overlay_image_zoom: zoomPct / 100.0, overlay_image_comp_pct: compPct,
+    zoom_video_50: zoom50,
+    zoom_video_fill: zoomFill,
+    zoom_fill_pct: zoomFillPct,
+    cinemascope_crop: cinemascopeCrop,
+    cinemascope_mode: cinemascopeMode,
+    cinemascope_px: cinemascopePx,
+    vertical_lift_px: verticalLift,
     output_dir: outDir, delete_source: deleteSrc,
     use_rotation: _ytRotationActive
   };
@@ -1535,6 +1626,14 @@ async function startReelConvert() {
   const overlayZoomPct = Math.max(100, Math.min(200, parseInt(document.getElementById('overlay-image-zoom-pct')?.value || '100')));
   const deleteSource = document.getElementById('reel-delete-source').checked;
 
+  const zoom50 = document.getElementById('overlay-zoom50') ? document.getElementById('overlay-zoom50').checked : false;
+  const zoomFill = document.getElementById('overlay-zoom-fill') ? document.getElementById('overlay-zoom-fill').checked : false;
+  const zoomFillPct = document.getElementById('overlay-zoom-fill-pct') ? parseInt(document.getElementById('overlay-zoom-fill-pct').value) : 10;
+  const cinemascopeCrop = document.getElementById('overlay-cinemascope') ? document.getElementById('overlay-cinemascope').checked : false;
+  const cinemascopeMode = document.getElementById('overlay-cinemascope-mode') ? document.getElementById('overlay-cinemascope-mode').value : 'auto';
+  const cinemascopePx = document.getElementById('overlay-cinemascope-px') ? parseInt(document.getElementById('overlay-cinemascope-px').value) : 130;
+  const verticalLift = document.getElementById('overlay-vertical-lift') ? parseInt(document.getElementById('overlay-vertical-lift').value) : 300;
+
   let payload = {title, watermark: wm, part_duration: partDur,
                   show_title: showTitle, show_part_label: showPart, show_watermark: showWm,
                   title_pos_pct: titlePos, part_pos_pct: partPos,
@@ -1544,6 +1643,13 @@ async function startReelConvert() {
                   overlay_image_path: _overlayImagePath,
                   overlay_image_zoom: overlayZoomPct / 100.0,
                   overlay_image_comp_pct: overlayCompPct,
+                  zoom_video_50: zoom50,
+                  zoom_video_fill: zoomFill,
+                  zoom_fill_pct: zoomFillPct,
+                  cinemascope_crop: cinemascopeCrop,
+                  cinemascope_mode: cinemascopeMode,
+                  cinemascope_px: cinemascopePx,
+                  vertical_lift_px: verticalLift,
                   delete_source: deleteSource,
                   cookie_mode: 'file',
                   request_delay: parseFloat(document.getElementById('yt-delay').value),
@@ -1689,18 +1795,142 @@ async function handleCookieUpload(input){
 document.addEventListener('DOMContentLoaded', () => {
    checkCookieStatus();
 
-   // Restore delay (element is inside Cookies tab but still in DOM — safe to set value)
+   // Restore delay
    const savedDelay = localStorage.getItem('yt-delay');
    if(savedDelay){
       const delayEl = document.getElementById('yt-delay');
       if(delayEl) { delayEl.value = savedDelay; updateDelayDisplay(savedDelay); }
    }
 
-   // Restore browser selector for Download tab only (audio/reel bypass dropdowns removed)
+   // Restore browser selector
    const ytMode = localStorage.getItem('yt-cookie-mode');
    const ytBr   = localStorage.getItem('yt-browser');
    if(ytMode){ const el=document.getElementById('yt-cookie-mode'); if(el){ el.value=ytMode; toggleBrowserSelector('yt'); } }
    if(ytBr)  { const el=document.getElementById('yt-browser');      if(el) el.value=ytBr; }
+
+   // ── Reel Converter Settings Persistence ─────────────────────────
+   // All field descriptors: [id, type]
+   // types: 'text' | 'checkbox' | 'select' | 'range' | 'radio-name'
+   const REEL_FIELDS = [
+     // Single tab — Quality & Output
+     ['reel-quality',              'select'],
+     ['reel-part-dur',             'text'],
+     ['reel-out-dir',              'text'],
+     ['reel-delete-source',        'checkbox'],
+     // Single tab — Text overlays
+     ['overlay-title',             'checkbox'],
+     ['title-pos-pct',             'range'],
+     ['overlay-watermark',         'checkbox'],
+     ['reel-watermark',            'text'],
+     // Single tab — Zoom & Cinemascope
+     ['overlay-cinemascope',       'checkbox'],
+     ['overlay-cinemascope-mode',  'select'],
+     ['overlay-cinemascope-px',    'text'],
+     ['overlay-zoom50',            'checkbox'],
+     ['overlay-zoom-fill',         'checkbox'],
+     ['overlay-zoom-fill-pct',     'range'],
+     ['overlay-vertical-lift',     'range'],
+     // Single tab — Output size (radio group)
+     ['reel_output_size',          'radio-name'],
+     // Single tab — Overlay mode (radio group)
+     ['overlay-mode',              'radio-name'],
+     // Bulk tab — Quality & Output
+     ['bulk-reel-quality',         'select'],
+     ['bulk-reel-part-dur',        'text'],
+     ['bulk-reel-out-dir',         'text'],
+     ['bulk-reel-delete-source',   'checkbox'],
+     // Bulk tab — Text overlays
+     ['bulk-overlay-title',        'checkbox'],
+     ['bulk-title-pos-pct',        'range'],
+     ['bulk-overlay-watermark',    'checkbox'],
+     ['bulk-reel-watermark',       'text'],
+     // Bulk tab — Zoom & Cinemascope
+     ['bulk-overlay-cinemascope',       'checkbox'],
+     ['bulk-overlay-cinemascope-mode',  'select'],
+     ['bulk-overlay-cinemascope-px',    'text'],
+     ['bulk-overlay-zoom50',            'checkbox'],
+     ['bulk-overlay-zoom-fill',         'checkbox'],
+     ['bulk-overlay-zoom-fill-pct',     'range'],
+     ['bulk-overlay-vertical-lift',     'range'],
+   ];
+
+   const LS_KEY = 'reelSettings_v2';
+
+   function saveReelSettings() {
+     const cfg = {};
+     REEL_FIELDS.forEach(([id, type]) => {
+       if(type === 'radio-name') {
+         const checked = document.querySelector(`input[name="${id}"]:checked`);
+         if(checked) cfg[id] = checked.value;
+       } else {
+         const el = document.getElementById(id);
+         if(!el) return;
+         if(type === 'checkbox') cfg[id] = el.checked;
+         else cfg[id] = el.value;
+       }
+     });
+     localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+   }
+
+   function restoreReelSettings() {
+     let cfg;
+     try { cfg = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e) { return; }
+     if(!cfg || Object.keys(cfg).length === 0) return;
+
+     REEL_FIELDS.forEach(([id, type]) => {
+       const val = cfg[id];
+       if(val === undefined) return;
+       if(type === 'radio-name') {
+         const radio = document.querySelector(`input[name="${id}"][value="${val}"]`);
+         if(radio) {
+           radio.checked = true;
+           // Trigger visual update for overlay mode
+           if(id === 'overlay-mode') setOverlayMode(val);
+         }
+       } else {
+         const el = document.getElementById(id);
+         if(!el) return;
+         if(type === 'checkbox') {
+           el.checked = !!val;
+         } else {
+           el.value = val;
+         }
+         // Refresh display labels for range sliders
+         if(type === 'range') el.dispatchEvent(new Event('input'));
+       }
+     });
+
+     // Refresh manual cinemascope-px visibility
+     ['overlay-cinemascope-mode', 'bulk-overlay-cinemascope-mode'].forEach(modeId => {
+       const modeEl = document.getElementById(modeId);
+       const pxId = modeId.replace('-mode', '-px');
+       const pxEl = document.getElementById(pxId);
+       if(modeEl && pxEl) pxEl.style.display = (modeEl.value === 'manual') ? 'inline-block' : 'none';
+     });
+   }
+
+   // Restore on load
+   restoreReelSettings();
+
+   // Auto-save on any change inside the reel tabs
+   ['ytab-reel', 'ytab-bulk'].forEach(tabId => {
+     const tab = document.getElementById(tabId);
+     if(!tab) return;
+     tab.addEventListener('change', saveReelSettings);
+     tab.addEventListener('input',  saveReelSettings);
+   });
+
+   // Show a subtle "Settings saved" toast when user explicitly changes something
+   let _saveTimer = null;
+   ['ytab-reel', 'ytab-bulk'].forEach(tabId => {
+     const tab = document.getElementById(tabId);
+     if(!tab) return;
+     tab.addEventListener('change', () => {
+       clearTimeout(_saveTimer);
+       _saveTimer = setTimeout(() => showToast('⚙️ Settings saved', 'success'), 600);
+     });
+   });
 });
+
 </script>
 {% endblock %}

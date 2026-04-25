@@ -140,7 +140,14 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
                   title_pos_pct: float = 20.0, part_pos_pct: float = 82.0,
                   output_size: str = 'instagram',
                   temp_dir: str = None,
-                  rotate_90: bool = False) -> (str, list):
+                  rotate_90: bool = False,
+                  zoom_video_50: bool = False,
+                  zoom_video_fill: bool = False,
+                  zoom_fill_pct: float = 10.0,
+                  cinemascope_crop: bool = False,
+                  cinemascope_mode: str = 'auto',
+                  cinemascope_px: int = 130,
+                  vertical_lift_px: int = 300) -> (str, list):
     """
     Build the -vf filter chain for one part.
     Returns (filter_string, list_of_temp_files_to_cleanup)
@@ -168,13 +175,41 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
         filters  = []
     else:
         # Instagram 9:16 letterbox
-        if is_portrait:
-            scale_pad = (
+        if cinemascope_crop and not is_portrait:
+            if cinemascope_mode == 'manual':
+                pre_crop = f"crop=iw:ih-{2*cinemascope_px}:0:{cinemascope_px},scale=iw:iw*9/16,setsar=1,"
+            else:
+                pre_crop = "crop=iw:ih-260:0:130,scale=iw:iw*9/16,setsar=1,"
+        else:
+            pre_crop = ""
+        
+        if zoom_video_fill and not is_portrait:
+            # Dynamic Zoom Fill calculation based on side crop percentage
+            loss_ratio = 1.0 - 2.0 * (zoom_fill_pct / 100.0)
+            if loss_ratio <= 0.1: loss_ratio = 0.1
+            scale_w = int(REEL_W / loss_ratio)
+            # Ensure even width for scale
+            if scale_w % 2 != 0: scale_w += 1
+            
+            scale_pad = pre_crop + (
+                f"scale={scale_w}:-2,"
+                f"crop={REEL_W}:ih,"
+                f"pad={REEL_W}:{REEL_H}:(ow-iw)/2:(oh-ih)/2-{vertical_lift_px}:black"
+            )
+        elif zoom_video_50 and not is_portrait:
+            # Scale height to 960 (half of 1920), crop width to 1080
+            scale_pad = pre_crop + (
+                f"scale=-2:960,"
+                f"crop={REEL_W}:960,"
+                f"pad={REEL_W}:{REEL_H}:(ow-iw)/2:(oh-ih)/2-{vertical_lift_px}:black"
+            )
+        elif is_portrait:
+            scale_pad = pre_crop + (
                 f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=decrease,"
                 f"pad={REEL_W}:{REEL_H}:(ow-iw)/2:(oh-ih)/2:black"
             )
         else:
-            scale_pad = (
+            scale_pad = pre_crop + (
                 f"scale={REEL_W}:-2,"
                 f"pad={REEL_W}:{REEL_H}:(ow-iw)/2:(oh-ih)/2:black"
             )
@@ -221,7 +256,7 @@ def build_filters(in_w: int, in_h: int, part_num: int, title: str, watermark: st
             )
 
     # Part label: custom centered bottom placement
-    if show_part_label:
+    if show_part_label and not zoom_video_50 and not zoom_video_fill:
         part_label = f"Part -{part_num}"
         t_file = _make_text_file(part_label)
         text_param = f"textfile='{t_file}'" if t_file else f"text='{part_label}'"
@@ -305,7 +340,7 @@ def encode_part(input_path: str, output_path: str,
                 f"scale=w=iw*{zoom:.4f}:h=ih*{zoom:.4f}[ovzoom];"
                 f"[ovzoom]crop=w='min(iw,{container_w})':h='min(ih,{container_h})':"
                 f"x='(iw-ow)/2':y='(ih-oh)/2'[ov];"
-                f"[base_ready][ov]overlay=x='(W-w)/2':y={overlay_y}:shortest=1[vout]"
+                f"[base_ready][ov]overlay=x='(W-w)/2':y={overlay_y}:shortest=1,format=yuv420p[vout]"
             ),
             '-map', '[vout]', '-map', '0:a?'
         ]
@@ -328,12 +363,8 @@ def encode_part(input_path: str, output_path: str,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    # Cleanup temp text files
-    if temp_files:
-        for tf in temp_files:
-            try:
-                if os.path.isfile(tf): os.remove(tf)
-            except: pass
+    # Removed premature temp file cleanup here because it breaks the CPU fallback.
+    # The parent function (convert_to_reels) handles the cleanup safely.
 
     if result.returncode != 0:
         stderr_text = (result.stderr or b'').decode('utf-8', errors='replace')
@@ -370,6 +401,13 @@ def convert_to_reels(
     overlay_image_path: str = '',
     overlay_image_zoom: float = 1.0,
     overlay_image_comp_pct: float = 100.0,
+    zoom_video_50: bool = False,
+    zoom_video_fill: bool = False,
+    zoom_fill_pct: float = 10.0,
+    cinemascope_crop: bool = False,
+    cinemascope_mode: str = 'auto',
+    cinemascope_px: int = 130,
+    vertical_lift_px: int = 300,
     # Optional: clip a specific range before splitting
     clip_start_sec: float = 0.0,
     clip_end_sec:   float = 0.0,   # 0 = full video
@@ -438,7 +476,10 @@ def convert_to_reels(
                 show_title, show_part_label, show_watermark,
                 title_pos_pct, part_pos_pct, output_size=output_size,
                 temp_dir=output_dir,
-                rotate_90=rotate_90
+                rotate_90=rotate_90,
+                zoom_video_50=zoom_video_50,
+                zoom_video_fill=zoom_video_fill,
+                cinemascope_crop=cinemascope_crop
             )
 
             if progress_cb:
@@ -491,7 +532,14 @@ def convert_to_reels(
             show_title, show_part_label, show_watermark,
             title_pos_pct, part_pos_pct, output_size=output_size,
             temp_dir=output_dir, # Use same output dir for temp files
-            rotate_90=rotate_90
+            rotate_90=rotate_90,
+            zoom_video_50=zoom_video_50,
+            zoom_video_fill=zoom_video_fill,
+            zoom_fill_pct=zoom_fill_pct,
+            cinemascope_crop=cinemascope_crop,
+            cinemascope_mode=cinemascope_mode,
+            cinemascope_px=cinemascope_px,
+            vertical_lift_px=vertical_lift_px
         )
 
         if progress_cb:
@@ -516,5 +564,13 @@ def convert_to_reels(
             errors.append(f'Part {part_num} failed')
             if progress_cb:
                 progress_cb(f'  ❌ Part {part_num} failed — check ffmpeg logs')
+
+        # Clean up temp text files created for this part's overlay
+        for tf in (t_files or []):
+            try:
+                if os.path.isfile(tf):
+                    os.remove(tf)
+            except Exception:
+                pass
 
     return {'parts': parts, 'errors': errors}

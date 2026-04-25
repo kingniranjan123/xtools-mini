@@ -2575,6 +2575,13 @@ def api_youtube_reel_convert():
     overlay_image_path = (data.get('overlay_image_path') or '').strip()
     overlay_image_zoom = float(data.get('overlay_image_zoom', 1.0) or 1.0)
     overlay_image_comp_pct = max(1.0, min(100.0, float(data.get('overlay_image_comp_pct', 100.0) or 100.0)))
+    zoom_video_50  = bool(data.get('zoom_video_50', False))
+    zoom_video_fill= bool(data.get('zoom_video_fill', False))
+    zoom_fill_pct  = float(data.get('zoom_fill_pct', 10.0))
+    cinemascope_crop= bool(data.get('cinemascope_crop', False))
+    cinemascope_mode = data.get('cinemascope_mode', 'auto')
+    cinemascope_px   = int(data.get('cinemascope_px', 130))
+    vertical_lift_px = int(data.get('vertical_lift_px', 300))
     overlay_mode   = data.get('overlay_mode', 'none')  # 'none' | 'manual' | 'auto'
     delete_source = bool(data.get('delete_source', False))
     browser       = data.get('browser')
@@ -2611,50 +2618,92 @@ def api_youtube_reel_convert():
     job    = _make_job(job_id)
 
     def run():
-        # ── Step 1: Download ──────────────────────────────
+        # ── Step 1: Download (or locate existing file) ────────────────────
         yt_dir = output_dir or _read_setting('dir_yt') or os.path.join(DOWNLOADS_DIR, '_youtube')
         os.makedirs(yt_dir, exist_ok=True)
-        _emit(job, f'📥 Downloading: {url}', 5)
+        import glob as _g, re as _re
 
-        def dcb(line, pct=None):
-            _emit(job, line, pct)
-            if 'Error:' in line or 'ERROR:' in line:
+        # ── Pre-check: is the video already on disk? ──────────────────────
+        vid_id_match = _re.search(r'[?&]v=([A-Za-z0-9_-]{8,12})', url)
+        vid_id_from_url = vid_id_match.group(1) if vid_id_match else None
+
+        existing_video = None
+        existing_thumb = None
+        if vid_id_from_url:
+            # Scan ALL mp4 files then do a literal string check for [vid_id] in filename
+            # (glob square brackets are character classes — cannot use them for literal match)
+            needle = f'[{vid_id_from_url}]'
+            all_mp4s = _g.glob(os.path.join(yt_dir, '**', '*.mp4'), recursive=True)
+            hits = [
+                h for h in all_mp4s
+                if needle in os.path.basename(h) and os.path.getsize(h) > 1024 * 100  # >100 KB
+            ]
+            if hits:
+                existing_video = max(hits, key=os.path.getsize)
+                _emit(job, f'✅ Found existing file — skipping download: {os.path.basename(existing_video)}', 25)
+                # Look for a matching thumbnail in the same folder by video ID
+                # (yt-dlp renames it to TITLE_<thumbnail>.jpg — not the same stem as the mp4)
+                vid_dir = os.path.dirname(existing_video)
+                for fname in os.listdir(vid_dir):
+                    if needle in fname and fname.lower().split('.')[-1] in ('jpg', 'jpeg', 'webp', 'png'):
+                        existing_thumb = os.path.join(vid_dir, fname)
+                        break
+                if existing_thumb:
+                    _emit(job, f'🖼 Found existing thumbnail: {os.path.basename(existing_thumb)}', 26)
+                else:
+                    _emit(job, '⚠ No matching thumbnail found next to existing file', 26)
+
+        if existing_video:
+            results = [{
+                'status': 'ok',
+                'url': url,
+                'id': vid_id_from_url,
+                'title': title or os.path.splitext(os.path.basename(existing_video))[0],
+                'file_path': existing_video,
+                'thumbnail': existing_thumb or '',
+            }]
+        else:
+            _emit(job, f'📥 Downloading: {url}', 5)
+
+            def dcb(line, pct=None):
+                _emit(job, line, pct)
+                if 'Error:' in line or 'ERROR:' in line:
+                    if selected_account:
+                        _update_yt_account_usage(selected_account['id'], success=False, error_msg=line)
+
+            results = download_youtube(
+                urls=[url], quality=quality, output_dir=yt_dir, audio_only=False,
+                custom_dir=bool(output_dir), browser=browser if cookie_mode == 'browser' else None,
+                cookie_file=cookie_file,
+                download_thumb=(overlay_mode == 'auto'),
+                request_delay=request_delay,
+                progress_cb=dcb
+            )
+
+            if results and results[0].get('status') == 'ok':
                 if selected_account:
-                    _update_yt_account_usage(selected_account['id'], success=False, error_msg=line)
+                    _update_yt_account_usage(selected_account['id'], success=True)
+            if not results or results[0].get('status') not in ('ok', 'skipped'):
+                err = results[0].get('error', 'Download failed') if results else 'Download failed'
+                _finish(job, f'Download failed: {err}', results=[])
+                return
 
-        results = download_youtube(
-            urls=[url], quality=quality, output_dir=yt_dir, audio_only=False,
-            custom_dir=bool(output_dir), browser=browser if cookie_mode == 'browser' else None, 
-            cookie_file=cookie_file,
-            request_delay=request_delay,
-            progress_cb=dcb
-        )
-        
-        if results and results[0].get('status') == 'ok':
-            if selected_account:
-                _update_yt_account_usage(selected_account['id'], success=True)
-        if not results or results[0].get('status') != 'ok':
-            err = results[0].get('error', 'Download failed') if results else 'Download failed'
-            _finish(job, f'Download failed: {err}', results=[])
-            return
-        
-        # Save to Master DB
-        try:
-            r = results[0]
-            db = sqlite3.connect(DB_PATH)
-            db.execute('''
-                INSERT OR REPLACE INTO reels (id, url, title, file_path, status)
-                VALUES (?, ?, ?, ?, 'ok')
-            ''', (r['id'], r['url'], r.get('title', ''), r.get('file_path', '')))
-            db.commit()
-            db.close()
-        except Exception as dbe:
-            print(f"Reel DB Save Error: {dbe}")
+            # Save to Master DB
+            try:
+                r = results[0]
+                db = sqlite3.connect(DB_PATH)
+                db.execute('''
+                    INSERT OR REPLACE INTO reels (id, url, title, file_path, status)
+                    VALUES (?, ?, ?, ?, 'ok')
+                ''', (r['id'], r['url'], r.get('title', ''), r.get('file_path', '')))
+                db.commit()
+                db.close()
+            except Exception as dbe:
+                print(f"Reel DB Save Error: {dbe}")
 
         video_path = results[0].get('file_path') or results[0].get('path', '')
         if not video_path or not os.path.isfile(video_path):
             # Fallback: find newest mp4 in yt_dir
-            import glob as _g
             files = sorted(_g.glob(os.path.join(yt_dir, '**', '*.mp4'), recursive=True),
                            key=os.path.getmtime, reverse=True)
             video_path = files[0] if files else ''
@@ -2666,7 +2715,9 @@ def api_youtube_reel_convert():
         video_title = results[0].get('title', title or 'Video')
         used_title  = title or video_title
 
-        _emit(job, f'✅ Downloaded: {os.path.basename(video_path)}', 30)
+        if not existing_video:
+            _emit(job, f'✅ Downloaded: {os.path.basename(video_path)}', 30)
+
 
         # ── Step 1b: Auto Thumbnail Overlay ──────────────────────────
         final_overlay_path = ''
@@ -2678,30 +2729,16 @@ def api_youtube_reel_convert():
             final_overlay_zoom = overlay_image_zoom
             final_overlay_comp = overlay_image_comp_pct
         elif overlay_mode == 'auto':
-            # Download the YT thumbnail and use it automatically
+            # Use the thumbnail automatically downloaded during video fetch
             try:
-                import glob as _gt
-                thumb_tmpl = os.path.join(TEMP_DIR, f'yt_auto_thumb_{uuid.uuid4().hex[:8]}.%(ext)s')
-                ytdlp_bin = _get_ytdlp_binary()
-                thumb_cmd = ytdlp_bin + [
-                    '--write-thumbnail', '--skip-download',
-                    '--convert-thumbnails', 'jpg',
-                    '--output', thumb_tmpl
-                ]
-                if cookie_file and os.path.isfile(cookie_file):
-                    thumb_cmd += ['--cookies', cookie_file]
-                thumb_cmd.append(url)
-                subprocess.run(thumb_cmd, capture_output=True, timeout=30)
-                # Find the downloaded thumbnail
-                pattern = thumb_tmpl.replace('%(ext)s', '*')
-                found = sorted(_gt.glob(pattern), key=os.path.getmtime, reverse=True)
-                if found:
-                    final_overlay_path = found[0]
+                thumb_path = results[0].get('thumbnail') if results else None
+                if thumb_path and os.path.isfile(thumb_path):
+                    final_overlay_path = thumb_path
                     final_overlay_zoom = 1.0   # System-managed
                     final_overlay_comp = 100.0  # System-managed
-                    _emit(job, f'🖼 Auto thumbnail: {os.path.basename(final_overlay_path)}')
+                    _emit(job, f'🖼 Auto thumbnail integrated: {os.path.basename(final_overlay_path)}')
                 else:
-                    _emit(job, '⚠ Could not download auto thumbnail — skipping overlay')
+                    _emit(job, '⚠ Auto thumbnail was not provided by yt-dlp — skipping overlay.')
             except Exception as te:
                 _emit(job, f'⚠ Auto thumbnail error: {te}')
 
@@ -2726,6 +2763,13 @@ def api_youtube_reel_convert():
             overlay_image_path = final_overlay_path,
             overlay_image_zoom = final_overlay_zoom,
             overlay_image_comp_pct = final_overlay_comp,
+            zoom_video_50   = zoom_video_50,
+            zoom_video_fill = zoom_video_fill,
+            zoom_fill_pct   = zoom_fill_pct,
+            cinemascope_crop = cinemascope_crop,
+            cinemascope_mode = cinemascope_mode,
+            cinemascope_px   = cinemascope_px,
+            vertical_lift_px = vertical_lift_px,
             clip_start_sec  = clip_start,
             clip_end_sec    = clip_end,
             clips           = clips,
@@ -2775,6 +2819,13 @@ def api_youtube_bulk_reel_convert():
     part_pos_pct  = float(data.get('part_pos_pct', 82.0))
     overlay_zoom  = float(data.get('overlay_image_zoom', 1.0) or 1.0)
     overlay_comp  = max(1.0, min(100.0, float(data.get('overlay_image_comp_pct', 100.0) or 100.0)))
+    zoom_video_50 = bool(data.get('zoom_video_50', False))
+    zoom_video_fill = bool(data.get('zoom_video_fill', False))
+    zoom_fill_pct  = float(data.get('zoom_fill_pct', 10.0))
+    cinemascope_crop= bool(data.get('cinemascope_crop', False))
+    cinemascope_mode = data.get('cinemascope_mode', 'auto')
+    cinemascope_px   = int(data.get('cinemascope_px', 130))
+    vertical_lift_px = int(data.get('vertical_lift_px', 300))
     delete_source = bool(data.get('delete_source', False))
     use_rotation  = bool(data.get('use_rotation', False))
     # Always use uploaded cookie file if present
@@ -2874,6 +2925,13 @@ def api_youtube_bulk_reel_convert():
                 overlay_image_path = thumb_path,
                 overlay_image_zoom = overlay_zoom,
                 overlay_image_comp_pct = overlay_comp,
+                zoom_video_50      = zoom_video_50,
+                zoom_video_fill    = zoom_video_fill,
+                zoom_fill_pct      = zoom_fill_pct,
+                cinemascope_crop   = cinemascope_crop,
+                cinemascope_mode   = cinemascope_mode,
+                cinemascope_px     = cinemascope_px,
+                vertical_lift_px   = vertical_lift_px,
                 clip_start_sec     = 0,
                 clip_end_sec       = 0,
                 use_cuda           = CUDA_INFO.get('available', False),
@@ -2927,6 +2985,13 @@ def api_youtube_reel_convert_local():
     overlay_image_path = (data.get('overlay_image_path') or '').strip()
     overlay_image_zoom = float(data.get('overlay_image_zoom', 1.0) or 1.0)
     overlay_image_comp_pct = max(1.0, min(100.0, float(data.get('overlay_image_comp_pct', 100.0) or 100.0)))
+    zoom_video_50 = bool(data.get('zoom_video_50', False))
+    zoom_video_fill = bool(data.get('zoom_video_fill', False))
+    zoom_fill_pct  = float(data.get('zoom_fill_pct', 10.0))
+    cinemascope_crop= bool(data.get('cinemascope_crop', False))
+    cinemascope_mode = data.get('cinemascope_mode', 'auto')
+    cinemascope_px   = int(data.get('cinemascope_px', 130))
+    vertical_lift_px = int(data.get('vertical_lift_px', 300))
     delete_source = bool(data.get('delete_source', False))
 
     job_id = str(uuid.uuid4())
@@ -2947,6 +3012,13 @@ def api_youtube_reel_convert_local():
             overlay_image_path=overlay_image_path,
             overlay_image_zoom=overlay_image_zoom,
             overlay_image_comp_pct=overlay_image_comp_pct,
+            zoom_video_50=zoom_video_50,
+            zoom_video_fill=zoom_video_fill,
+            zoom_fill_pct=zoom_fill_pct,
+            cinemascope_crop=cinemascope_crop,
+            cinemascope_mode=cinemascope_mode,
+            cinemascope_px=cinemascope_px,
+            vertical_lift_px=vertical_lift_px,
             clip_start_sec=clip_start, clip_end_sec=clip_end, clips=clips,
             progress_cb=lambda line: _emit(job, line),
         )

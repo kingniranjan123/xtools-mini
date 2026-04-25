@@ -99,71 +99,99 @@ def download_youtube(urls: list, quality: str, output_dir: str,
             if progress_cb: progress_cb(f'  ✗ Skipped CDN URL (not a valid YouTube page): {url[:60]}...', None)
             return {'url': url, 'status': 'error', 'error': 'Raw CDN URL — not a valid YouTube watch page'}
 
-        # 2. Get Info & Deduplication
-        try:
-            # Randomize slightly (e.g. 30s delay becomes 25-35s)
-            if request_delay > 0:
-                jitter_delay = random.uniform(request_delay * 0.8, request_delay * 1.2)
-                if progress_cb: progress_cb(f"⏳ Waiting {int(jitter_delay)}s (Safety Mode)...", None)
-                time.sleep(jitter_delay)
-            else:
-                time.sleep(random.uniform(0, 1.5))
-            
-            # Removed --rm-cache-dir to prevent WinError 32 locks from concurrent challenges
-            info_cmd = ytdlp + ['--print-json', '--no-download', '--no-playlist']
-            if request_delay > 0:
-                info_cmd += ['--sleep-interval', str(int(request_delay))]
-            
-            if cookie_file and os.path.isfile(cookie_file):
-                info_cmd += ['--cookies', cookie_file]
-            elif browser:
-                info_cmd += ['--cookies-from-browser', browser]
-            info_cmd.append(url)
-            
-            # Use run to capture both stdout and stderr for better error reporting
-            proc = subprocess.run(info_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60)
-            if proc.returncode != 0:
-                raise RuntimeError(_clean_err(proc.stderr))
+        # Network error detection keywords
+        NETWORK_ERRORS = (
+            'getaddrinfo failed',
+            'Failed to resolve',
+            'Failed to establish a new connection',
+            'WinError 10051',
+            'socket operation was attempted to an unreachable network',
+            'Unable to download webpage',
+        )
 
-            info = json.loads(proc.stdout.splitlines()[0])
+        MAX_NET_RETRIES = 3
+        net_attempt = 0
+        info = None
+        try:
+            while net_attempt < MAX_NET_RETRIES:
+                # Randomize delay
+                if request_delay > 0:
+                    jitter_delay = random.uniform(request_delay * 0.8, request_delay * 1.2)
+                    if progress_cb: progress_cb(f"⏳ Waiting {int(jitter_delay)}s (Safety Mode)...", None)
+                    time.sleep(jitter_delay)
+                else:
+                    time.sleep(random.uniform(0, 1.5))
+
+                info_cmd = ytdlp + ['--print-json', '--no-download', '--no-playlist']
+                if request_delay > 0:
+                    info_cmd += ['--sleep-interval', str(int(request_delay))]
+                if cookie_file and os.path.isfile(cookie_file):
+                    info_cmd += ['--cookies', cookie_file]
+                elif browser:
+                    info_cmd += ['--cookies-from-browser', browser]
+                info_cmd.append(url)
+
+                try:
+                    proc = subprocess.run(info_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60)
+                except subprocess.TimeoutExpired:
+                    net_attempt += 1
+                    if progress_cb: progress_cb(f'  ⚠ Timeout (attempt {net_attempt}/{MAX_NET_RETRIES}), retrying...', None)
+                    if net_attempt < MAX_NET_RETRIES:
+                        time.sleep(15)
+                        continue
+                    raise RuntimeError('yt-dlp timed out after multiple retries')
+
+                if proc.returncode != 0:
+                    raw_err = _clean_err(proc.stderr)
+                    if any(e in raw_err for e in NETWORK_ERRORS):
+                        net_attempt += 1
+                        wait_sec = 15 * net_attempt
+                        if progress_cb: progress_cb(f'  ⚠ Network error (attempt {net_attempt}/{MAX_NET_RETRIES}), retrying in {wait_sec}s...', None)
+                        if net_attempt < MAX_NET_RETRIES:
+                            time.sleep(wait_sec)
+                            continue
+                    raise RuntimeError(raw_err)
+
+                try:
+                    info = json.loads(proc.stdout.splitlines()[0])
+                except (json.JSONDecodeError, IndexError) as je:
+                    raise RuntimeError(f'Invalid JSON from yt-dlp: {je}')
+                break  # Success
+            else:
+                raise RuntimeError(f'Network unreachable after {MAX_NET_RETRIES} retries — check your internet connection')
+
             vid_id = info.get('id')
             title = info.get('title', url)
-            
-            # Label prefix for parallel logs
             prefix = f"[{title[:30]}...]"
-            
+
             # Check for duplicate
             if check_exists_cb and vid_id:
                 if check_exists_cb(vid_id, title=title):
                     with lock:
                         state['completed_count'] += 1
                         pct = int(state['completed_count'] / total * 100)
-                    if progress_cb: progress_cb(f'  ✓ [Duplicate] {prefix} Hyperlink already downloaded (Skipped)', pct)
+                    if progress_cb: progress_cb(f'  ✓ [Duplicate] {prefix} already downloaded (Skipped)', pct)
                     return {'url': url, 'id': vid_id, 'status': 'skipped', 'title': title}
 
             # 3. Download
             if progress_cb: progress_cb(f'  ↓ Starting: {prefix}', None)
-            
-            # Inject delay for sub-processes
             info['request_delay'] = request_delay
-            
+
             res = _download_yt_single(
-                url, quality, output_dir, custom_dir, audio_only, download_subs, download_thumb, ytdlp, 
+                url, quality, output_dir, custom_dir, audio_only, download_subs, download_thumb, ytdlp,
                 progress_cb, prefix, info, browser=browser, cookie_file=cookie_file
             )
-            
+
             with lock:
                 state['completed_count'] += 1
                 pct = int(state['completed_count'] / total * 100)
-            
             if progress_cb: progress_cb(f'  ✓ Done: {prefix}', pct)
             return res
-                
+
         except Exception as exc:
             with lock:
                 state['completed_count'] += 1
                 pct = int(state['completed_count'] / total * 100)
-            
             err_msg = str(exc)
             if progress_cb: progress_cb(f'  ✗ Error: {url} -> {err_msg}', pct)
             return {'url': url, 'status': 'error', 'error': err_msg}
